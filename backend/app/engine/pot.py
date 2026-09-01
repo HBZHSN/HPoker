@@ -9,7 +9,7 @@ Handles:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Set, Tuple, Optional, Sequence
 from collections import defaultdict
 
 from backend.app.engine.evaluator import HandEvaluation
@@ -94,6 +94,10 @@ class PotManager:
         return self.current_round_bets.get(player_id, 0)
 
     def get_player_total_contribution(self, player_id: str) -> int:
+        """Get the total hand contribution of a player."""
+        return self.total_contributions.get(player_id, 0)
+
+    def get_player_total_bet(self, player_id: str) -> int:
         """Get the total hand contribution of a player."""
         return self.total_contributions.get(player_id, 0)
 
@@ -200,33 +204,14 @@ class PotManager:
 
         return merged_pots, refunds
 
-    def resolve_showdown(
+    def _distribute_pots_internal(
         self,
+        pots: List[Pot],
         hand_evaluations: Dict[str, HandEvaluation],
-        seat_order_from_sb: Sequence[str]
+        seat_order_from_sb: Sequence[str],
     ) -> List[PotPayout]:
-        """Distribute all pots to winning players based on hand evaluations.
-        
-        Args:
-            hand_evaluations: player_id -> HandEvaluation (for all showdown players)
-            seat_order_from_sb: list of player_ids starting clockwise from Small Blind (for odd chip rule)
-        
-        Returns:
-            List of PotPayout detailing which player received what amount from which pot.
-        """
-        pots, refunds = self.calculate_pots()
+        """Internal helper to distribute a given list of pots among evaluated contenders."""
         payouts: List[PotPayout] = []
-
-        # First add refunds (if any)
-        for player_id, refund_amt in refunds.items():
-            if refund_amt > 0:
-                payouts.append(PotPayout(
-                    player_id=player_id,
-                    amount=refund_amt,
-                    pot_name="多余下注退回"
-                ))
-
-        # Distribute each pot (from main pot to side pots)
         for pot in pots:
             if pot.amount <= 0:
                 continue
@@ -234,11 +219,9 @@ class PotManager:
             # Eligible players for this pot who showed down cards
             contenders = [p for p in pot.eligible_players if p in hand_evaluations]
             if not contenders:
-                # Fallback: if somehow no evaluations, give to first eligible
                 contenders = list(pot.eligible_players)
                 if not contenders:
                     continue
-                # Split equally
                 split_val = pot.amount // len(contenders)
                 for c in contenders:
                     payouts.append(PotPayout(player_id=c, amount=split_val, pot_name=pot.name))
@@ -267,7 +250,6 @@ class PotManager:
             # Distribute odd chips in clockwise seat order from Small Blind
             if remainder > 0:
                 ordered_winners = [p for p in seat_order_from_sb if p in winners]
-                # If some winner wasn't in seat order, append at end
                 for w in winners:
                     if w not in ordered_winners:
                         ordered_winners.append(w)
@@ -283,5 +265,82 @@ class PotManager:
                         pot_name=pot.name,
                         hand_description=best_eval.description if best_eval else None
                     ))
-
         return payouts
+
+    def resolve_showdown(
+        self,
+        hand_evaluations: Dict[str, HandEvaluation],
+        seat_order_from_sb: Sequence[str]
+    ) -> List[PotPayout]:
+        """Distribute all pots to winning players based on hand evaluations (Run It Once)."""
+        pots, refunds = self.calculate_pots()
+        payouts: List[PotPayout] = []
+
+        # First add refunds (if any)
+        for player_id, refund_amt in refunds.items():
+            if refund_amt > 0:
+                payouts.append(PotPayout(
+                    player_id=player_id,
+                    amount=refund_amt,
+                    pot_name="多余下注退回"
+                ))
+
+        # Distribute pots
+        payouts.extend(self._distribute_pots_internal(pots, hand_evaluations, seat_order_from_sb))
+        return payouts
+
+    def resolve_showdown_twice(
+        self,
+        hand_evaluations_1: Dict[str, HandEvaluation],
+        hand_evaluations_2: Dict[str, HandEvaluation],
+        seat_order_from_sb: Sequence[str]
+    ) -> Tuple[List[PotPayout], List[PotPayout], List[PotPayout]]:
+        """Distribute all pots across two runouts (Run It Twice).
+        
+        Pots are split 50/50 between Board 1 and Board 2.
+        Odd chips in pot splits are awarded to Board 1.
+        
+        Returns:
+            (payouts_board_1, payouts_board_2, all_payouts_combined)
+        """
+        pots, refunds = self.calculate_pots()
+        refund_payouts: List[PotPayout] = []
+
+        for player_id, refund_amt in refunds.items():
+            if refund_amt > 0:
+                refund_payouts.append(PotPayout(
+                    player_id=player_id,
+                    amount=refund_amt,
+                    pot_name="多余下注退回"
+                ))
+
+        pots_1: List[Pot] = []
+        pots_2: List[Pot] = []
+
+        for pot in pots:
+            if pot.amount <= 0:
+                continue
+            half_1 = pot.amount // 2
+            half_2 = pot.amount - half_1
+            # If odd chip, give the extra chip to Board 1
+            if half_1 < half_2:
+                half_1, half_2 = half_2, half_1
+
+            if half_1 > 0:
+                pots_1.append(Pot(
+                    name=f"{pot.name} (第1次)",
+                    amount=half_1,
+                    eligible_players=set(pot.eligible_players)
+                ))
+            if half_2 > 0:
+                pots_2.append(Pot(
+                    name=f"{pot.name} (第2次)",
+                    amount=half_2,
+                    eligible_players=set(pot.eligible_players)
+                ))
+
+        payouts_1 = self._distribute_pots_internal(pots_1, hand_evaluations_1, seat_order_from_sb)
+        payouts_2 = self._distribute_pots_internal(pots_2, hand_evaluations_2, seat_order_from_sb)
+        all_combined = refund_payouts + payouts_1 + payouts_2
+
+        return payouts_1, payouts_2, all_combined

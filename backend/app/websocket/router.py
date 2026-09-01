@@ -1,6 +1,7 @@
 """WebSocket Router and Event Dispatcher for Texas Hold'em Room."""
 
 from __future__ import annotations
+import asyncio
 import json
 import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -17,21 +18,83 @@ logger = logging.getLogger("poker.router")
 ws_router = APIRouter()
 
 
+async def start_all_in_slow_dealing(room_id: str):
+    """Orchestrates dramatic step-by-step card dealing when all-in is reached."""
+    timeout_manager.cancel_turn_timer(room_id)
+    timeout_manager.cancel_rit_timer(room_id)
+
+    async def _deal_flow(r_id: str):
+        # Brief initial suspense pause (1.0s)
+        await asyncio.sleep(1.0)
+
+        while True:
+            r = room_manager.get_room(r_id)
+            if not r or r.is_ended:
+                return
+
+            step = r.table.deal_all_in_next_step()
+            if step is None or step == "SHOWDOWN":
+                break
+
+            await ws_manager.broadcast_sound(r_id, "deal")
+            await ws_manager.broadcast_room_state(r)
+            # Suspense delay between dealing streets: 1.8s
+            await asyncio.sleep(1.8)
+
+        # Showdown & Pot Resolution
+        r = room_manager.get_room(r_id)
+        if not r or r.is_ended:
+            return
+        r.table.enter_showdown()
+        await ws_manager.broadcast_sound(r_id, "win_pot")
+        await ws_manager.broadcast_room_state(r)
+
+    timeout_manager.start_deal_task(room_id, _deal_flow)
+
+
+async def trigger_room_after_action(room_id: str):
+    """Handle state transitions and timer scheduling after any game action or street advance."""
+    room = room_manager.get_room(room_id)
+    if not room or room.is_ended:
+        timeout_manager.cancel_all_timers(room_id)
+        return
+
+    if room.table.street == Street.RIT_DECISION:
+        timeout_manager.cancel_turn_timer(room_id)
+        await ws_manager.broadcast_sound(room_id, "allin")
+        await ws_manager.broadcast_room_state(room)
+
+        async def _on_rit_timeout(r_id: str):
+            r = room_manager.get_room(r_id)
+            if not r or r.is_ended or r.table.street != Street.RIT_DECISION:
+                return
+            r.table.timeout_rit()
+            await ws_manager.broadcast_room_state(r)
+            await start_all_in_slow_dealing(r_id)
+
+        timeout_manager.start_rit_timer(room_id, 8, _on_rit_timeout)
+
+    elif room.table.street not in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END):
+        await trigger_room_turn_timer(room_id)
+    else:
+        timeout_manager.cancel_turn_timer(room_id)
+
+
 async def trigger_room_turn_timer(room_id: str):
     """Setup turn timeout for the current active player."""
     room = room_manager.get_room(room_id)
-    if not room or room.is_ended or room.table.street in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END):
-        timeout_manager.cancel_timer(room_id)
+    if not room or room.is_ended or room.table.street in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END, Street.RIT_DECISION):
+        timeout_manager.cancel_turn_timer(room_id)
         return
 
     current_seat_idx = room.table.current_turn_seat
     if current_seat_idx is None:
-        timeout_manager.cancel_timer(room_id)
+        timeout_manager.cancel_turn_timer(room_id)
         return
 
     current_player = room.table.seats[current_seat_idx]
     if not current_player:
-        timeout_manager.cancel_timer(room_id)
+        timeout_manager.cancel_turn_timer(room_id)
         return
 
     async def _on_timeout(r_id: str):
@@ -39,7 +102,11 @@ async def trigger_room_turn_timer(room_id: str):
         if not r or r.is_ended or r.table.current_turn_seat != current_seat_idx:
             return
 
-        legal = r.table.get_legal_actions(current_player.player_id)
+        target_player = r.table.seats[current_seat_idx]
+        if not target_player:
+            return
+
+        legal = r.table.get_legal_actions(target_player.player_id)
         if legal.can_check:
             action = ActionType.CHECK
             sound = "check"
@@ -48,8 +115,14 @@ async def trigger_room_turn_timer(room_id: str):
             sound = "fold"
 
         prev_street = r.table.street
-        r.table.handle_action(current_player.player_id, action)
-        await ws_manager.broadcast_sound(r_id, sound, {"player_id": current_player.player_id})
+        success = r.table.handle_action(target_player.player_id, action)
+        if not success:
+            logger.warning(f"Timeout auto-action {action} failed for player {target_player.player_id}, fallback FOLD")
+            r.table.handle_action(target_player.player_id, ActionType.FOLD)
+            action = ActionType.FOLD
+            sound = "fold"
+
+        await ws_manager.broadcast_sound(r_id, sound, {"player_id": target_player.player_id})
 
         if r.table.street != prev_street:
             if r.table.street in (Street.FLOP, Street.TURN, Street.RIVER):
@@ -58,9 +131,9 @@ async def trigger_room_turn_timer(room_id: str):
                 await ws_manager.broadcast_sound(r_id, "win_pot")
 
         await ws_manager.broadcast_room_state(r)
-        await trigger_room_turn_timer(r_id)
+        await trigger_room_after_action(r_id)
 
-    timeout_manager.start_timer(
+    timeout_manager.start_turn_timer(
         room_id=room_id,
         timeout_seconds=room.config.action_timeout,
         on_timeout_callback=_on_timeout
@@ -78,6 +151,15 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
 
     user = user_manager.get_user(user_id)
     nickname = user.nickname if user else f"Player_{user_id[-4:]}"
+
+    # Auto-seat player if room is active and player is not yet seated
+    if not room.is_ended:
+        is_already_seated = any(s and s.player_id == user_id for s in room.table.seats)
+        if not is_already_seated:
+            for idx in range(room.config.max_seats):
+                if room.table.seats[idx] is None:
+                    room.sit_down_player(user_id, nickname, idx)
+                    break
 
     await ws_manager.connect(websocket, room_id, user_id)
 
@@ -112,7 +194,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 if seat_index is not None:
                     room.stand_up_player(seat_index)
                     await ws_manager.broadcast_room_state(room)
-                    await trigger_room_turn_timer(room_id)
+                    await trigger_room_after_action(room_id)
 
             elif event == EventType.REBUY:
                 ok = room.rebuy_player(user_id)
@@ -121,17 +203,22 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     await ws_manager.broadcast_room_state(room)
 
             elif event == EventType.START_GAME:
-                # Any seated player or host can trigger start of next hand when idle
-                if room.table.can_start_hand():
+                # Only room host can trigger start of next hand when idle / hand_end
+                if user_id == room.host_player_id and room.table.can_start_hand():
+                    timeout_manager.cancel_all_timers(room_id)
                     ok = room.table.start_new_hand()
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "deal")
                         await ws_manager.broadcast_room_state(room)
-                        await trigger_room_turn_timer(room_id)
+                        await trigger_room_after_action(room_id)
 
             elif event == EventType.PLAYER_ACTION:
                 action_str = payload.get("action")
-                amount = payload.get("amount", 0)
+                raw_amount = payload.get("amount", 0)
+                try:
+                    amount = int(float(raw_amount))
+                except (ValueError, TypeError):
+                    amount = 0
                 try:
                     action = ActionType(action_str)
                 except ValueError:
@@ -140,8 +227,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 prev_street = room.table.street
                 success = room.table.handle_action(user_id, action, raise_total_amount=amount)
                 if success:
-                    # Cancel turn timer immediately upon active player action
-                    timeout_manager.cancel_timer(room_id)
+                    timeout_manager.cancel_turn_timer(room_id)
 
                     # Sound mapping
                     sound_map = {
@@ -163,19 +249,49 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                             await ws_manager.broadcast_sound(room_id, "win_pot")
 
                     await ws_manager.broadcast_room_state(room)
-                    await trigger_room_turn_timer(room_id)
+                    await trigger_room_after_action(room_id)
+
+            elif event == EventType.RIT_CHOICE:
+                choice = payload.get("choice", 1)
+                try:
+                    choice = int(choice)
+                except (ValueError, TypeError):
+                    choice = 1
+
+                res, is_twice = room.table.vote_rit(user_id, choice)
+                if res == "FINALIZED":
+                    timeout_manager.cancel_rit_timer(room_id)
+                    await ws_manager.broadcast_room_state(room)
+                    await start_all_in_slow_dealing(room_id)
+                elif res == "WAITING":
+                    await ws_manager.broadcast_room_state(room)
 
             elif event == EventType.SHOW_CARD:
                 card_index = payload.get("card_index")
                 show_all = payload.get("show_all", False)
-                ok = room.table.show_card(user_id, card_index=card_index, show_all=show_all)
+                hide_all = payload.get("hide_all", False)
+                toggle_index = payload.get("toggle_index")
+                ok = room.table.show_card(user_id, card_index=card_index, show_all=show_all, hide_all=hide_all, toggle_index=toggle_index)
                 if ok:
+                    await ws_manager.broadcast_room_state(room)
+
+            elif event == EventType.PLAYER_READY:
+                ready = payload.get("ready", True)
+                all_ready = room.table.set_player_ready(user_id, ready)
+                if all_ready and room.table.can_start_hand():
+                    timeout_manager.cancel_all_timers(room_id)
+                    ok = room.table.start_new_hand()
+                    if ok:
+                        await ws_manager.broadcast_sound(room_id, "deal")
+                        await ws_manager.broadcast_room_state(room)
+                        await trigger_room_after_action(room_id)
+                else:
                     await ws_manager.broadcast_room_state(room)
 
             elif event == EventType.END_ROOM:
                 report = room.end_room(requester_id=user_id)
                 if report:
-                    timeout_manager.cancel_timer(room_id)
+                    timeout_manager.cancel_all_timers(room_id)
                     await ws_manager.broadcast_sound(room_id, "win_pot")
                     await ws_manager.broadcast_room_state(room)
 
@@ -184,3 +300,5 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     except Exception as e:
         logger.exception(f"Unexpected WebSocket error: {e}")
         ws_manager.disconnect(websocket)
+
+

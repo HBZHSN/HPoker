@@ -1,16 +1,70 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Lobby from './components/Lobby';
 import PokerTable from './components/PokerTable';
+import LoginModal from './components/LoginModal';
+import ProfileModal from './components/ProfileModal';
+import AdminUserModal from './components/AdminUserModal';
 import { soundEngine } from './sound/SoundEngine';
 
 export default function App() {
+  const [token, setToken] = useState(() => localStorage.getItem('ggpoker_token') || '');
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('ggpoker_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
   const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [activeRoomId, setActiveRoomId] = useState(null);
   const [roomData, setRoomData] = useState(null);
 
+  // Modals
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+
   const wsRef = useRef(null);
+
+  // Verify stored token on startup
+  useEffect(() => {
+    if (token) {
+      fetch(`/api/auth/me?token=${token}`)
+        .then((res) => {
+          if (!res.ok) throw new Error('Token expired');
+          return res.json();
+        })
+        .then((data) => {
+          setCurrentUser(data.user);
+          localStorage.setItem('ggpoker_user', JSON.stringify(data.user));
+        })
+        .catch(() => {
+          setToken('');
+          setCurrentUser(null);
+          localStorage.removeItem('ggpoker_token');
+          localStorage.removeItem('ggpoker_user');
+        });
+    }
+  }, [token]);
+
+  const handleLoginSuccess = (user, authToken) => {
+    setCurrentUser(user);
+    setToken(authToken);
+    localStorage.setItem('ggpoker_token', authToken);
+    localStorage.setItem('ggpoker_user', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setToken('');
+    setCurrentUser(null);
+    setActiveRoomId(null);
+    setRoomData(null);
+    localStorage.removeItem('ggpoker_token');
+    localStorage.removeItem('ggpoker_user');
+  };
+
+  const handleUpdateUser = (updatedUser) => {
+    setCurrentUser(updatedUser);
+    localStorage.setItem('ggpoker_user', JSON.stringify(updatedUser));
+  };
 
   // Fetch initial users and active rooms
   const fetchLobbyData = useCallback(async () => {
@@ -23,14 +77,11 @@ export default function App() {
       const roomsJson = await roomsRes.json();
 
       setUsers(usersJson);
-      if (!currentUser && usersJson.length > 0) {
-        setCurrentUser(usersJson[0]);
-      }
       setRooms(roomsJson);
     } catch (e) {
       console.error("Failed to load lobby data:", e);
     }
-  }, [currentUser]);
+  }, []);
 
   useEffect(() => {
     fetchLobbyData();
@@ -110,6 +161,15 @@ export default function App() {
     fetchLobbyData();
   };
 
+  // If not authenticated, require login
+  if (!token || !currentUser) {
+    return (
+      <div className="min-h-screen bg-gg-dark text-slate-100 flex flex-col font-sans">
+        <LoginModal onLoginSuccess={handleLoginSuccess} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gg-dark text-slate-100 flex flex-col font-sans">
       {activeRoomId && roomData ? (
@@ -123,12 +183,37 @@ export default function App() {
         <Lobby
           users={users}
           currentUser={currentUser}
-          onSelectUser={setCurrentUser}
+          token={token}
+          onUpdateUser={handleUpdateUser}
+          onOpenProfile={() => setProfileOpen(true)}
+          onOpenAdmin={() => setAdminOpen(true)}
+          onLogout={handleLogout}
           rooms={rooms}
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
         />
       )}
+
+      {/* User Profile Modal */}
+      {profileOpen && (
+        <ProfileModal
+          isOpen={profileOpen}
+          user={currentUser}
+          token={token}
+          onUpdateUser={handleUpdateUser}
+          onClose={() => setProfileOpen(false)}
+        />
+      )}
+
+      {/* Admin User & Account Management Modal */}
+      {adminOpen && currentUser?.is_admin && (
+        <AdminUserModal
+          isOpen={adminOpen}
+          adminUser={currentUser}
+          onClose={() => setAdminOpen(false)}
+        />
+      )}
     </div>
   );
 }
+

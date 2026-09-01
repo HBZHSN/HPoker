@@ -25,6 +25,7 @@ class Street(str, Enum):
     FLOP = "FLOP"
     TURN = "TURN"
     RIVER = "RIVER"
+    RIT_DECISION = "RIT_DECISION"
     SHOWDOWN = "SHOWDOWN"
     HAND_END = "HAND_END"
 
@@ -142,15 +143,29 @@ class TableStateMachine:
 
         self.street: Street = Street.IDLE
         self.board_cards: List[Card] = []
+        self.board_cards_2: List[Card] = []
         self.hand_number: int = 0
 
         self.current_round_highest_bet: int = 0
         self.min_raise_increment: int = big_blind
         self.last_raiser_seat: Optional[int] = None
 
+        self.rit_enabled: bool = False
+        self.rit_status: Optional[str] = None
+        self.rit_votes: Dict[str, int] = {}
+        self.rit_voters: List[str] = []
+        self.current_dealing_board: int = 1
+        self.is_all_in_runout: bool = False
+        self.all_in_initial_board_count: int = 0
+
         self.hand_evaluations: Dict[str, HandEvaluation] = {}
+        self.hand_evaluations_2: Dict[str, HandEvaluation] = {}
         self.payouts: List[PotPayout] = []
+        self.payouts_1: List[PotPayout] = []
+        self.payouts_2: List[PotPayout] = []
         self.last_action_history: List[dict] = []
+        self.ready_player_ids: Set[str] = set()
+        self.turn_count: int = 0
 
     # ----------------- Seat & Player Management -----------------
 
@@ -189,9 +204,12 @@ class TableStateMachine:
     def rebuy(self, player_id: str, additional_chips: int) -> bool:
         for player in self.active_seated_players:
             if player.player_id == player_id:
+                if player.chips > 0:
+                    return False
                 player.chips += additional_chips
                 player.total_buyin_chips += additional_chips
                 player.rebuy_count += 1
+                player.is_all_in = False
                 return True
         return False
 
@@ -226,9 +244,21 @@ class TableStateMachine:
 
         self.hand_number += 1
         self.board_cards.clear()
+        self.board_cards_2.clear()
+        self.rit_enabled = False
+        self.rit_status = None
+        self.rit_votes.clear()
+        self.rit_voters.clear()
+        self.current_dealing_board = 1
+        self.is_all_in_runout = False
+        self.all_in_initial_board_count = 0
         self.hand_evaluations.clear()
+        self.hand_evaluations_2.clear()
         self.payouts.clear()
+        self.payouts_1.clear()
+        self.payouts_2.clear()
         self.last_action_history.clear()
+        self.ready_player_ids.clear()
         self.pot_manager.reset()
         self.deck.reset()
 
@@ -256,11 +286,13 @@ class TableStateMachine:
         self.current_round_highest_bet = self.big_blind
         self.min_raise_increment = self.big_blind
 
-        if len(self.non_allin_active_players) <= 1:
-            self._fast_forward_to_showdown()
+        if self.should_trigger_all_in_runout():
+            self.setup_all_in_runout()
         else:
             utg_seat = self._find_next_action_seat(self.bb_seat)
             self.current_turn_seat = utg_seat
+            if self.current_turn_seat is not None:
+                self.turn_count += 1
         return True
 
     def _rotate_positions(self) -> None:
@@ -429,14 +461,35 @@ class TableStateMachine:
         elif action in (ActionType.BET, ActionType.RAISE):
             # raise_total_amount is the total target bet for this round
             target_bet = raise_total_amount
-            added_chips = target_bet - curr_round_bet
-            if added_chips <= 0 or added_chips > current_player.chips:
-                # Fallback: if all-in
-                if added_chips >= current_player.chips:
-                    added_chips = current_player.chips
-                    target_bet = curr_round_bet + added_chips
+
+            # If target_bet is 0 or unassigned, default to minimum legal bet/raise
+            if target_bet <= 0:
+                if legal.can_bet:
+                    target_bet = legal.min_bet
+                elif legal.can_raise:
+                    target_bet = legal.min_raise_to
                 else:
                     return False
+
+            # Clamp if below minimum legal raise but player has enough chips
+            if highest_bet == 0 and target_bet < self.big_blind:
+                if current_player.chips >= self.big_blind:
+                    target_bet = min(self.big_blind, current_player.chips)
+            elif highest_bet > 0:
+                min_target = highest_bet + self.min_raise_increment
+                if target_bet < min_target:
+                    # If player has enough chips to make min raise, clamp up to min_target
+                    if curr_round_bet + current_player.chips >= min_target:
+                        target_bet = min_target
+
+            added_chips = target_bet - curr_round_bet
+            if added_chips <= 0:
+                return False
+
+            if added_chips > current_player.chips:
+                # Fallback: if all-in
+                added_chips = current_player.chips
+                target_bet = curr_round_bet + added_chips
 
             # Check min-raise rules
             raise_diff = target_bet - highest_bet
@@ -518,7 +571,10 @@ class TableStateMachine:
             self._advance_street()
         else:
             # Advance to next active player
-            self.current_turn_seat = self._find_next_action_seat(self.current_turn_seat or self.dealer_seat)
+            after_seat = self.current_turn_seat if self.current_turn_seat is not None else self.dealer_seat
+            self.current_turn_seat = self._find_next_action_seat(after_seat)
+            if self.current_turn_seat is not None:
+                self.turn_count += 1
 
     def _advance_street(self) -> None:
         """Advance to next street (Flop, Turn, River, or Showdown)."""
@@ -530,9 +586,9 @@ class TableStateMachine:
         for p in self.active_seated_players:
             p.has_acted_this_round = False
 
-        # Check if 0 or 1 player can still act (others all-in) -> fast-forward board!
-        if len(self.non_allin_active_players) <= 1 and len(self.active_in_hand_players) >= 2:
-            self._fast_forward_to_showdown()
+        # Check if 0 or 1 player can still act (others all-in) -> trigger all-in slow runout
+        if self.should_trigger_all_in_runout():
+            self.setup_all_in_runout()
             return
 
         if self.street == Street.PREFLOP:
@@ -548,37 +604,138 @@ class TableStateMachine:
             self.deck.burn()
             self.board_cards.append(self.deck.draw_one())
         elif self.street == Street.RIVER:
-            self._enter_showdown()
+            self.enter_showdown()
             return
 
         # Set first action player for post-flop streets (first active player after dealer button)
         first_seat = self._find_next_action_seat(self.dealer_seat)
         self.current_turn_seat = first_seat
+        if self.current_turn_seat is not None:
+            self.turn_count += 1
 
-    def _fast_forward_to_showdown(self) -> None:
-        """Deal remaining community cards automatically when players are all-in."""
-        while len(self.board_cards) < 5:
+    def should_trigger_all_in_runout(self) -> bool:
+        """True if betting is complete and all remaining active players are all-in (<=1 player can act)."""
+        return len(self.non_allin_active_players) <= 1 and len(self.active_in_hand_players) >= 2
+
+    def setup_all_in_runout(self) -> bool:
+        """Setup table for all-in Run-It-Twice choice and slow dealing."""
+        if not self.should_trigger_all_in_runout():
+            return False
+
+        # Reveal cards of all contenders immediately for drama and excitement
+        for p in self.active_in_hand_players:
+            p.shown_cards = list(p.hole_cards)
+
+        self.is_all_in_runout = True
+        self.all_in_initial_board_count = len(self.board_cards)
+        self.current_turn_seat = None
+
+        if len(self.board_cards) < 5:
+            # Prompt for RIT decision
+            self.street = Street.RIT_DECISION
+            self.rit_status = "VOTING"
+            self.rit_votes.clear()
+            self.rit_voters = [p.player_id for p in self.active_in_hand_players]
+            return True
+        else:
+            # All 5 cards already out on river, directly showdown
+            self.enter_showdown()
+            return False
+
+    def vote_rit(self, player_id: str, choice: int) -> Tuple[str, bool]:
+        """Record player's Run-It-Twice choice (1 or 2).
+        
+        Rule: If ANY player chooses 1, Run It Once (1 run).
+              If ALL players choose 2, Run It Twice (2 runs).
+        
+        Returns:
+            (status, is_run_twice): status in ("FINALIZED", "WAITING", "IGNORED")
+        """
+        if self.street != Street.RIT_DECISION or player_id not in self.rit_voters:
+            return ("IGNORED", False)
+
+        self.rit_votes[player_id] = choice
+
+        if choice == 1:
+            # Any single vote of 1 forces Run It Once
+            self.rit_enabled = False
+            self.rit_status = "AGREED_ONCE"
+            return ("FINALIZED", False)
+        elif choice == 2:
+            # Check if all voters have chosen 2
+            if len(self.rit_votes) == len(self.rit_voters) and all(v == 2 for v in self.rit_votes.values()):
+                self.rit_enabled = True
+                self.rit_status = "AGREED_TWICE"
+                return ("FINALIZED", True)
+            return ("WAITING", False)
+        return ("IGNORED", False)
+
+    def timeout_rit(self) -> bool:
+        """Fallback when RIT voting timer expires: defaults to Run It Once unless unanimous 2."""
+        if self.street == Street.RIT_DECISION or self.rit_status == "VOTING":
+            if len(self.rit_votes) == len(self.rit_voters) and all(v == 2 for v in self.rit_votes.values()):
+                self.rit_enabled = True
+                self.rit_status = "AGREED_TWICE"
+            else:
+                self.rit_enabled = False
+                self.rit_status = "AGREED_ONCE"
+            return True
+        return False
+
+    def deal_all_in_next_step(self) -> Optional[str]:
+        """Deal the next street/card during slow all-in runout.
+        
+        Returns event description string (e.g. 'FLOP', 'TURN', 'RIVER', 'FLOP_2', 'TURN_2', 'RIVER_2', 'SHOWDOWN') or None.
+        """
+        if self.current_dealing_board == 1:
             if len(self.board_cards) == 0:
+                self.street = Street.FLOP
                 self.deck.burn()
                 self.board_cards.extend(self.deck.draw(3))
-            else:
+                return "FLOP"
+            elif len(self.board_cards) == 3:
+                self.street = Street.TURN
                 self.deck.burn()
                 self.board_cards.append(self.deck.draw_one())
-        self._enter_showdown()
+                return "TURN"
+            elif len(self.board_cards) == 4:
+                self.street = Street.RIVER
+                self.deck.burn()
+                self.board_cards.append(self.deck.draw_one())
+                return "RIVER"
+            elif len(self.board_cards) >= 5:
+                if self.rit_enabled:
+                    self.current_dealing_board = 2
+                    self.board_cards_2 = list(self.board_cards[:self.all_in_initial_board_count])
+                    return self.deal_all_in_next_step()
+                else:
+                    return "SHOWDOWN"
 
-    def _enter_showdown(self) -> None:
-        """Evaluate hands for all contenders and distribute pots."""
+        elif self.current_dealing_board == 2:
+            if len(self.board_cards_2) == 0:
+                self.deck.burn()
+                self.board_cards_2.extend(self.deck.draw(3))
+                return "FLOP_2"
+            elif len(self.board_cards_2) == 3:
+                self.deck.burn()
+                self.board_cards_2.append(self.deck.draw_one())
+                return "TURN_2"
+            elif len(self.board_cards_2) == 4:
+                self.deck.burn()
+                self.board_cards_2.append(self.deck.draw_one())
+                return "RIVER_2"
+            elif len(self.board_cards_2) >= 5:
+                return "SHOWDOWN"
+
+        return None
+
+    def enter_showdown(self) -> None:
+        """Evaluate hands for all contenders and distribute pots (supporting 1 or 2 boards)."""
         self.street = Street.SHOWDOWN
         self.current_turn_seat = None
 
-        # Evaluate hands for all non-folded players
-        evaluations: Dict[str, HandEvaluation] = {}
+        # Auto show hole cards in showdown
         for p in self.active_in_hand_players:
-            total_cards = p.hole_cards + self.board_cards
-            eval_res = evaluate_hand(total_cards)
-            evaluations[p.player_id] = eval_res
-            self.hand_evaluations[p.player_id] = eval_res
-            # Auto show hole cards in showdown
             p.shown_cards = list(p.hole_cards)
 
         # Get seat order starting from SB for odd chip resolution
@@ -587,18 +744,69 @@ class TableStateMachine:
             if not p.is_folded
         ]
 
-        # Calculate and apply payouts
-        self.payouts = self.pot_manager.resolve_showdown(
-            hand_evaluations=evaluations,
-            seat_order_from_sb=sb_order
-        )
+        if not self.rit_enabled:
+            evaluations: Dict[str, HandEvaluation] = {}
+            for p in self.active_in_hand_players:
+                total_cards = p.hole_cards + self.board_cards
+                eval_res = evaluate_hand(total_cards)
+                evaluations[p.player_id] = eval_res
+                self.hand_evaluations[p.player_id] = eval_res
 
-        for payout in self.payouts:
-            player = next((p for p in self.active_seated_players if p.player_id == payout.player_id), None)
-            if player:
-                player.chips += payout.amount
+            self.payouts = self.pot_manager.resolve_showdown(
+                hand_evaluations=evaluations,
+                seat_order_from_sb=sb_order
+            )
+            for payout in self.payouts:
+                player = next((p for p in self.active_seated_players if p.player_id == payout.player_id), None)
+                if player:
+                    player.chips += payout.amount
+        else:
+            evaluations_1: Dict[str, HandEvaluation] = {}
+            evaluations_2: Dict[str, HandEvaluation] = {}
+            for p in self.active_in_hand_players:
+                e1 = evaluate_hand(p.hole_cards + self.board_cards)
+                e2 = evaluate_hand(p.hole_cards + self.board_cards_2)
+                evaluations_1[p.player_id] = e1
+                evaluations_2[p.player_id] = e2
+                self.hand_evaluations[p.player_id] = e1
+                self.hand_evaluations_2[p.player_id] = e2
+
+            p1, p2, combined = self.pot_manager.resolve_showdown_twice(
+                hand_evaluations_1=evaluations_1,
+                hand_evaluations_2=evaluations_2,
+                seat_order_from_sb=sb_order
+            )
+            self.payouts_1 = p1
+            self.payouts_2 = p2
+            self.payouts = combined
+            for payout in self.payouts:
+                player = next((p for p in self.active_seated_players if p.player_id == payout.player_id), None)
+                if player:
+                    player.chips += payout.amount
 
         self.street = Street.HAND_END
+        self.is_all_in_runout = False
+        self.rit_status = "COMPLETED" if self.rit_enabled else None
+
+    def _enter_showdown(self) -> None:
+        self.enter_showdown()
+
+    def _fast_forward_to_showdown(self) -> None:
+        self.fast_forward_to_showdown()
+
+    def fast_forward_to_showdown(self, run_twice: bool = False) -> None:
+        """Synchronously deal remaining cards to showdown (convenient for testing)."""
+        if run_twice:
+            self.rit_enabled = True
+            self.rit_status = "AGREED_TWICE"
+            self.current_dealing_board = 1
+            self.all_in_initial_board_count = len(self.board_cards)
+
+        while True:
+            step = self.deal_all_in_next_step()
+            if step == "SHOWDOWN" or step is None:
+                break
+        self.enter_showdown()
 
     def _end_hand_uncontested(self) -> None:
         """Single winner takes the pot without revealing hand."""
@@ -628,21 +836,54 @@ class TableStateMachine:
                     hand_description="其他玩家弃牌获胜"
                 ))
 
-    def show_card(self, player_id: str, card_index: Optional[int] = None, show_all: bool = False) -> bool:
-        """Allow player to reveal one or all cards at the end of the hand."""
+    def set_player_ready(self, player_id: str, ready: bool = True) -> bool:
+        """Mark a player as confirmed/ready for the next hand.
+        Returns True if all active eligible seated players are ready.
+        """
+        if ready:
+            self.ready_player_ids.add(player_id)
+        else:
+            self.ready_player_ids.discard(player_id)
+
+        eligible = [p.player_id for p in self.eligible_hand_players]
+        if len(eligible) >= 2 and all(pid in self.ready_player_ids for pid in eligible):
+            return True
+        return False
+
+    def show_card(
+        self,
+        player_id: str,
+        card_index: Optional[int] = None,
+        show_all: bool = False,
+        hide_all: bool = False,
+        toggle_index: Optional[int] = None,
+    ) -> bool:
+        """Allow player to reveal or hide cards at the end of the hand."""
         if self.street != Street.HAND_END:
             return False
         player = next((p for p in self.active_seated_players if p.player_id == player_id), None)
         if not player or not player.hole_cards:
             return False
 
-        if show_all:
+        if hide_all:
+            player.shown_cards.clear()
+            return True
+        elif show_all:
             player.shown_cards = list(player.hole_cards)
+            return True
+        elif toggle_index is not None and 0 <= toggle_index < len(player.hole_cards):
+            card = player.hole_cards[toggle_index]
+            if card in player.shown_cards:
+                player.shown_cards.remove(card)
+            else:
+                player.shown_cards.append(card)
+            player.shown_cards = [c for c in player.hole_cards if c in player.shown_cards]
             return True
         elif card_index is not None and 0 <= card_index < len(player.hole_cards):
             card = player.hole_cards[card_index]
             if card not in player.shown_cards:
                 player.shown_cards.append(card)
+            player.shown_cards = [c for c in player.hole_cards if c in player.shown_cards]
             return True
         return False
 
@@ -657,25 +898,90 @@ class TableStateMachine:
     def get_table_state(self, viewer_player_id: Optional[str] = None) -> dict:
         """Produce full serialized table snapshot for client broadcast."""
         pots, refunds = self.pot_manager.calculate_pots()
+
+        # Build hand_results for HAND_END / SHOWDOWN summary
+        hand_results = []
+        if self.street in (Street.HAND_END, Street.SHOWDOWN):
+            for p in self.active_seated_players:
+                total_bet = self.pot_manager.get_player_total_bet(p.player_id)
+                payout_amt = sum(po.amount for po in self.payouts if po.player_id == p.player_id)
+                payout_b1 = sum(po.amount for po in self.payouts_1 if po.player_id == p.player_id)
+                payout_b2 = sum(po.amount for po in self.payouts_2 if po.player_id == p.player_id)
+                net_profit = payout_amt - total_bet
+                hand_desc = "未参与"
+                hand_desc_2 = None
+                if p.player_id in self.hand_evaluations:
+                    eval_obj = self.hand_evaluations[p.player_id]
+                    hand_desc = eval_obj.description or eval_obj.category.display_name
+                elif payout_amt > 0:
+                    matching_po = next((po for po in self.payouts if po.player_id == p.player_id), None)
+                    hand_desc = matching_po.hand_description if matching_po and matching_po.hand_description else "获胜"
+                elif p.is_folded:
+                    hand_desc = "弃牌 (Folded)"
+                elif len(p.hole_cards) > 0:
+                    hand_desc = "已盖牌"
+
+                if self.rit_enabled and p.player_id in self.hand_evaluations_2:
+                    eval_obj_2 = self.hand_evaluations_2[p.player_id]
+                    hand_desc_2 = eval_obj_2.description or eval_obj_2.category.display_name
+
+                # Private cards revealed if user is viewer or if player's cards are shown
+                show_private = (
+                    p.player_id == viewer_player_id
+                    or (len(p.shown_cards) > 0 and not p.is_folded)
+                )
+
+                hand_results.append({
+                    "player_id": p.player_id,
+                    "name": p.name,
+                    "seat_index": p.seat_index,
+                    "total_bet": total_bet,
+                    "payout_amount": payout_amt,
+                    "payout_board_1": payout_b1,
+                    "payout_board_2": payout_b2,
+                    "net_profit": net_profit,
+                    "chips": p.chips,
+                    "is_folded": p.is_folded,
+                    "is_winner": payout_amt > 0,
+                    "hand_desc": hand_desc,
+                    "hand_desc_2": hand_desc_2,
+                    "hole_cards": [c.to_dict() for c in p.hole_cards] if (p.player_id == viewer_player_id) else [],
+                    "shown_cards": [c.to_dict() for c in p.shown_cards],
+                    "is_ready": p.player_id in self.ready_player_ids,
+                })
+
         return {
             "hand_number": self.hand_number,
             "street": self.street.value,
             "board_cards": [c.to_dict() for c in self.board_cards],
+            "board_cards_2": [c.to_dict() for c in self.board_cards_2],
+            "all_in_initial_board_count": self.all_in_initial_board_count,
+            "rit_enabled": self.rit_enabled,
+            "rit_status": self.rit_status,
+            "rit_votes": dict(self.rit_votes),
+            "rit_voters": list(self.rit_voters),
+            "current_dealing_board": self.current_dealing_board,
+            "is_all_in_runout": self.is_all_in_runout,
             "dealer_seat": self.dealer_seat,
             "sb_seat": self.sb_seat,
             "bb_seat": self.bb_seat,
             "current_turn_seat": self.current_turn_seat,
+            "turn_count": self.turn_count,
             "small_blind": self.small_blind,
             "big_blind": self.big_blind,
             "current_round_highest_bet": self.current_round_highest_bet,
             "total_pot": self.pot_manager.total_pot_amount,
             "pots": [p.to_dict() for p in pots],
             "seats": [
-                s.to_dict(include_private_cards=(s.player_id == viewer_player_id or self.street == Street.SHOWDOWN or self.street == Street.HAND_END and len(s.shown_cards) > 0))
+                s.to_dict(include_private_cards=(s.player_id == viewer_player_id))
                 if s else None
                 for s in self.seats
             ],
             "payouts": [p.to_dict() for p in self.payouts],
+            "payouts_1": [p.to_dict() for p in self.payouts_1],
+            "payouts_2": [p.to_dict() for p in self.payouts_2],
             "legal_actions": self.get_legal_actions(viewer_player_id).to_dict() if viewer_player_id else None,
             "action_history": self.last_action_history[-10:],
+            "ready_player_ids": list(self.ready_player_ids),
+            "hand_results": hand_results,
         }

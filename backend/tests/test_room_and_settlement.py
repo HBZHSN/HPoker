@@ -80,9 +80,13 @@ def test_room_lifecycle_and_rebuy():
     assert room.sit_down_player("host1", "Alice (Host)", seat_index=0) is True
     assert room.sit_down_player("user2", "Bob", seat_index=1) is True
 
-    # Bob rebuys
+    # Bob cannot rebuy when chips > 0
+    assert room.rebuy_player("user2") is False
+
+    # Bob loses all chips (chips == 0)
+    room.table.seats[1].chips = 0
     assert room.rebuy_player("user2") is True
-    assert room.table.seats[1].chips == 2000
+    assert room.table.seats[1].chips == 1000
     assert room.table.seats[1].rebuy_count == 2
     assert room.table.seats[1].total_buyin_chips == 2000
 

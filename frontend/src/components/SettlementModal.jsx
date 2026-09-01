@@ -18,7 +18,7 @@ export default function SettlementModal({
       text += `${idx + 1}. ${r.player_name}: 买入x${r.rebuy_count} (${r.total_buyin_chips}筹码) -> 终局${r.final_chips}筹码 | 净输赢: ${sign}¥${r.net_cash.toFixed(2)}\n`;
     });
 
-    text += `\n--- 极简转账支付清单 (最少转账次数) ---\n`;
+    text += `\n--- 现金转账明细 ---\n`;
     if (report.transactions.length === 0) {
       text += `所有人筹码收支平衡，无需额外转账。\n`;
     } else {
@@ -106,7 +106,7 @@ export default function SettlementModal({
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-              极简现金转账明细 (最小转账图算法优化)
+              现金转账明细
             </h3>
             <span className="text-[11px] text-slate-400">
               共 {report.transactions.length} 笔支付

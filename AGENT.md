@@ -7,7 +7,10 @@
 
 ## 🎯 核心工作准则
 
-1. **虚拟环境隔离原则**：所有 Python 代码运行、依赖管理、测试执行必须在本地虚拟环境 `.venv` 中进行。
+> [!IMPORTANT]
+> **虚拟环境强制使用**：本项目所有 Python 命令必须使用虚拟环境 `.venv`（`/home/hanxu/code/python/poker/.venv/bin/python`、`/home/hanxu/code/python/poker/.venv/bin/pytest` 等），禁止尝试使用系统原生全局 Python！
+
+1. **虚拟环境隔离原则**：所有 Python 代码运行、依赖管理、测试执行必须在本地虚拟环境 `.venv` 中进行（命令前缀必须使用 `/home/hanxu/code/python/poker/.venv/bin/`）。
 2. **Git 原子提交原则**：每完成一个小功能或修复，必须立即执行 Git 提交，清晰记录改动原因与范围。
 3. **进度实时勾选原则**：以 [PROGRESS.md](file:///home/hanxu/code/python/poker/PROGRESS.md) 为唯一事实依据，每完成一个小功能，必须立即在对应项打勾 `[x]`。
 4. **算法零容错原则**：德州扑克规则极为严密（尤其是 7选5 牌型大小、边池分配、全下池隔离、结算债务简化），核心算法必须附带高覆盖率单元测试。
@@ -21,12 +24,13 @@
   ```bash
   python3 -m venv /home/hanxu/code/python/poker/.venv
   ```
-- **命令执行规范**：
+- **命令执行规范**（AI 必须绝对遵循）：
   - 运行 Python 脚本或模块：`/home/hanxu/code/python/poker/.venv/bin/python <script.py>`
   - 安装依赖：`/home/hanxu/code/python/poker/.venv/bin/pip install -r backend/requirements.txt`
   - 运行测试：`/home/hanxu/code/python/poker/.venv/bin/pytest backend/tests/`
   - 启动服务：`/home/hanxu/code/python/poker/.venv/bin/uvicorn backend.main:app --reload`
 - **禁止行为**：
+  - ❌ 严禁尝试原生 Python 或直接运行 `python`、`pytest` 等全局命令，必须使用 `.venv` 路径。
   - ❌ 禁止在全局系统 Python 环境下直接 `pip install` 或运行项目。
   - ❌ 禁止将 `.venv` 目录提交至 Git 仓库。
 

@@ -4,7 +4,11 @@ import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight } f
 export default function Lobby({
   users,
   currentUser,
-  onSelectUser,
+  token,
+  onUpdateUser,
+  onOpenProfile,
+  onOpenAdmin,
+  onLogout,
   rooms,
   onCreateRoom,
   onJoinRoom,
@@ -35,7 +39,7 @@ export default function Lobby({
 
   return (
     <div className="w-full max-w-5xl mx-auto p-4 md:p-8 flex flex-col gap-8">
-      {/* Top Banner & User Switcher */}
+      {/* Top Banner & User Switcher / Auth Control */}
       <header className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900/80 border border-amber-500/30 p-5 rounded-3xl backdrop-blur-md shadow-2xl">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-black text-xl shadow-glow-gold">
@@ -45,29 +49,55 @@ export default function Lobby({
             <h1 className="text-xl md:text-2xl font-black text-white tracking-wider flex items-center gap-2">
               GGPOKER 在线德州现金局
             </h1>
-            <p className="text-xs text-slate-400">
-              真实边池计算 · 现金局重买记录 · 终局极简转账图结算
-            </p>
           </div>
         </div>
 
-        {/* User Identity Selector */}
-        <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded-2xl border border-slate-800">
-          <span className="text-xs text-slate-400">当前身份:</span>
-          <select
-            value={currentUser?.user_id || ''}
-            onChange={(e) => {
-              const u = users.find((item) => item.user_id === e.target.value);
-              if (u) onSelectUser(u);
-            }}
-            className="bg-slate-900 text-amber-400 font-bold text-xs rounded-xl px-2 py-1 border border-slate-700 outline-none cursor-pointer"
-          >
-            {users.map((u) => (
-              <option key={u.user_id} value={u.user_id}>
-                {u.avatar} {u.nickname} {u.is_admin ? '(Admin)' : ''}
-              </option>
-            ))}
-          </select>
+        {/* User Profile & Management Controls */}
+        <div className="flex items-center gap-2.5 bg-slate-950 px-3.5 py-2 rounded-2xl border border-slate-800">
+          <div className="text-2xl select-none">{currentUser?.avatar || '👤'}</div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs md:text-sm font-black text-slate-100">{currentUser?.nickname}</span>
+              {currentUser?.is_admin && (
+                <span className="text-[10px] bg-amber-950 text-amber-300 px-1.5 py-0.2 rounded border border-amber-500/40 font-bold">
+                  👑 管理员
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] text-slate-400 font-mono">@{currentUser?.username}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-2">
+            {/* Edit Profile Button */}
+            <button
+              onClick={onOpenProfile}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs font-bold rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer"
+              title="个人设置"
+            >
+              个人设置
+            </button>
+
+            {/* Admin Management Button */}
+            {currentUser?.is_admin && (
+              <button
+                onClick={onOpenAdmin}
+                className="px-2.5 py-1.5 bg-amber-950 hover:bg-amber-900 text-amber-300 text-xs font-bold rounded-xl border border-amber-500/40 transition active:scale-95 cursor-pointer flex items-center gap-1 shadow"
+                title="账号管理"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                账号管理
+              </button>
+            )}
+
+            {/* Logout Button */}
+            <button
+              onClick={onLogout}
+              className="px-2.5 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 text-xs font-bold rounded-xl border border-red-500/40 transition active:scale-95 cursor-pointer"
+              title="退出登录"
+            >
+              退出
+            </button>
+          </div>
         </div>
       </header>
 
