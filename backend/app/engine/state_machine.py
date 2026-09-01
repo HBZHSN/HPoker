@@ -57,6 +57,21 @@ class PlayerSeat:
     has_acted_this_round: bool = False
     shown_cards: List[Card] = field(default_factory=list)
     last_action: Optional[str] = None
+    time_bank_cards: int = 3
+
+    def add_time_bank_card(self, amount: int = 1, max_cards: int = 5) -> bool:
+        """Add time bank cards up to max_cards (default 5). Returns True if added."""
+        if self.time_bank_cards < max_cards:
+            self.time_bank_cards = min(max_cards, self.time_bank_cards + amount)
+            return True
+        return False
+
+    def use_time_bank_card(self) -> bool:
+        """Consume one time bank card. Returns True if successfully consumed."""
+        if self.time_bank_cards > 0:
+            self.time_bank_cards -= 1
+            return True
+        return False
 
     def reset_for_new_hand(self) -> None:
         self.hole_cards.clear()
@@ -82,6 +97,7 @@ class PlayerSeat:
             "has_acted_this_round": self.has_acted_this_round,
             "shown_cards": [c.to_dict() for c in self.shown_cards],
             "last_action": self.last_action,
+            "time_bank_cards": self.time_bank_cards,
         }
 
 
@@ -166,6 +182,8 @@ class TableStateMachine:
         self.last_action_history: List[dict] = []
         self.ready_player_ids: Set[str] = set()
         self.turn_count: int = 0
+        self.is_using_time_bank: bool = False
+        self.current_turn_duration: int = action_timeout
 
     # ----------------- Seat & Player Management -----------------
 
@@ -186,8 +204,32 @@ class TableStateMachine:
             chips=chips,
             total_buyin_chips=total_buyin or chips,
             rebuy_count=1,
+            time_bank_cards=3,
         )
         return True
+
+    def use_time_bank_for_current_player(self) -> bool:
+        """Consume 1 time bank card for current active player and extend timer by 30 seconds."""
+        if self.current_turn_seat is None:
+            return False
+        player = self.seats[self.current_turn_seat]
+        if not player or player.time_bank_cards <= 0:
+            return False
+        if player.use_time_bank_card():
+            self.is_using_time_bank = True
+            self.current_turn_duration = 30
+            self.turn_count += 1
+            player.last_action = "⏱️ 使用时间卡 +30s"
+            return True
+        return False
+
+    def add_periodic_time_cards(self, max_cards: int = 5) -> int:
+        """Add 1 time bank card to all active seated players up to max_cards."""
+        count = 0
+        for player in self.active_seated_players:
+            if player.add_time_bank_card(1, max_cards=max_cards):
+                count += 1
+        return count
 
     def stand_up(self, seat_index: int) -> Optional[PlayerSeat]:
         if 0 <= seat_index < self.max_seats:
@@ -261,6 +303,8 @@ class TableStateMachine:
         self.ready_player_ids.clear()
         self.pot_manager.reset()
         self.deck.reset()
+        self.is_using_time_bank = False
+        self.current_turn_duration = self.action_timeout
 
         # Reset player hand states
         for player in self.active_seated_players:
@@ -573,6 +617,8 @@ class TableStateMachine:
             # Advance to next active player
             after_seat = self.current_turn_seat if self.current_turn_seat is not None else self.dealer_seat
             self.current_turn_seat = self._find_next_action_seat(after_seat)
+            self.is_using_time_bank = False
+            self.current_turn_duration = self.action_timeout
             if self.current_turn_seat is not None:
                 self.turn_count += 1
 
@@ -582,6 +628,8 @@ class TableStateMachine:
         self.current_round_highest_bet = 0
         self.min_raise_increment = self.big_blind
         self.last_raiser_seat = None
+        self.is_using_time_bank = False
+        self.current_turn_duration = self.action_timeout
 
         for p in self.active_seated_players:
             p.has_acted_this_round = False
@@ -967,6 +1015,8 @@ class TableStateMachine:
             "bb_seat": self.bb_seat,
             "current_turn_seat": self.current_turn_seat,
             "turn_count": self.turn_count,
+            "is_using_time_bank": self.is_using_time_bank,
+            "current_turn_duration": self.current_turn_duration,
             "small_blind": self.small_blind,
             "big_blind": self.big_blind,
             "current_round_highest_bet": self.current_round_highest_bet,

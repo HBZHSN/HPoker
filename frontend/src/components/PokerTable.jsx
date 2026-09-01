@@ -500,6 +500,8 @@ export default function PokerTable({
                       onSitDown={handleSitDown}
                       currentUserId={currentUser?.user_id}
                       actionTimeout={room?.config?.action_timeout || 15}
+                      currentTurnDuration={table?.current_turn_duration || room?.config?.action_timeout || 15}
+                      isUsingTimeBank={table?.is_using_time_bank || false}
                       payoutInfo={payout}
                       betDirection={pos.betDirection}
                       street={table?.street || 'IDLE'}
@@ -536,6 +538,9 @@ export default function PokerTable({
             actionHistory={table?.action_history || []}
             onStartGame={isHost ? handleStartGame : undefined}
             actionTimeout={room?.config?.action_timeout || 15}
+            currentTurnDuration={table?.current_turn_duration || room?.config?.action_timeout || 15}
+            isUsingTimeBank={table?.is_using_time_bank || false}
+            onUseTimeCard={() => onSendWsEvent('USE_TIME_CARD', {})}
             seats={table?.seats || []}
             ritStatus={table?.rit_status}
             ritVoters={table?.rit_voters}

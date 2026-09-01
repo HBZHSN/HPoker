@@ -67,6 +67,12 @@ class SoundEngine {
         case 'rebuy':
           this.playChime();
           break;
+        case 'time_card':
+          this.playTimeCard();
+          break;
+        case 'time_card_gain':
+          this.playTimeCardGain();
+          break;
         default:
           break;
       }
@@ -262,6 +268,49 @@ class SoundEngine {
 
       osc.start(ctx.currentTime + idx * 0.08);
       osc.stop(ctx.currentTime + idx * 0.08 + 0.2);
+    });
+  }
+
+  playTimeCard() {
+    const ctx = this.ctx;
+    // Dramatic resonant dual-bell clock / chime for time extension
+    [587.33, 880.0, 1174.66].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.06);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, ctx.currentTime + idx * 0.06 + 0.35);
+
+      gain.gain.setValueAtTime(0.35 * this.volume, ctx.currentTime + idx * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.06 + 0.4);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime + idx * 0.06);
+      osc.stop(ctx.currentTime + idx * 0.06 + 0.4);
+    });
+  }
+
+  playTimeCardGain() {
+    const ctx = this.ctx;
+    // Pleasant reward arpeggio when gaining a periodic time card
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.07);
+
+      gain.gain.setValueAtTime(0.22 * this.volume, ctx.currentTime + idx * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.07 + 0.25);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime + idx * 0.07);
+      osc.stop(ctx.currentTime + idx * 0.07 + 0.25);
     });
   }
 }

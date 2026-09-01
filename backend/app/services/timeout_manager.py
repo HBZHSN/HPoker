@@ -18,6 +18,8 @@ class TimeoutManager:
         self._rit_tasks: Dict[str, asyncio.Task] = {}
         # room_id -> active slow all-in dealing asyncio.Task
         self._deal_tasks: Dict[str, asyncio.Task] = {}
+        # room_id -> active recurring replenishment asyncio.Task
+        self._replenish_tasks: Dict[str, asyncio.Task] = {}
 
     def cancel_turn_timer(self, room_id: str) -> None:
         """Cancel existing turn timer for a room if any."""
@@ -37,15 +39,47 @@ class TimeoutManager:
         if task and not task.done():
             task.cancel()
 
+    def cancel_replenish_task(self, room_id: str) -> None:
+        """Cancel existing replenish task for a room if any."""
+        task = self._replenish_tasks.pop(room_id, None)
+        if task and not task.done():
+            task.cancel()
+
     # Backwards-compatible alias
     def cancel_timer(self, room_id: str) -> None:
         self.cancel_turn_timer(room_id)
 
     def cancel_all_timers(self, room_id: str) -> None:
-        """Cancel all turn timers, RIT timers, and dealing tasks for a room."""
+        """Cancel all turn timers, RIT timers, dealing tasks, and replenish tasks for a room."""
         self.cancel_turn_timer(room_id)
         self.cancel_rit_timer(room_id)
         self.cancel_deal_task(room_id)
+        self.cancel_replenish_task(room_id)
+
+    def start_replenish_task(
+        self,
+        room_id: str,
+        interval_seconds: int,
+        on_replenish_callback: Callable[[str], Awaitable[None]]
+    ) -> None:
+        """Start a recurring background timer for periodic time card replenishment."""
+        self.cancel_replenish_task(room_id)
+
+        async def _replenish_worker():
+            current_task = asyncio.current_task()
+            try:
+                while True:
+                    await asyncio.sleep(interval_seconds)
+                    await on_replenish_callback(room_id)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.exception(f"Error in replenish worker for room {room_id}: {e}")
+            finally:
+                if self._replenish_tasks.get(room_id) is current_task:
+                    self._replenish_tasks.pop(room_id, None)
+
+        self._replenish_tasks[room_id] = asyncio.create_task(_replenish_worker())
 
     def start_turn_timer(
         self,

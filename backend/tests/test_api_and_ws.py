@@ -203,14 +203,26 @@ async def test_turn_timeout_and_hand_end_auto_start():
     assert room.table.street == Street.PREFLOP
     initial_turn_seat = room.table.current_turn_seat
     assert initial_turn_seat is not None
+    current_player = room.table.seats[initial_turn_seat]
+    assert current_player.time_bank_cards == 3
 
     # Trigger turn timer
     await trigger_room_turn_timer(room.room_id)
 
-    # Sleep for 1.2s to allow timeout worker to fire
+    # Sleep for 1.2s to allow initial timeout worker to fire
     await asyncio.sleep(1.2)
 
-    # After timeout, player at initial_turn_seat should have auto-folded/checked, transitioning turn or ending hand
+    # After initial timeout, player should have auto-consumed 1 time card (+30s)
+    assert current_player.time_bank_cards == 2
+    assert room.table.is_using_time_bank is True
+
+    # Now set time_bank_cards to 0 and re-trigger 1s timer to test auto-fold/check
+    current_player.time_bank_cards = 0
+    room.table.current_turn_duration = 1
+    await trigger_room_turn_timer(room.room_id)
+    await asyncio.sleep(1.2)
+
+    # After zero-card timeout, player at initial_turn_seat should have auto-folded/checked
     assert room.table.current_turn_seat != initial_turn_seat or room.table.street in (Street.FLOP, Street.HAND_END)
 
     # Clean up timers

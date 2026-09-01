@@ -16,6 +16,7 @@ class EventType(str, Enum):
     SHOW_CARD = "SHOW_CARD"
     PLAYER_READY = "PLAYER_READY"
     RIT_CHOICE = "RIT_CHOICE"
+    USE_TIME_CARD = "USE_TIME_CARD"
     END_ROOM = "END_ROOM"
     PING = "PING"
 

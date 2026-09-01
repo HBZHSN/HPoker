@@ -35,6 +35,9 @@ export default function ActionBar({
   actionHistory = [],
   onStartGame,
   actionTimeout = 15,
+  currentTurnDuration = 15,
+  isUsingTimeBank = false,
+  onUseTimeCard,
   seats = [],
   ritStatus = null,
   ritVoters = [],
@@ -46,7 +49,10 @@ export default function ActionBar({
   const maxVal = legalActions?.can_bet ? legalActions.max_bet : (legalActions?.max_raise_to || 0);
 
   const [raiseAmount, setRaiseAmount] = useState(minVal || 0);
-  const [turnTimeLeft, setTurnTimeLeft] = useState(actionTimeout);
+  const effectiveTimeout = (isUsingTimeBank || (currentTurnPlayer && isUsingTimeBank))
+    ? (currentTurnDuration || 30)
+    : (currentTurnDuration || actionTimeout || 15);
+  const [turnTimeLeft, setTurnTimeLeft] = useState(effectiveTimeout);
 
   // Sync raiseAmount whenever minVal or maxVal changes
   useEffect(() => {
@@ -63,12 +69,12 @@ export default function ActionBar({
   // Turn timer countdown in sidebar
   useEffect(() => {
     if (!currentTurnPlayer) {
-      setTurnTimeLeft(actionTimeout);
+      setTurnTimeLeft(effectiveTimeout);
       return;
     }
-    setTurnTimeLeft(actionTimeout);
+    setTurnTimeLeft(effectiveTimeout);
     const startTime = Date.now();
-    const totalMs = (actionTimeout || 15) * 1000;
+    const totalMs = effectiveTimeout * 1000;
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const remaining = Math.max(0, (totalMs - elapsed) / 1000);
@@ -79,7 +85,7 @@ export default function ActionBar({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [currentTurnPlayer?.player_id, street, turnCount, actionHistory?.length, actionTimeout]);
+  }, [currentTurnPlayer?.player_id, street, turnCount, actionHistory?.length, effectiveTimeout, isUsingTimeBank]);
 
   const currentAmount = Math.max(minVal, Math.min(maxVal, raiseAmount || minVal));
 
@@ -178,7 +184,9 @@ export default function ActionBar({
       {/* 1. Turn Status & Countdown Banner */}
       <div
         className={`p-3 rounded-2xl border transition-all duration-300 ${
-          isMyTurn
+          isMyTurn && isUsingTimeBank
+            ? 'bg-gradient-to-r from-purple-950/90 via-slate-900 to-indigo-950 border-purple-400 shadow-glow-cyan'
+            : isMyTurn
             ? 'bg-gradient-to-r from-amber-950/80 to-slate-900 border-amber-400 shadow-glow-gold'
             : currentTurnPlayer
             ? 'bg-slate-900/90 border-slate-700/80'
@@ -189,14 +197,16 @@ export default function ActionBar({
           <div className="flex items-center gap-2">
             {isMyTurn ? (
               <span className="flex h-3 w-3 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isUsingTimeBank ? 'bg-purple-400' : 'bg-amber-400'} opacity-75`}></span>
+                <span className={`relative inline-flex rounded-full h-3 w-3 ${isUsingTimeBank ? 'bg-purple-500' : 'bg-amber-500'}`}></span>
               </span>
             ) : (
               <Clock className="w-4 h-4 text-slate-400" />
             )}
             <span className="text-sm font-black tracking-wide">
-              {isMyTurn
+              {isMyTurn && isUsingTimeBank
+                ? '⚡ 正在使用时间卡延时 (+30s)'
+                : isMyTurn
                 ? '⚡ 轮到您的行动回合！'
                 : currentTurnPlayer
                 ? `等待 ${currentTurnPlayer.name} 行动...`
@@ -207,8 +217,12 @@ export default function ActionBar({
           </div>
 
           {currentTurnPlayer && (
-            <div className="flex items-center gap-1 bg-slate-950/80 px-2.5 py-0.5 rounded-full border border-amber-500/40 text-xs font-black text-amber-300">
-              <Clock className="w-3 h-3 text-amber-400 animate-spin" />
+            <div className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-black ${
+              isUsingTimeBank
+                ? 'bg-purple-950 border-purple-400/70 text-purple-200 shadow-glow-cyan'
+                : 'bg-slate-950/80 border-amber-500/40 text-amber-300'
+            }`}>
+              <Clock className={`w-3 h-3 ${isUsingTimeBank ? 'text-purple-300' : 'text-amber-400'} animate-spin`} />
               <span>{Math.ceil(turnTimeLeft)}s</span>
             </div>
           )}
@@ -219,14 +233,45 @@ export default function ActionBar({
           <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mt-2">
             <div
               className={`h-full transition-all duration-100 rounded-full ${
-                turnTimeLeft > 7
+                isUsingTimeBank
+                  ? 'bg-gradient-to-r from-purple-400 via-indigo-400 to-fuchsia-400 shadow-[0_0_10px_rgba(192,132,252,0.9)]'
+                  : turnTimeLeft > 7
                   ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
                   : turnTimeLeft > 3
                   ? 'bg-gradient-to-r from-amber-400 to-yellow-500'
                   : 'bg-gradient-to-r from-red-500 to-rose-600 animate-pulse'
               }`}
-              style={{ width: `${Math.min(100, (turnTimeLeft / (actionTimeout || 15)) * 100)}%` }}
+              style={{ width: `${Math.min(100, (turnTimeLeft / effectiveTimeout) * 100)}%` }}
             />
+          </div>
+        )}
+
+        {/* Manual Time Card Button inside My Turn banner */}
+        {isMyTurn && (
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/80">
+            <div className="flex items-center gap-1.5 text-xs text-slate-300 font-bold">
+              <span>⏱️ 时间卡:</span>
+              <span className="text-amber-400 font-black">{selfSeat?.time_bank_cards ?? 3} 张</span>
+              <span className="text-slate-500 text-[10px]">(每张+30s)</span>
+            </div>
+            {!isUsingTimeBank && (selfSeat?.time_bank_cards ?? 0) > 0 && onUseTimeCard ? (
+              <button
+                onClick={onUseTimeCard}
+                className="px-2.5 py-1 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-purple-100 rounded-lg text-xs font-black border border-purple-400/50 shadow-md transition active:scale-95 cursor-pointer flex items-center gap-1"
+                title="立即消耗1张时间卡，延长30秒思考时间"
+              >
+                <Clock className="w-3 h-3 text-purple-300 animate-spin" />
+                <span>使用时间卡 (+30s)</span>
+              </button>
+            ) : isUsingTimeBank ? (
+              <span className="text-[11px] font-black text-purple-300 animate-pulse">
+                时间卡思考中 (+30s)
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-500 font-medium">
+                时间卡已耗尽
+              </span>
+            )}
           </div>
         )}
 
@@ -299,6 +344,12 @@ export default function ActionBar({
               <span className="text-xs text-slate-400 font-bold">筹码:</span>
               <span className={`text-base md:text-lg font-black ${selfSeat.chips === 0 ? 'text-red-400' : 'text-amber-400'}`}>
                 ${selfSeat.chips}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[10px] text-slate-400 font-bold">时间卡:</span>
+              <span className="text-[11px] text-amber-300 font-black bg-slate-950 px-2 py-0.2 rounded-full border border-amber-500/30 flex items-center gap-1">
+                <span>⏱️ {selfSeat.time_bank_cards ?? 3} / 5</span>
               </span>
             </div>
           </div>

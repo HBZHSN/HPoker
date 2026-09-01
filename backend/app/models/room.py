@@ -19,6 +19,10 @@ class RoomConfig:
     big_blind: int = 10
     action_timeout: int = 15          # Seconds to act
     max_seats: int = 6
+    time_card_duration: int = 30      # Seconds added per time card
+    initial_time_cards: int = 3      # Starting time cards per player
+    max_time_cards: int = 5          # Maximum time cards per player
+    time_card_replenish_interval: int = 900  # 15 minutes replenishment interval (in seconds)
 
     def to_dict(self) -> dict:
         return {
@@ -29,6 +33,10 @@ class RoomConfig:
             "big_blind": self.big_blind,
             "action_timeout": self.action_timeout,
             "max_seats": self.max_seats,
+            "time_card_duration": self.time_card_duration,
+            "initial_time_cards": self.initial_time_cards,
+            "max_time_cards": self.max_time_cards,
+            "time_card_replenish_interval": self.time_card_replenish_interval,
             "chip_to_cash_ratio": self.cash_value / self.buyin_chips if self.buyin_chips > 0 else 1.0,
         }
 
@@ -54,6 +62,12 @@ class Room:
 
         # Historical participant tracker (player_id -> dict of stats)
         self.historical_players: Dict[str, dict] = {}
+
+    def add_periodic_time_cards(self) -> int:
+        """Add 1 periodic time card to all active seated players up to max_time_cards."""
+        if self.is_ended:
+            return 0
+        return self.table.add_periodic_time_cards(max_cards=self.config.max_time_cards)
 
     def track_player(self, player_id: str, name: str, chips_added: int) -> None:
         """Record buyin or rebuy for historical accounting."""

@@ -80,6 +80,25 @@ async def trigger_room_after_action(room_id: str):
         timeout_manager.cancel_turn_timer(room_id)
 
 
+def ensure_room_replenish_task(room_id: str) -> None:
+    """Ensure recurring 15-minute background time card replenishment is running for the room."""
+    room = room_manager.get_room(room_id)
+    if not room or room.is_ended:
+        return
+    if room_id not in timeout_manager._replenish_tasks:
+        async def _on_replenish(r_id: str):
+            r = room_manager.get_room(r_id)
+            if not r or r.is_ended:
+                return
+            added = r.add_periodic_time_cards()
+            if added > 0:
+                await ws_manager.broadcast_sound(r_id, "time_card_gain")
+                await ws_manager.broadcast_room_state(r)
+
+        interval = getattr(room.config, "time_card_replenish_interval", 900)
+        timeout_manager.start_replenish_task(room_id, interval, _on_replenish)
+
+
 async def trigger_room_turn_timer(room_id: str):
     """Setup turn timeout for the current active player."""
     room = room_manager.get_room(room_id)
@@ -97,6 +116,12 @@ async def trigger_room_turn_timer(room_id: str):
         timeout_manager.cancel_turn_timer(room_id)
         return
 
+    timeout_duration = (
+        room.table.current_turn_duration
+        if getattr(room.table, "is_using_time_bank", False)
+        else room.config.action_timeout
+    )
+
     async def _on_timeout(r_id: str):
         r = room_manager.get_room(r_id)
         if not r or r.is_ended or r.table.current_turn_seat != current_seat_idx:
@@ -105,6 +130,26 @@ async def trigger_room_turn_timer(room_id: str):
         target_player = r.table.seats[current_seat_idx]
         if not target_player:
             return
+
+        # Prioritize auto-consuming time card if available
+        if target_player.time_bank_cards > 0:
+            target_player.use_time_bank_card()
+            r.table.is_using_time_bank = True
+            r.table.current_turn_duration = 30
+            r.table.turn_count += 1
+            target_player.last_action = "⏱️ 使用时间卡 +30s"
+            await ws_manager.broadcast_sound(r_id, "time_card", {"player_id": target_player.player_id})
+            await ws_manager.broadcast_room_state(r)
+            timeout_manager.start_turn_timer(
+                room_id=r_id,
+                timeout_seconds=30,
+                on_timeout_callback=_on_timeout
+            )
+            return
+
+        # No time cards left: fallback to auto CHECK or FOLD
+        r.table.is_using_time_bank = False
+        r.table.current_turn_duration = r.config.action_timeout
 
         legal = r.table.get_legal_actions(target_player.player_id)
         if legal.can_check:
@@ -135,7 +180,7 @@ async def trigger_room_turn_timer(room_id: str):
 
     timeout_manager.start_turn_timer(
         room_id=room_id,
-        timeout_seconds=room.config.action_timeout,
+        timeout_seconds=timeout_duration,
         on_timeout_callback=_on_timeout
     )
 
@@ -162,6 +207,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     break
 
     await ws_manager.connect(websocket, room_id, user_id)
+    ensure_room_replenish_task(room_id)
 
     # Initial state sync
     await ws_manager.broadcast_room_state(room)
@@ -287,6 +333,17 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                         await trigger_room_after_action(room_id)
                 else:
                     await ws_manager.broadcast_room_state(room)
+
+            elif event == EventType.USE_TIME_CARD:
+                if room.table.current_turn_seat is not None:
+                    curr_p = room.table.seats[room.table.current_turn_seat]
+                    if curr_p and curr_p.player_id == user_id and curr_p.time_bank_cards > 0:
+                        ok = room.table.use_time_bank_for_current_player()
+                        if ok:
+                            timeout_manager.cancel_turn_timer(room_id)
+                            await ws_manager.broadcast_sound(room_id, "time_card", {"player_id": user_id})
+                            await ws_manager.broadcast_room_state(room)
+                            await trigger_room_turn_timer(room_id)
 
             elif event == EventType.END_ROOM:
                 report = room.end_room(requester_id=user_id)

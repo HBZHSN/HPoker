@@ -13,22 +13,27 @@ export default function PlayerSeat({
   onSitDown,
   currentUserId,
   actionTimeout = 15,
+  currentTurnDuration = 15,
+  isUsingTimeBank = false,
   payoutInfo = null,
   betDirection = 'top', // 'top', 'bottom', 'left', 'right'
   street = 'IDLE',
   turnCount = 0,
   actionHistoryLength = 0,
 }) {
-  const [timeLeft, setTimeLeft] = useState(actionTimeout);
+  const baseTimeout = (isCurrentTurn && isUsingTimeBank)
+    ? (currentTurnDuration || 30)
+    : (currentTurnDuration || actionTimeout || 15);
+  const [timeLeft, setTimeLeft] = useState(baseTimeout);
 
   useEffect(() => {
     if (!isCurrentTurn) {
-      setTimeLeft(actionTimeout);
+      setTimeLeft(baseTimeout);
       return;
     }
-    setTimeLeft(actionTimeout);
+    setTimeLeft(baseTimeout);
     const startTime = Date.now();
-    const totalMs = (actionTimeout || 15) * 1000;
+    const totalMs = baseTimeout * 1000;
     const interval = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const remaining = Math.max(0, (totalMs - elapsed) / 1000);
@@ -39,7 +44,7 @@ export default function PlayerSeat({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isCurrentTurn, street, turnCount, actionHistoryLength, actionTimeout]);
+  }, [isCurrentTurn, street, turnCount, actionHistoryLength, baseTimeout, isUsingTimeBank]);
 
   // Empty seat
   if (!seatData) {
@@ -77,10 +82,17 @@ export default function PlayerSeat({
       <div className="relative flex flex-col items-center justify-center">
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {isCurrentTurn ? (
-          <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-950 border-2 border-amber-400 text-[11px] font-black text-amber-300 shadow-glow-gold whitespace-nowrap animate-pulse">
-            <Clock className="w-3 h-3 text-amber-400 animate-spin" />
-            <span>{Math.ceil(timeLeft)}s</span>
-          </div>
+          isUsingTimeBank ? (
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-950 to-indigo-950 border-2 border-purple-400 text-[11px] font-black text-purple-200 shadow-glow-cyan whitespace-nowrap animate-pulse">
+              <Clock className="w-3 h-3 text-purple-300 animate-spin" />
+              <span>时间卡 +{Math.ceil(timeLeft)}s</span>
+            </div>
+          ) : (
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-950 border-2 border-amber-400 text-[11px] font-black text-amber-300 shadow-glow-gold whitespace-nowrap animate-pulse">
+              <Clock className="w-3 h-3 text-amber-400 animate-spin" />
+              <span>{Math.ceil(timeLeft)}s</span>
+            </div>
+          )
         ) : payoutInfo ? (
           <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border-2 border-emerald-400 px-3 py-1 rounded-xl text-xs font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
             +${payoutInfo.amount} ({payoutInfo.pot_name})
@@ -125,6 +137,15 @@ export default function PlayerSeat({
           </div>
         )}
 
+        {/* === BOTTOM-LEFT CORNER: Time Bank Cards Badge (时间卡数量) === */}
+        <div
+          className="absolute -bottom-2.5 -left-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
+          title={`时间卡: 剩余 ${seatData.time_bank_cards ?? 3} 张 (每张+30秒)`}
+        >
+          <span className="text-[10px]">⏱️</span>
+          <span>x{seatData.time_bank_cards ?? 3}</span>
+        </div>
+
         {/* === TOP-RIGHT CORNER: Dealer / SB / BB Position Badges === */}
         <div className="absolute -top-2.5 -right-2.5 z-20 flex gap-1 items-center">
           {isDealer && (
@@ -156,7 +177,9 @@ export default function PlayerSeat({
         {/* === MAIN AVATAR CARD === */}
         <div
           className={`relative flex flex-col items-center justify-between w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 bg-gradient-to-b from-slate-850 via-slate-900 to-slate-950 shadow-2xl p-1.5 transition-all duration-300 overflow-hidden ${
-            isCurrentTurn
+            isCurrentTurn && isUsingTimeBank
+              ? 'border-purple-400 shadow-glow-cyan scale-105 ring-2 ring-purple-400/80'
+              : isCurrentTurn
               ? 'border-amber-400 shadow-glow-gold scale-105 ring-2 ring-amber-400/60'
               : isWinner
               ? 'border-emerald-400 shadow-glow-cyan'
@@ -198,13 +221,15 @@ export default function PlayerSeat({
             <div className="absolute inset-x-0 bottom-0 h-1.5 bg-slate-950/80 overflow-hidden border-t border-slate-800">
               <div
                 className={`h-full transition-all duration-100 ${
-                  timeLeft > (actionTimeout * 0.5)
+                  isUsingTimeBank
+                    ? 'bg-gradient-to-r from-purple-400 via-indigo-400 to-fuchsia-400 shadow-[0_0_10px_rgba(192,132,252,0.9)]'
+                    : timeLeft > (baseTimeout * 0.5)
                     ? 'bg-gradient-to-r from-emerald-400 to-teal-300 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
-                    : timeLeft > (actionTimeout * 0.2)
+                    : timeLeft > (baseTimeout * 0.2)
                     ? 'bg-gradient-to-r from-amber-400 to-yellow-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]'
                     : 'bg-gradient-to-r from-red-500 to-rose-500 animate-pulse shadow-[0_0_10px_rgba(244,63,94,1)]'
                 }`}
-                style={{ width: `${Math.min(100, (timeLeft / (actionTimeout || 15)) * 100)}%` }}
+                style={{ width: `${Math.min(100, (timeLeft / (baseTimeout || 15)) * 100)}%` }}
               />
             </div>
           )}
