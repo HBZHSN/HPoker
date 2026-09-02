@@ -129,7 +129,11 @@ class Room:
                 (idx for idx, seat in enumerate(self.table.seats) if seat is None),
                 None,
             )
-        if seat_index is None or not (0 <= seat_index < self.config.max_seats):
+        if (
+            not isinstance(seat_index, int)
+            or isinstance(seat_index, bool)
+            or not (0 <= seat_index < self.config.max_seats)
+        ):
             return None
 
         bot_id = f"bot_{uuid.uuid4().hex[:10]}"

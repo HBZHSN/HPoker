@@ -20,6 +20,9 @@ class EventType(str, Enum):
     USE_TIME_CARD = "USE_TIME_CARD"
     END_ROOM = "END_ROOM"
     DELETE_ROOM = "DELETE_ROOM"
+    ADD_TEST_BOT = "ADD_TEST_BOT"
+    # Short alias retained for lightweight clients that call it ADD_BOT.
+    ADD_BOT = "ADD_BOT"
     PING = "PING"
 
     # Server -> Client

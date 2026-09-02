@@ -209,6 +209,31 @@ def get_room_details(room_id: str, viewer_id: Optional[str] = None):
     return room.to_dict(viewer_player_id=viewer_id)
 
 
+@api_router.post("/rooms/{room_id}/test-bots")
+async def add_test_bot(
+    room_id: str,
+    requester_id: str = Query(...),
+    seat_index: Optional[int] = Query(None, ge=0, le=8),
+):
+    """Add a virtual random-action bot; only the room host may request it."""
+    room = room_manager.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if requester_id != room.host_player_id:
+        raise HTTPException(status_code=403, detail="Only the room host can add a test bot")
+
+    bot = room.add_test_bot(seat_index=seat_index)
+    if not bot:
+        raise HTTPException(
+            status_code=409,
+            detail="Test bots can only be added between hands when an empty seat is available",
+        )
+
+    await ws_manager.broadcast_sound(room_id, "sit")
+    await ws_manager.broadcast_room_state(room)
+    return room.to_dict()
+
+
 @api_router.post("/rooms/{room_id}/end")
 def end_room(room_id: str, requester_id: str):
     room = room_manager.get_room(room_id)

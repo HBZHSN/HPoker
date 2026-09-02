@@ -13,10 +13,12 @@ from backend.app.websocket.connection_manager import ws_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.services.user_manager import user_manager
 from backend.app.services.timeout_manager import timeout_manager
+from backend.app.services.bot_player import choose_bot_action
 from backend.app.engine.state_machine import ActionType, Street
 
 logger = logging.getLogger("poker.router")
 ws_router = APIRouter()
+BOT_ACTION_DELAY_SECONDS = 0.2
 
 
 async def start_all_in_slow_dealing(room_id: str):
@@ -75,6 +77,36 @@ async def trigger_room_after_action(room_id: str):
 
         timeout_manager.start_rit_timer(room_id, 8, _on_rit_timeout)
 
+        if any(
+            seat and seat.is_bot and seat.player_id in room.table.rit_voters
+            for seat in room.table.seats
+        ):
+            async def _on_bot_rit_choice(r_id: str):
+                r = room_manager.get_room(r_id)
+                if not r or r.is_ended or r.table.street != Street.RIT_DECISION:
+                    return
+
+                for seat in r.table.active_in_hand_players:
+                    if (
+                        seat.is_bot
+                        and seat.player_id in r.table.rit_voters
+                        and seat.player_id not in r.table.rit_votes
+                    ):
+                        result, _ = r.table.vote_rit(seat.player_id, 1)
+                        if result == "FINALIZED":
+                            timeout_manager.cancel_rit_timer(r_id)
+                            await ws_manager.broadcast_room_state(r)
+                            await start_all_in_slow_dealing(r_id)
+                        else:
+                            await ws_manager.broadcast_room_state(r)
+                        return
+
+            timeout_manager.start_bot_action_task(
+                room_id,
+                BOT_ACTION_DELAY_SECONDS,
+                _on_bot_rit_choice,
+            )
+
     elif room.table.street not in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END):
         await trigger_room_turn_timer(room_id)
     else:
@@ -115,6 +147,88 @@ async def trigger_room_turn_timer(room_id: str):
     current_player = room.table.seats[current_seat_idx]
     if not current_player:
         timeout_manager.cancel_turn_timer(room_id)
+        return
+
+    if current_player.is_bot:
+        timeout_manager.cancel_turn_timer(room_id)
+
+        async def _on_bot_action(r_id: str):
+            r = room_manager.get_room(r_id)
+            if (
+                not r
+                or r.is_ended
+                or r.table.current_turn_seat != current_seat_idx
+                or r.table.street in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END, Street.RIT_DECISION)
+            ):
+                return
+
+            bot = r.table.seats[current_seat_idx]
+            if not bot or not bot.is_bot:
+                return
+
+            decision = choose_bot_action(r.table, bot.player_id)
+            if decision is None:
+                return
+
+            action = decision.action
+            amount = decision.amount
+            prev_street = r.table.street
+            success = r.table.handle_action(
+                bot.player_id,
+                action,
+                raise_total_amount=amount,
+            )
+            if not success:
+                # The decision helper only emits legal actions. This fallback
+                # keeps a test hand moving if a state changes between the
+                # snapshot and the delayed callback.
+                legal = r.table.get_legal_actions(bot.player_id)
+                action = (
+                    ActionType.CHECK
+                    if legal.can_check
+                    else ActionType.CALL
+                    if legal.can_call
+                    else ActionType.FOLD
+                )
+                amount = legal.call_amount if action is ActionType.CALL else 0
+                success = r.table.handle_action(
+                    bot.player_id,
+                    action,
+                    raise_total_amount=amount,
+                )
+
+            if not success:
+                logger.warning("Test bot action failed for player %s", bot.player_id)
+                return
+
+            sound_map = {
+                ActionType.FOLD: "fold",
+                ActionType.CHECK: "check",
+                ActionType.CALL: "call",
+                ActionType.BET: "bet",
+                ActionType.RAISE: "raise",
+                ActionType.ALL_IN: "allin",
+            }
+            await ws_manager.broadcast_sound(
+                r_id,
+                sound_map.get(action, "bet"),
+                {"player_id": bot.player_id},
+            )
+
+            if r.table.street != prev_street:
+                if r.table.street in (Street.FLOP, Street.TURN, Street.RIVER):
+                    await ws_manager.broadcast_sound(r_id, "deal")
+                elif r.table.street in (Street.SHOWDOWN, Street.HAND_END):
+                    await ws_manager.broadcast_sound(r_id, "win_pot")
+
+            await ws_manager.broadcast_room_state(r)
+            await trigger_room_after_action(r_id)
+
+        timeout_manager.start_bot_action_task(
+            room_id,
+            BOT_ACTION_DELAY_SECONDS,
+            _on_bot_action,
+        )
         return
 
     timeout_duration = (
@@ -273,6 +387,22 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                         await ws_manager.broadcast_room_state(room)
                         await trigger_room_after_action(room_id)
 
+            elif event in (EventType.ADD_TEST_BOT, EventType.ADD_BOT):
+                # Test bots are intentionally a host-only room control. They
+                # can only be seated between hands so they never enter a hand
+                # after cards have already been dealt.
+                if user_id == room.host_player_id:
+                    seat_index = payload.get("seat_index")
+                    if seat_index is not None:
+                        try:
+                            seat_index = int(seat_index)
+                        except (TypeError, ValueError):
+                            seat_index = None
+                    bot = room.add_test_bot(seat_index=seat_index)
+                    if bot:
+                        await ws_manager.broadcast_sound(room_id, "sit")
+                        await ws_manager.broadcast_room_state(room)
+
             elif event == EventType.PLAYER_ACTION:
                 action_str = payload.get("action")
                 raw_amount = payload.get("amount", 0)
@@ -322,6 +452,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 res, is_twice = room.table.vote_rit(user_id, choice)
                 if res == "FINALIZED":
                     timeout_manager.cancel_rit_timer(room_id)
+                    timeout_manager.cancel_bot_action(room_id)
                     await ws_manager.broadcast_room_state(room)
                     await start_all_in_slow_dealing(room_id)
                 elif res == "WAITING":

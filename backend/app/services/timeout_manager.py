@@ -20,6 +20,8 @@ class TimeoutManager:
         self._deal_tasks: Dict[str, asyncio.Task] = {}
         # room_id -> active recurring replenishment asyncio.Task
         self._replenish_tasks: Dict[str, asyncio.Task] = {}
+        # room_id -> delayed test-bot action asyncio.Task
+        self._bot_tasks: Dict[str, asyncio.Task] = {}
         # room_id -> active empty room auto-cleanup asyncio.Task
         self._empty_room_tasks: Dict[str, asyncio.Task] = {}
 
@@ -47,6 +49,16 @@ class TimeoutManager:
         if task and not task.done():
             task.cancel()
 
+    def cancel_bot_action(self, room_id: str) -> None:
+        """Cancel a delayed test-bot action for a room if any."""
+        task = self._bot_tasks.pop(room_id, None)
+        try:
+            current_task = asyncio.current_task()
+        except RuntimeError:
+            current_task = None
+        if task and task is not current_task and not task.done():
+            task.cancel()
+
     def cancel_empty_room_cleanup(self, room_id: str) -> None:
         """Cancel existing empty room auto-cleanup task for a room if any."""
         task = self._empty_room_tasks.pop(room_id, None)
@@ -58,11 +70,12 @@ class TimeoutManager:
         self.cancel_turn_timer(room_id)
 
     def cancel_all_timers(self, room_id: str) -> None:
-        """Cancel all turn timers, RIT timers, dealing tasks, replenish tasks, and empty room cleanup for a room."""
+        """Cancel every background task associated with a room."""
         self.cancel_turn_timer(room_id)
         self.cancel_rit_timer(room_id)
         self.cancel_deal_task(room_id)
         self.cancel_replenish_task(room_id)
+        self.cancel_bot_action(room_id)
         self.cancel_empty_room_cleanup(room_id)
 
     def schedule_empty_room_cleanup(
@@ -155,6 +168,36 @@ class TimeoutManager:
                         self._turn_tasks.pop(room_id, None)
 
             self._turn_tasks[room_id] = loop.create_task(_turn_worker())
+
+    def start_bot_action_task(
+        self,
+        room_id: str,
+        delay_seconds: float,
+        on_action_callback: Callable[[str], Awaitable[None]],
+    ) -> None:
+        """Run a delayed test-bot callback, replacing any previous callback."""
+        self.cancel_bot_action(room_id)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            async def _bot_worker():
+                current_task = asyncio.current_task()
+                try:
+                    await asyncio.sleep(delay_seconds)
+                    await on_action_callback(room_id)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.exception(f"Error in test-bot worker for room {room_id}: {e}")
+                finally:
+                    if self._bot_tasks.get(room_id) is current_task:
+                        self._bot_tasks.pop(room_id, None)
+
+            self._bot_tasks[room_id] = loop.create_task(_bot_worker())
 
     def start_rit_timer(
         self,
