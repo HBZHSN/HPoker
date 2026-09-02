@@ -5,6 +5,7 @@ import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from cli.api_client import PokerApiClient
+from cli.main import parse_args
 from cli.ws_client import PokerWsClient
 from cli.ui_renderer import PokerUiRenderer, Colors
 from cli.controller import PokerCliController
@@ -43,6 +44,28 @@ def test_cli_command_parser_and_bet_sizing():
     assert resolve_bet_amount("all-in", context) == 1000
     assert resolve_bet_amount(None, context) == 40
     assert resolve_bet_amount("not-an-amount", context) is None
+
+
+def test_cli_entrypoint_options():
+    args = parse_args([
+        "--server", "http://poker.test:9000",
+        "--user", "fwd",
+        "--password", "123",
+        "--room", "rm_123",
+        "--mode", "stream",
+        "--no-color",
+        "--http-timeout", "3.5",
+        "--reconnect-attempts", "4",
+    ])
+
+    assert args.server == "http://poker.test:9000"
+    assert args.user == "fwd"
+    assert args.password == "123"
+    assert args.room == "rm_123"
+    assert args.mode == "stream"
+    assert args.no_color is True
+    assert args.http_timeout == 3.5
+    assert args.reconnect_attempts == 4
 
 
 class TestPokerUiRenderer:

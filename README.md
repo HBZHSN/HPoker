@@ -70,28 +70,44 @@
 
 ### 💻 轻量 CLI 终端客户端
 
-界面简洁大方、排版整洁，支持两套视图模式（`Dashboard` 仪表盘模式与 `Stream` 极简日志流模式），功能 100% 完整覆盖：
+CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模式（`dashboard` 仪表盘 / `stream` 事件流）。测试或 CLI 启动不会检查前端 `node_modules`，可直接使用：
 
-- **启动方式**：
-  ```bash
-  # 交互式输入账号密码登录
-  ./start.sh cli
-  
-  # 或直接指定用户与模式极速启动
-  .venv/bin/python poker_cli.py --user fwd --mode dashboard
-  ```
-- **核心操作指令**：
-  - `c` / `check` / `call`：智能过牌或跟注
-  - `f` / `fold`：弃牌
-  - `r <金额>` / `r 0.5p` / `r 2/3p` / `r 1p`：加注/下注（支持半池、2/3池、满池等智能比例）
-  - `a` / `allin`：全下
-  - `ready` / `start`：准备 / 开局
-  - `rebuy`：重买补码
-  - `show 1` / `show 2` / `show all` / `muck`：秀牌/盖牌
-  - `rit 1` / `rit 2`：多次发牌（Run It Twice）投票
-  - `end`：房主结束房间并输出最小债务转账清算清单
-  - `mode`：一键切换 仪表盘模式 / 极简日志流模式
-  - `h` / `help`：查看详细帮助指南
+```bash
+# 交互式登录并进入大厅
+./start.sh cli
+
+# 自动登录、直接进房间、使用事件流模式
+./start.sh cli --user fwd --room ROOM_ID --mode stream
+
+# 直接运行入口；密码建议留空后交互输入，避免出现在进程列表
+.venv/bin/python poker_cli.py --user fwd --no-color
+```
+
+命令行参数：
+
+- `--server URL`：后端地址，也可设置 `POKER_SERVER_URL`。
+- `--user NAME`、`--password PASSWORD`：自动登录；不提供时交互登录。
+- `--room ROOM_ID`：登录后直接进入指定房间。
+- `--mode dashboard|stream`：选择牌桌显示模式，也可设置 `POKER_CLI_MODE`。
+- `--no-color`：关闭 ANSI 颜色，适合日志重定向。
+- `--http-timeout SECONDS`、`--reconnect-attempts N`：控制请求超时和自动重连次数。
+
+大厅常用命令：
+
+- `rooms` / `refresh`：刷新活跃房间；输入房间编号或 ID 直接加入。
+- `create "房间名"`：交互创建房间；也支持 `create "现金桌" --buyin 2000 --cash 200 --sb 10 --timeout 20 --seats 6`。
+- `users`：查看预置用户；`info ROOM_ID`：查看房间详情。
+- `mode`、`color`、`help`、`quit`：切换显示、查看帮助或退出。
+
+牌桌常用命令：
+
+- `check` / `call` / `fold` / `allin`：过牌、跟注、弃牌、全下；快捷键为 `c`、`f`、`a`。
+- `bet <额度>` / `raise <额度>`：下注或加注；快捷键为 `r`，例如 `r 1/2p`、`r 2/3p`、`r 1.5p`、`r +1bb`、`r 200`、`r all`。
+- 额度还支持 `min`、`max`、`10bb`、`20sb`；系统会自动按小盲步长对齐并限制在合法范围。
+- `ready`、`start`、`sit 2`、`stand`、`rebuy`：准备、开局、入座、离座和补码。
+- `show 1` / `show 2` / `show all` / `muck`：摊牌时秀牌或盖牌；`rit 1` / `rit 2`：Run It Twice 投票。
+- `reconnect`：手动重连；`status`、`history`、`redraw`：查看状态、行动记录或重绘。`r` 专用于下注，不再作为重绘别名。
+- `bill` / `export settlement.txt`：查看或导出结算报表；房主使用 `end` 结束房间，`delete` 删除已结束房间。
 
 ---
 
