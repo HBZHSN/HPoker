@@ -99,3 +99,34 @@ def test_room_lifecycle_and_rebuy():
     assert report is not None
     assert room.is_ended is True
     assert len(report.player_records) == 2
+
+
+def test_ending_room_refunds_unsettled_hand_contributions():
+    cfg = RoomConfig(
+        room_name="Interrupted Hand Room",
+        buyin_chips=100,
+        cash_value=10.0,
+        small_blind=5,
+        action_timeout=15,
+        max_seats=6,
+    )
+    room = Room(host_player_id="host1", config=cfg)
+    assert room.sit_down_player("host1", "Alice", seat_index=0) is True
+    assert room.sit_down_player("user2", "Bob", seat_index=1) is True
+
+    assert room.table.start_new_hand() is True
+    assert room.table.pot_manager.total_pot_amount == 15
+    assert room.table.seats[0].chips == 95
+    assert room.table.seats[1].chips == 90
+
+    report = room.end_room(requester_id="host1")
+
+    assert report is not None
+    assert report.is_balanced is True
+    assert report.total_chips_in_game == 200
+    assert report.transactions == []
+    assert room.table.pot_manager.total_pot_amount == 0
+    assert room.table.street.value == "HAND_END"
+    assert room.table.seats[0].chips == 100
+    assert room.table.seats[1].chips == 100
+    assert all(record.net_chips == 0 for record in report.player_records)

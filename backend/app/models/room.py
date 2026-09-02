@@ -179,6 +179,17 @@ class Room:
         if self.is_ended and self.settlement_report:
             return self.settlement_report
 
+        # A room can be closed in the middle of a hand. Return all current
+        # hand contributions before taking the settlement snapshot so the
+        # chips remain conserved instead of being stranded in an open pot.
+        refunded_contributions = self.table.refund_unsettled_hand()
+        seated_player_ids = {
+            seat.player_id for seat in self.table.active_seated_players
+        }
+        for player_id, refund in refunded_contributions.items():
+            if player_id not in seated_player_ids and player_id in self.historical_players:
+                self.historical_players[player_id]["final_chips"] += refund
+
         # Update final chips for currently seated players
         for seat in self.table.active_seated_players:
             if seat.player_id in self.historical_players:

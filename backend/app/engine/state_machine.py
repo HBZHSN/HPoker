@@ -268,6 +268,41 @@ class TableStateMachine:
                 return player
         return None
 
+    def refund_unsettled_hand(self) -> Dict[str, int]:
+        """Return every chip committed to a hand that has not been settled.
+
+        Ending a cash-game room must not treat chips sitting in an unfinished
+        pot as lost money. The room layer uses the returned contribution map
+        to update historical records for players who already stood up.
+        """
+        if self.street in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END):
+            return {}
+
+        contributions = dict(self.pot_manager.total_contributions)
+        for player in self.active_seated_players:
+            refund = contributions.get(player.player_id, 0)
+            if refund > 0:
+                player.chips += refund
+                player.is_all_in = False
+
+        self.pot_manager.reset()
+        self.current_turn_seat = None
+        self.turn_started_at = None
+        self.current_round_highest_bet = 0
+        self.min_raise_increment = self.big_blind
+        self.last_raiser_seat = None
+        self.is_using_time_bank = False
+        self.current_turn_duration = self.action_timeout
+        self.is_all_in_runout = False
+        self.rit_enabled = False
+        self.rit_status = None
+        self.rit_votes.clear()
+        self.rit_voters.clear()
+        self.current_dealing_board = 1
+        self.all_in_initial_board_count = 0
+        self.street = Street.HAND_END
+        return contributions
+
     def rebuy(self, player_id: str, additional_chips: int) -> bool:
         for player in self.active_seated_players:
             if player.player_id == player_id:
