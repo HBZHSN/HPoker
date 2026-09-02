@@ -31,7 +31,7 @@ class SoundEngine {
     this.volume = Math.max(0, Math.min(1, vol));
   }
 
-  play(soundName) {
+  play(soundName, options = {}) {
     if (this.muted) return;
     try {
       this._initContext();
@@ -61,7 +61,7 @@ class SoundEngine {
           this.playWinPot();
           break;
         case 'countdown':
-          this.playCountdownTick();
+          this.playCountdownTick(options?.secondsLeft ?? 5, options?.isMyTurn ?? false);
           break;
         case 'sit':
         case 'rebuy':
@@ -233,22 +233,72 @@ class SoundEngine {
     setTimeout(() => this.playChipsClink(), 250);
   }
 
-  playCountdownTick() {
+  playCountdownTick(secondsLeft = 5, isMyTurn = false) {
     const ctx = this.ctx;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    if (!ctx) return;
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    const volMultiplier = isMyTurn ? 1.0 : 0.65;
+    const pitchMap = {
+      5: 659.25, // E5
+      4: 783.99, // G5
+      3: 880.00, // A5
+      2: 1046.50, // C6
+      1: 1318.51, // E6
+    };
+    const freq = pitchMap[secondsLeft] || 880;
 
-    gain.gain.setValueAtTime(0.15 * this.volume, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+    // 1. Crisp percussive transient click (woodblock / digital metronome attack)
+    const clickOsc = ctx.createOscillator();
+    const clickGain = ctx.createGain();
+    clickOsc.type = 'triangle';
+    clickOsc.frequency.setValueAtTime(freq * 1.8, ctx.currentTime);
+    clickOsc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.015);
 
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+    clickGain.gain.setValueAtTime(0.18 * this.volume * volMultiplier, ctx.currentTime);
+    clickGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.015);
 
-    osc.start();
-    osc.stop(ctx.currentTime + 0.04);
+    clickOsc.connect(clickGain);
+    clickGain.connect(ctx.destination);
+    clickOsc.start(ctx.currentTime);
+    clickOsc.stop(ctx.currentTime + 0.015);
+
+    // 2. Resonant tonal tick body
+    if (secondsLeft === 1) {
+      // Urgent double-tick for final 1s
+      [0, 0.07].forEach((delay) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.15, ctx.currentTime + delay + 0.06);
+
+        gain.gain.setValueAtTime(0.3 * this.volume * volMultiplier, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.07);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.07);
+      });
+    } else {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.96, ctx.currentTime + 0.05);
+
+      gain.gain.setValueAtTime(0.22 * this.volume * volMultiplier, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.05);
+    }
   }
 
   playChime() {

@@ -28,7 +28,7 @@ class Suit(str, Enum):
 
     @property
     def color_name(self) -> str:
-        # Standard 4-color deck palette (GGPoker style)
+        # Standard 4-color deck palette (HPoker style)
         colors = {
             Suit.SPADES: "black",
             Suit.HEARTS: "red",

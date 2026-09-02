@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { Lock, User, KeyRound, AlertCircle, ArrowRight } from 'lucide-react';
+import { Lock, User, KeyRound, AlertCircle, ArrowRight, CheckSquare, Square } from 'lucide-react';
 
 export default function LoginModal({ onLoginSuccess }) {
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(() => localStorage.getItem('hpoker_remembered_username') || localStorage.getItem('ggpoker_remembered_username') || '');
   const [password, setPassword] = useState('');
+  const [rememberLogin, setRememberLogin] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e?.preventDefault();
-    if (!username.trim() || !password.trim()) {
+  const executeLogin = async (loginUser, loginPass) => {
+    if (!loginUser.trim() || !loginPass.trim()) {
       setError('请输入用户名和密码');
       return;
     }
@@ -20,7 +20,7 @@ export default function LoginModal({ onLoginSuccess }) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
+        body: JSON.stringify({ username: loginUser.trim(), password: loginPass.trim() }),
       });
 
       if (!res.ok) {
@@ -29,12 +29,23 @@ export default function LoginModal({ onLoginSuccess }) {
       }
 
       const data = await res.json();
-      onLoginSuccess(data.user, data.token);
+      if (rememberLogin) {
+        localStorage.setItem('hpoker_remembered_username', loginUser.trim());
+      } else {
+        localStorage.removeItem('hpoker_remembered_username');
+        localStorage.removeItem('ggpoker_remembered_username');
+      }
+      onLoginSuccess(data.user, data.token, rememberLogin);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e) => {
+    e?.preventDefault();
+    executeLogin(username, password);
   };
 
   return (
@@ -50,7 +61,7 @@ export default function LoginModal({ onLoginSuccess }) {
             <Lock className="w-6 h-6 text-slate-950" />
           </div>
           <h2 className="text-xl md:text-2xl font-black text-amber-400 tracking-wide mt-2">
-            GGPoker 账号登录
+            HPoker 账号登录
           </h2>
         </div>
 
@@ -67,13 +78,12 @@ export default function LoginModal({ onLoginSuccess }) {
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
               <User className="w-3.5 h-3.5 text-amber-400" />
-              用户名 / Username
+              用户名
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="请输入用户名"
               className="w-full bg-slate-950 px-3.5 py-2.5 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none transition shadow-inner"
             />
           </div>
@@ -81,23 +91,36 @@ export default function LoginModal({ onLoginSuccess }) {
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
               <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-              密码 / Password
+              密码
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="请输入密码"
               className="w-full bg-slate-950 px-3.5 py-2.5 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none transition shadow-inner"
             />
+          </div>
+
+          <div className="flex items-center justify-between py-0.5">
+            <label
+              onClick={() => setRememberLogin(!rememberLogin)}
+              className="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer select-none"
+            >
+              {rememberLogin ? (
+                <CheckSquare className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-500" />
+              )}
+              <span>记住登录状态</span>
+            </label>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-base rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 mt-2"
+            className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-base rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 mt-1"
           >
-            <span>{loading ? '正在验证...' : '立即登录'}</span>
+            <span>{loading ? '登录中...' : '登录'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>

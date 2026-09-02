@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import PlayerSeat from './PlayerSeat';
 import CardView from './CardView';
 import ActionBar from './ActionBar';
@@ -12,13 +12,9 @@ import {
   LogOut,
   PowerOff,
   Play,
-  Share2,
-  Users,
   Clock,
-  Sparkles,
   CheckCircle2,
-  Layers,
-  Flame,
+  Trash2,
 } from 'lucide-react';
 
 export default function PokerTable({
@@ -68,25 +64,25 @@ export default function PokerTable({
   const visualScreenPositions = useMemo(() => {
     if (maxSeats === 6) {
       return [
-        { top: '80%', left: '50%', betDirection: 'top' },    // Screen Pos 0 (Bottom Center)
-        { top: '65%', left: '16%', betDirection: 'right' },  // Screen Pos 1 (Bottom Left)
-        { top: '28%', left: '16%', betDirection: 'right' },  // Screen Pos 2 (Top Left)
-        { top: '16%', left: '50%', betDirection: 'bottom' }, // Screen Pos 3 (Top Center)
-        { top: '28%', left: '84%', betDirection: 'left' },   // Screen Pos 4 (Top Right)
-        { top: '65%', left: '84%', betDirection: 'left' },   // Screen Pos 5 (Bottom Right)
+        { top: '92%', left: '50%', betDirection: 'top' },    // Screen Pos 0 (Bottom Center - Hero)
+        { top: '68%', left: '15%', betDirection: 'right' },  // Screen Pos 1 (Bottom Left)
+        { top: '24%', left: '15%', betDirection: 'right' },  // Screen Pos 2 (Top Left)
+        { top: '11%', left: '50%', betDirection: 'bottom' }, // Screen Pos 3 (Top Center)
+        { top: '24%', left: '85%', betDirection: 'left' },   // Screen Pos 4 (Top Right)
+        { top: '68%', left: '85%', betDirection: 'left' },   // Screen Pos 5 (Bottom Right)
       ];
     }
     // 9 Seats layout
     return [
-      { top: '82%', left: '50%', betDirection: 'top' },    // 0 Bottom
-      { top: '72%', left: '18%', betDirection: 'right' },  // 1 Bottom Left
-      { top: '48%', left: '12%', betDirection: 'right' },  // 2 Mid Left
-      { top: '24%', left: '18%', betDirection: 'bottom' }, // 3 Top Left
-      { top: '15%', left: '38%', betDirection: 'bottom' }, // 4 Top Left-Center
-      { top: '15%', left: '62%', betDirection: 'bottom' }, // 5 Top Right-Center
-      { top: '24%', left: '82%', betDirection: 'bottom' }, // 6 Top Right
-      { top: '48%', left: '88%', betDirection: 'left' },   // 7 Mid Right
-      { top: '72%', left: '82%', betDirection: 'left' },   // 8 Bottom Right
+      { top: '93%', left: '50%', betDirection: 'top' },    // 0 Bottom (Hero)
+      { top: '76%', left: '16%', betDirection: 'right' },  // 1 Bottom Left
+      { top: '48%', left: '9%', betDirection: 'right' },   // 2 Mid Left
+      { top: '20%', left: '16%', betDirection: 'bottom' }, // 3 Top Left
+      { top: '10%', left: '37%', betDirection: 'bottom' }, // 4 Top Left-Center
+      { top: '10%', left: '63%', betDirection: 'bottom' }, // 5 Top Right-Center
+      { top: '20%', left: '84%', betDirection: 'bottom' }, // 6 Top Right
+      { top: '48%', left: '91%', betDirection: 'left' },   // 7 Mid Right
+      { top: '76%', left: '84%', betDirection: 'left' },   // 8 Bottom Right
     ];
   }, [maxSeats]);
 
@@ -124,13 +120,14 @@ export default function PokerTable({
     }
   };
 
-  const handlePlayerAction = (action, amount = 0) => {
-    onSendWsEvent('PLAYER_ACTION', { action, amount });
+  const handleDeleteRoom = () => {
+    if (window.confirm('确定要解散并删除该房间吗？删除后所有玩家将返回大厅。')) {
+      onSendWsEvent('DELETE_ROOM', {});
+    }
   };
 
-  const handleShowCard = (cardIndex, showAll) => {
-    onSendWsEvent('SHOW_CARD', { card_index: cardIndex, show_all: showAll });
-    setShowCardsVisible(false);
+  const handlePlayerAction = (action, amount = 0) => {
+    onSendWsEvent('PLAYER_ACTION', { action, amount });
   };
 
   const currentTurnPlayer = useMemo(() => {
@@ -141,6 +138,69 @@ export default function PokerTable({
   const isMyTurn = useMemo(() => {
     return !!(selfSeat && table?.current_turn_seat === selfSeat.seat_index);
   }, [selfSeat, table?.current_turn_seat]);
+
+  // Turn Countdown Audio Effect (5 seconds remaining warning)
+  const lastPlayedSecondRef = useRef(null);
+
+  useEffect(() => {
+    // Only active during ongoing betting rounds or RIT voting
+    const isOngoingTurn =
+      table?.street &&
+      !['IDLE', 'SHOWDOWN', 'HAND_END'].includes(table.street) &&
+      (table.current_turn_seat !== null && table.current_turn_seat !== undefined);
+
+    const isRIT = table?.street === 'RIT_DECISION' || table?.rit_status === 'VOTING';
+
+    if (!isOngoingTurn && !isRIT) {
+      lastPlayedSecondRef.current = null;
+      return;
+    }
+
+    const duration = isRIT
+      ? 8
+      : table?.is_using_time_bank
+      ? (table?.current_turn_duration || 30)
+      : (table?.current_turn_duration || room?.config?.action_timeout || 15);
+
+    const startTime = Date.now();
+    const totalMs = duration * 1000;
+    lastPlayedSecondRef.current = null;
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remainingSec = Math.max(0, (totalMs - elapsed) / 1000);
+      const secondsCeil = Math.ceil(remainingSec);
+
+      if (secondsCeil <= 5 && secondsCeil >= 1) {
+        if (lastPlayedSecondRef.current !== secondsCeil) {
+          lastPlayedSecondRef.current = secondsCeil;
+          const isUserTurn = isRIT
+            ? (table?.rit_voters?.includes(currentUser?.user_id) && table?.rit_votes?.[currentUser?.user_id] === undefined)
+            : isMyTurn;
+          soundEngine.play('countdown', {
+            secondsLeft: secondsCeil,
+            isMyTurn: isUserTurn,
+          });
+        }
+      }
+    }, 100);
+
+    return () => {
+      clearInterval(interval);
+      lastPlayedSecondRef.current = null;
+    };
+  }, [
+    table?.street,
+    table?.current_turn_seat,
+    table?.turn_count,
+    table?.action_history?.length,
+    table?.is_using_time_bank,
+    table?.current_turn_duration,
+    room?.config?.action_timeout,
+    isMyTurn,
+    currentUser?.user_id,
+    table?.rit_status,
+  ]);
 
   return (
     <div className="relative w-full h-screen max-h-screen overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
@@ -158,7 +218,7 @@ export default function PokerTable({
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <h1 className="text-sm md:text-base font-black text-amber-400 tracking-wide">
-                {room?.config?.room_name || 'GGPoker 现金桌'}
+                {room?.config?.room_name || 'HPoker 现金桌'}
               </h1>
               <span className="text-[11px] bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-bold">
                 盲注: ${room?.config?.small_blind}/${room?.config?.big_blind}
@@ -213,55 +273,67 @@ export default function PokerTable({
               结束房间并结算
             </button>
           )}
+
+          {/* Host Delete/Disband Room Button */}
+          {(isHost || currentUser?.is_admin) && (
+            <button
+              onClick={handleDeleteRoom}
+              className="flex items-center gap-1 px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"
+              title="解散并删除房间"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              解散房间
+            </button>
+          )}
         </div>
       </header>
 
       {/* Main Body: Left Poker Table Felt + Right Action Console Sidebar */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
         {/* Left Side: Main Poker Table Felt Area */}
-        <main className="relative flex-1 w-full h-full flex items-center justify-center p-2 lg:p-4 select-none min-h-0 min-w-0">
+        <main className="relative flex-1 w-full h-full flex items-center justify-center p-3 pb-8 md:p-6 md:pb-12 select-none min-h-0 min-w-0 overflow-visible">
           {/* Table Exterior Border Ring (Leather & Wood Armrest) */}
-          <div className="relative w-full h-[98%] max-h-[720px] rounded-[170px] md:rounded-[230px] bg-gradient-to-b from-[#2e2018] via-[#1a130e] to-[#0c0806] p-3 md:p-4 shadow-table border-[4px] border-[#3f2e24]">
-            {/* Inner Golden Line */}
-            <div className="w-full h-full rounded-[155px] md:rounded-[215px] border-2 border-amber-600/35 p-2 md:p-3 bg-gradient-to-b from-[#0a2318] via-[#061810] to-[#030e09] relative shadow-inner overflow-hidden">
+          <div className="relative w-full h-[88%] md:h-[90%] max-h-[660px] rounded-[170px] md:rounded-[230px] bg-gradient-to-b from-[#2e2018] via-[#1a130e] to-[#0c0806] p-3 md:p-4 shadow-table border-[4px] border-[#3f2e24] overflow-visible">
+            {/* Table Felt Background & Texture (clipped cleanly inside the inner oval) */}
+            <div className="absolute inset-3 md:inset-4 rounded-[155px] md:rounded-[215px] border-2 border-amber-600/35 bg-gradient-to-b from-[#0a2318] via-[#061810] to-[#030e09] shadow-inner overflow-hidden pointer-events-none">
               {/* Felt Texture Pattern */}
-              <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#2ecc71_1.5px,transparent_1.5px)] [background-size:14px_14px] pointer-events-none" />
+              <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#2ecc71_1.5px,transparent_1.5px)] [background-size:14px_14px]" />
 
-              {/* GGPoker Center Logo Watermark */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none opacity-20">
+              {/* HPoker Center Logo Watermark */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20">
                 <span className="text-4xl md:text-6xl font-black tracking-widest text-amber-500 font-serif">
-                  GGPOKER
-                </span>
-                <span className="text-xs md:text-sm tracking-widest text-amber-300 uppercase mt-1 font-bold">
-                  HIGH STAKES CASH GAME
+                  HPOKER
                 </span>
               </div>
+            </div>
 
+            {/* Inner Content Area (Overlay, Seats, Center Area - NOT clipped, allowing overflow) */}
+            <div className="relative w-full h-full">
               {/* Center Table Area: Board Cards, Pots & Next Hand Countdown */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
                 {/* Street & Total Pot Badge */}
-                <div className="flex flex-col items-center gap-1.5">
+                <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
                   <div className="flex items-center gap-3 bg-slate-950/85 px-4 py-1.5 rounded-full border-2 border-amber-500/40 backdrop-blur-md shadow-2xl">
                     <span className="text-xs md:text-sm font-bold text-slate-300">
                       {table?.street === 'PREFLOP'
-                        ? '翻牌前 (Preflop)'
+                        ? '翻牌前'
                         : table?.street === 'FLOP'
-                        ? '翻牌圈 (Flop)'
+                        ? '翻牌圈'
                         : table?.street === 'TURN'
-                        ? '转牌圈 (Turn)'
+                        ? '转牌圈'
                         : table?.street === 'RIVER'
-                        ? '河牌圈 (River)'
+                        ? '河牌圈'
                         : table?.street === 'RIT_DECISION'
-                        ? '🔥 发牌次数协商中...'
+                        ? '发牌次数'
                         : table?.street === 'SHOWDOWN'
-                        ? '摊牌比牌 (Showdown)'
+                        ? '摊牌'
                         : table?.street === 'HAND_END'
                         ? '牌局结束'
                         : '等待开局'}
                     </span>
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     <span className="text-base md:text-xl font-black text-amber-300 tracking-wide">
-                      总底池: ${table?.total_pot || 0}
+                      底池: ${table?.total_pot || 0}
                     </span>
                   </div>
 
@@ -280,7 +352,7 @@ export default function PokerTable({
                   )}
                 </div>
 
-                {/* Community Board Cards (Supports Dual Boards for Run It Twice) */}
+                {/* Community Board Cards */}
                 {table?.rit_enabled || (table?.board_cards_2 && table.board_cards_2.length > 0) ? (
                   <div className="flex flex-col gap-2 bg-black/60 p-3 rounded-2xl border border-purple-500/40 backdrop-blur-md shadow-2xl">
                     {/* Board 1 */}
@@ -348,13 +420,13 @@ export default function PokerTable({
 
                 {/* Start Hand / Ready / Rebuy Prompt */}
                 {table?.street in { IDLE: 1, HAND_END: 1 } && (
-                  <div className="flex flex-col sm:flex-row items-center gap-2 mt-1">
+                  <div className="flex flex-col sm:flex-row items-center gap-2 mt-1 pointer-events-auto">
                     {table?.street === 'HAND_END' && handResultDismissed && (
                       <button
                         onClick={() => setHandResultDismissed(false)}
                         className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-amber-500/50 text-amber-300 text-xs font-bold rounded-xl shadow transition active:scale-95 cursor-pointer"
                       >
-                        📊 查看本局结算
+                        查看本局结算
                       </button>
                     )}
                     {selfSeat && selfSeat.chips === 0 ? (
@@ -363,7 +435,7 @@ export default function PokerTable({
                         className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs md:text-sm font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer animate-pulse"
                       >
                         <RefreshCw className="w-4 h-4" />
-                        筹码已输尽，立即补充买入 (${room?.config?.buyin_chips || 1000})
+                        补码 (${room?.config?.buyin_chips || 1000})
                       </button>
                     ) : isHost ? (
                       <button
@@ -371,7 +443,7 @@ export default function PokerTable({
                         className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs md:text-sm font-black rounded-xl shadow-glow-cyan transition active:scale-95 cursor-pointer animate-pulse"
                       >
                         <Play className="w-4 h-4 fill-white" />
-                        {table?.street === 'HAND_END' ? '立即开始下一局' : '开始游戏'}
+                        {table?.street === 'HAND_END' ? '下一局' : '开始'}
                       </button>
                     ) : selfSeat ? (
                       <button
@@ -387,12 +459,12 @@ export default function PokerTable({
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         {table?.ready_player_ids?.includes(selfSeat.player_id)
-                          ? '已准备 (等待房主开局)'
-                          : '确认并准备下一局'}
+                          ? '已准备'
+                          : '准备下一局'}
                       </button>
                     ) : (
                       <div className="px-4 py-2 bg-slate-900/80 border border-slate-700 text-slate-400 text-xs font-bold rounded-xl">
-                        等待房主开始游戏...
+                        等待房主开局
                       </div>
                     )}
                   </div>
@@ -404,11 +476,10 @@ export default function PokerTable({
                 <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
                   <div className="max-w-md w-full bg-gradient-to-b from-slate-900 via-slate-950 to-purple-950 border-2 border-purple-500/80 rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 text-center">
                     <div className="flex items-center justify-center gap-2 text-amber-400 font-black text-base md:text-lg">
-                      <Flame className="w-5 h-5 fill-amber-400 animate-bounce" />
-                      ALL-IN 对决：请选择发牌次数
+                      全下后发牌次数
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                      双方均同意发 <strong className="text-purple-300">2 次</strong> 则平分底池并各发两副牌；若任意一人选择 <strong className="text-amber-300">1 次</strong> 则只发 1 次牌。
+                      双方均选 <strong className="text-purple-300">2 次</strong> 时平分底池；有一人选 <strong className="text-amber-300">1 次</strong> 则发 1 次。
                     </p>
 
                     {/* Contender Votes Progress */}
@@ -430,7 +501,7 @@ export default function PokerTable({
                           >
                             <span>{voterName}:</span>
                             <span>
-                              {vote === 2 ? '发 2 次 (Twice)' : vote === 1 ? '发 1 次 (Once)' : '选择中...'}
+                              {vote === 2 ? '发 2 次' : vote === 1 ? '发 1 次' : '未选择'}
                             </span>
                           </span>
                         );
@@ -449,7 +520,6 @@ export default function PokerTable({
                           }`}
                         >
                           <span className="text-base font-black">发 1 次</span>
-                          <span className="text-[11px] opacity-80">Run It Once (单轮)</span>
                         </button>
 
                         <button
@@ -461,13 +531,12 @@ export default function PokerTable({
                           }`}
                         >
                           <span className="text-base font-black">发 2 次</span>
-                          <span className="text-[11px] opacity-80">Run It Twice (双轮分池)</span>
                         </button>
                       </div>
                     ) : (
                       <div className="text-xs text-slate-400 font-bold py-1 flex items-center justify-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                        等待对决双方做出选择...
+                        等待选择
                       </div>
                     )}
                   </div>
@@ -497,6 +566,7 @@ export default function PokerTable({
                       isDealer={isDealer}
                       isSB={isSB}
                       isBB={isBB}
+                      currentRoundBet={seatData?.current_round_bet || 0}
                       onSitDown={handleSitDown}
                       currentUserId={currentUser?.user_id}
                       actionTimeout={room?.config?.action_timeout || 15}
@@ -521,31 +591,19 @@ export default function PokerTable({
             legalActions={table?.legal_actions}
             totalPot={table?.total_pot || 0}
             bigBlind={room?.config?.big_blind || 10}
-            smallBlind={room?.config?.small_blind || 5}
             buyinChips={room?.config?.buyin_chips || 1000}
             onAction={handlePlayerAction}
             selfSeat={selfSeat}
-            isHost={isHost}
-            readyPlayerIds={table?.ready_player_ids || []}
-            onToggleReady={() => {
-              const isReady = table?.ready_player_ids?.includes(selfSeat?.player_id);
-              onSendWsEvent('PLAYER_READY', { ready: !isReady });
-            }}
             onRebuy={handleRebuy}
             currentTurnPlayer={currentTurnPlayer}
             isMyTurn={isMyTurn}
             street={table?.street || 'IDLE'}
             actionHistory={table?.action_history || []}
-            onStartGame={isHost ? handleStartGame : undefined}
             actionTimeout={room?.config?.action_timeout || 15}
             currentTurnDuration={table?.current_turn_duration || room?.config?.action_timeout || 15}
             isUsingTimeBank={table?.is_using_time_bank || false}
             onUseTimeCard={() => onSendWsEvent('USE_TIME_CARD', {})}
             seats={table?.seats || []}
-            ritStatus={table?.rit_status}
-            ritVoters={table?.rit_voters}
-            ritVotes={table?.rit_votes}
-            onRitChoice={(choice) => onSendWsEvent('RIT_CHOICE', { choice })}
             turnCount={table?.turn_count || 0}
           />
         </aside>

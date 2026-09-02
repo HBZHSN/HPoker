@@ -1,6 +1,6 @@
-# GGPoker 风格多人在线德州扑克系统 (Texas Hold'em Online)
+# HPoker 风格多人在线德州扑克系统 (Texas Hold'em Online)
 
-一款高度拟真、参考 **GGPoker** 视觉与交互体验的多人实时在线德州扑克（Texas Hold'em）现金局平台。后端采用 Python 异步架构（FastAPI + WebSocket），前端采用现代响应式前端框架，具备极高准确性的边池计算、精准的超时托管机制、重买记录、战局结束债权自动结算以及全套沉浸式音效。
+一款高度拟真、参考 **HPoker** 视觉与交互体验的多人实时在线德州扑克（Texas Hold'em）现金局平台。后端采用 Python 异步架构（FastAPI + WebSocket），前端采用现代响应式前端框架，具备极高准确性的边池计算、精准的超时托管机制、重买记录、战局结束债权自动结算以及全套沉浸式音效。
 
 ---
 
@@ -10,10 +10,10 @@
 - **加密级洗牌算法**：采用 Python `secrets` / CSPRNG 保证发牌绝对随机与不可预测。
 - **高精度 7 选 5 牌型评估器**：支持高牌、一对、两对、三条、顺子、同花、葫芦、四条、同花顺、皇家同花顺的快速准确比对。
 - **全下（All-in）与多重边池（Side Pots）计算**：严格按照德州扑克国际规则，精确处理多人全下、不同下注额度产生的复杂主池与多个边池分配，杜绝任何算力漏洞。
-- **下注合法性校验与尺度控制**：严格遵循最小加注增量规则（Min-Raise Rule），提供 1/3 Pot、1/2 Pot、2/3 Pot、3/4 Pot、Pot、All-In 等快捷尺度与滑块微调。
+- **下注合法性校验与尺度控制**：严格遵循最小加注增量规则（Min-Raise Rule），提供 1/3 Pot、1/2 Pot、2/3 Pot、Pot、1.5 Pot、2 Pot、3 Pot、All-In 等快捷尺度与实时计算金额直观显示，配合滑块微调。
 
-### 2. GGPoker 风格 UI / UX 与视觉沉浸
-- **UI风格**：还原 GGPoker 页面风格，按钮排布等。
+### 2. HPoker 风格 UI / UX 与视觉沉浸
+- **UI风格**：还原 HPoker 页面风格，按钮排布等。
 - **座位与玩家状态**：环形动态排布座位、庄家位（Dealer Button）、小盲（SB）、大盲（BB）、下注额、手牌及实时倒计时进度光圈。
 - **手牌展示机制（Show / Muck）**：牌局结束后支持玩家自主选择亮出单张牌或全部牌（Show One / Show All），打到最后摊牌（Showdown）阶段自动比牌亮牌。
 - **全套扑克音效系统**：内置发牌、Check、Call、Raise、Fold、All-in、赢取底池、倒计时提示音等全套音效。
@@ -41,33 +41,77 @@
 
 ## 🚀 快速启动指南
 
-### 1. 环境准备
-确保本机已安装 Python 3.11+ 以及 Node.js 18+。
+### ⚡ 方式一：一键极速启动 (推荐)
 
-### 2. 创建并激活 Python 虚拟环境
-本项目严格要求使用独立虚拟环境：
+项目内置了自动化启动脚本 `start.sh`，会自动检查并配置虚拟环境、安装缺失依赖、释放冲突端口并同时启动前后端服务：
 
 ```bash
-# 进入项目目录
-cd /home/hanxu/code/python/poker
+# 进入项目目录直接运行
+./start.sh
+```
 
-# 创建虚拟环境
+- 🌐 本地桌面访问：`http://localhost:5173`
+- 📱 局域网/手机访问：`http://<局域网IP>:5173`（脚本启动时会自动显示对应 IP）
+- 💻 **轻量 CLI 终端客户端**：`./start.sh cli` 或 `.venv/bin/python poker_cli.py`
+- 📖 后端 API 文档：`http://localhost:8000/docs`
+- 🛑 按 `Ctrl + C` 即可一键安全停止所有服务。
+
+> **脚本常用命令**：
+> - `./start.sh` 或 `./start.sh dev`：前后端热重载开发模式（默认）
+> - `./start.sh cli`：启动轻量 CLI 终端客户端（支持创建房间、打牌、加注、秀牌、结算）
+> - `./start.sh prod`：编译前端并以单端口（8000）生产模式运行
+> - `./start.sh backend`：仅启动后端服务
+> - `./start.sh test`：运行全部单元测试
+> - `./start.sh stop`：强制停止占用 8000 / 5173 端口的残留进程
+> - `./start.sh help`：查看全部命令帮助
+
+---
+
+### 💻 轻量 CLI 终端客户端
+
+界面简洁大方、排版整洁，支持两套视图模式（`Dashboard` 仪表盘模式与 `Stream` 极简日志流模式），功能 100% 完整覆盖：
+
+- **启动方式**：
+  ```bash
+  # 交互式输入账号密码登录
+  ./start.sh cli
+  
+  # 或直接指定用户与模式极速启动
+  .venv/bin/python poker_cli.py --user fwd --mode dashboard
+  ```
+- **核心操作指令**：
+  - `c` / `check` / `call`：智能过牌或跟注
+  - `f` / `fold`：弃牌
+  - `r <金额>` / `r 0.5p` / `r 2/3p` / `r 1p`：加注/下注（支持半池、2/3池、满池等智能比例）
+  - `a` / `allin`：全下
+  - `ready` / `start`：准备 / 开局
+  - `rebuy`：重买补码
+  - `show 1` / `show 2` / `show all` / `muck`：秀牌/盖牌
+  - `rit 1` / `rit 2`：多次发牌（Run It Twice）投票
+  - `end`：房主结束房间并输出最小债务转账清算清单
+  - `mode`：一键切换 仪表盘模式 / 极简日志流模式
+  - `h` / `help`：查看详细帮助指南
+
+---
+
+### 🛠️ 方式二：手动分步启动
+
+#### 1. 环境准备
+确保本机已安装 Python 3.11+ 以及 Node.js 18+。
+
+#### 2. 创建并激活 Python 虚拟环境
+```bash
 python3 -m venv .venv
-
-# 激活虚拟环境
 source .venv/bin/activate
 ```
 
-### 3. 安装后端依赖并运行
+#### 3. 安装后端依赖并运行
 ```bash
-# 激活环境后安装依赖
 pip install -r backend/requirements.txt
-
-# 启动后端服务 (FastAPI + WebSocket)
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### 4. 安装前端依赖并运行
+#### 4. 安装前端依赖并运行
 ```bash
 cd frontend
 npm install

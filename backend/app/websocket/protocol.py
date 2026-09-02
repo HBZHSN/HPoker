@@ -18,6 +18,7 @@ class EventType(str, Enum):
     RIT_CHOICE = "RIT_CHOICE"
     USE_TIME_CARD = "USE_TIME_CARD"
     END_ROOM = "END_ROOM"
+    DELETE_ROOM = "DELETE_ROOM"
     PING = "PING"
 
     # Server -> Client
@@ -25,6 +26,7 @@ class EventType(str, Enum):
     ACTION_EVENT = "ACTION_EVENT"
     SOUND_EFFECT = "SOUND_EFFECT"
     SETTLEMENT_REPORT = "SETTLEMENT_REPORT"
+    ROOM_DELETED = "ROOM_DELETED"
     ERROR_MESSAGE = "ERROR_MESSAGE"
     PONG = "PONG"
 

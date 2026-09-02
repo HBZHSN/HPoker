@@ -38,3 +38,26 @@ class User:
             "created_at": self.created_at,
         }
 
+    def to_storage_dict(self) -> dict:
+        return {
+            "user_id": self.user_id,
+            "username": self.username,
+            "nickname": self.nickname,
+            "avatar": self.avatar,
+            "is_admin": self.is_admin,
+            "password_hash": self.password_hash,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_storage_dict(cls, data: dict) -> User:
+        return cls(
+            user_id=data["user_id"],
+            username=data["username"],
+            nickname=data.get("nickname", data["username"]),
+            avatar=data.get("avatar", "👤"),
+            is_admin=data.get("is_admin", False),
+            password_hash=data.get("password_hash", hash_password("123")),
+            created_at=data.get("created_at", time.time()),
+        )
+

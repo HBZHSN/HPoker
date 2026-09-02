@@ -1,11 +1,15 @@
 """REST API Endpoints for Poker Users, Authentication, and Room Management."""
 
+import json
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
 from backend.app.services.user_manager import user_manager
 from backend.app.services.room_manager import room_manager
+from backend.app.services.timeout_manager import timeout_manager
+from backend.app.websocket.connection_manager import ws_manager
+from backend.app.websocket.protocol import EventType, make_message
 from backend.app.models.room import RoomConfig
 
 api_router = APIRouter()
@@ -167,7 +171,7 @@ def create_user(req: AdminCreateUserRequest):
 
 class CreateRoomRequest(BaseModel):
     host_player_id: str
-    room_name: str = "GGPoker 现金桌"
+    room_name: str = "HPoker 现金桌"
     buyin_chips: int = Field(default=1000, ge=10)
     cash_value: float = Field(default=100.0, ge=1.0)
     small_blind: int = Field(default=5, ge=1)
@@ -182,7 +186,7 @@ def get_rooms():
 
 
 @api_router.post("/rooms")
-def create_room(req: CreateRoomRequest):
+async def create_room(req: CreateRoomRequest):
     cfg = RoomConfig(
         room_name=req.room_name,
         buyin_chips=req.buyin_chips,
@@ -193,6 +197,9 @@ def create_room(req: CreateRoomRequest):
         max_seats=req.max_seats,
     )
     room = room_manager.create_room(host_player_id=req.host_player_id, config=cfg)
+    # Schedule initial empty room cleanup in case creator never enters room
+    from backend.app.websocket.router import schedule_room_empty_check
+    schedule_room_empty_check(room.room_id, delay_seconds=30.0)
     return room.to_dict()
 
 
@@ -213,4 +220,35 @@ def end_room(room_id: str, requester_id: str):
     if not report:
         raise HTTPException(status_code=403, detail="Only host can end room or room already ended")
     return report.to_dict()
+
+
+@api_router.delete("/rooms/{room_id}")
+@api_router.post("/rooms/{room_id}/delete")
+async def delete_room(room_id: str, requester_id: str = Query(...)):
+    room = room_manager.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="房间不存在")
+
+    requester = user_manager.get_user(requester_id)
+    is_admin = requester.is_admin if requester else False
+    if requester_id != room.host_player_id and not is_admin:
+        raise HTTPException(status_code=403, detail="只有房主或管理员有权删除房间")
+
+    # Broadcast ROOM_DELETED to all connected WebSocket clients
+    msg = make_message(EventType.ROOM_DELETED, {
+        "room_id": room_id,
+        "message": "房间已被房主解散",
+        "deleted_by": requester_id,
+    }, room_id=room_id)
+    raw_msg = json.dumps(msg)
+    for ws in list(ws_manager.get_room_connections(room_id)):
+        try:
+            await ws.send_text(raw_msg)
+        except Exception:
+            pass
+
+    timeout_manager.cancel_all_timers(room_id)
+    room_manager.delete_room(room_id)
+    await ws_manager.close_room_connections(room_id, reason="Room deleted by host")
+    return {"success": True, "message": "房间已成功删除"}
 

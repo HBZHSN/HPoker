@@ -10,20 +10,20 @@ export default function SettlementModal({
   if (!report) return null;
 
   const copySettlementText = () => {
-    let text = `【${report.room_name} - 战局终局结算清单】\n`;
-    text += `买入标准: ${report.buyin_chips}筹码 = ¥${report.cash_value}\n\n`;
-    text += `--- 玩家战绩汇总 ---\n`;
+    let text = `【${report.room_name} - 结算清单】\n`;
+    text += `买入: ${report.buyin_chips}筹码 = ¥${report.cash_value}\n\n`;
+    text += `--- 玩家战绩 ---\n`;
     report.player_records.forEach((r, idx) => {
       const sign = r.net_cash >= 0 ? '+' : '';
-      text += `${idx + 1}. ${r.player_name}: 买入x${r.rebuy_count} (${r.total_buyin_chips}筹码) -> 终局${r.final_chips}筹码 | 净输赢: ${sign}¥${r.net_cash.toFixed(2)}\n`;
+      text += `${idx + 1}. ${r.player_name}: 买入x${r.rebuy_count} (${r.total_buyin_chips}筹码) -> 余额${r.final_chips}筹码 | 净输赢: ${sign}¥${r.net_cash.toFixed(2)}\n`;
     });
 
-    text += `\n--- 现金转账明细 ---\n`;
+    text += `\n--- 转账 ---\n`;
     if (report.transactions.length === 0) {
-      text += `所有人筹码收支平衡，无需额外转账。\n`;
+      text += `无需转账。\n`;
     } else {
       report.transactions.forEach((t, idx) => {
-        text += `${idx + 1}. ${t.from_player_name}  ➡️  ${t.to_player_name} : ¥${t.amount_cash.toFixed(2)} (${t.amount_chips} 筹码)\n`;
+        text += `${idx + 1}. ${t.from_player_name} -> ${t.to_player_name}: ¥${t.amount_cash.toFixed(2)} (${t.amount_chips} 筹码)\n`;
       });
     }
 
@@ -58,7 +58,7 @@ export default function SettlementModal({
 
         {/* Player Leaderboard */}
         <div className="flex flex-col gap-2">
-          <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">玩家战绩排行榜</h3>
+          <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">玩家战绩</h3>
           <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/60">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-800">
@@ -115,7 +115,7 @@ export default function SettlementModal({
 
           {report.transactions.length === 0 ? (
             <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
-              所有人筹码净收益平衡，无需额外支付转账。
+              无需转账
             </div>
           ) : (
             <div className="flex flex-col gap-2">
@@ -156,7 +156,7 @@ export default function SettlementModal({
             className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition flex items-center justify-center gap-1.5"
           >
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {copied ? "已复制结算单至剪贴板" : "复制结算清单文本"}
+            {copied ? "已复制" : "复制结算清单"}
           </button>
           <button
             onClick={onClose}

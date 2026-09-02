@@ -13,7 +13,7 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newNickname, setNewNickname] = useState('');
-  const [newPassword, setNewPassword] = useState('123');
+  const [newPassword, setNewPassword] = useState('');
   const [newAvatar, setNewAvatar] = useState('👤');
   const [newIsAdmin, setNewIsAdmin] = useState(false);
 
@@ -46,6 +46,10 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
       setError('用户名不能为空');
       return;
     }
+    if (!newPassword.trim()) {
+      setError('初始密码不能为空');
+      return;
+    }
     setError('');
     setSuccess('');
 
@@ -57,7 +61,7 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
           admin_user_id: adminUser.user_id,
           username: newUsername.trim(),
           nickname: newNickname.trim() || newUsername.trim(),
-          password: newPassword.trim() || '123',
+          password: newPassword.trim(),
           avatar: newAvatar,
           is_admin: newIsAdmin,
         }),
@@ -66,11 +70,11 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '创建用户失败');
 
-      setSuccess(`账号 '${data.username}' 创建成功！`);
+      setSuccess(`已创建账号 '${data.username}'`);
       setShowAddForm(false);
       setNewUsername('');
       setNewNickname('');
-      setNewPassword('123');
+      setNewPassword('');
       fetchUsers();
     } catch (err) {
       setError(err.message);
@@ -94,7 +98,7 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '更新失败');
 
-      setSuccess(`用户 '${data.username}' 资料已更新！`);
+      setSuccess(`已更新用户 '${data.username}'`);
       setEditingUserId(null);
       setEditPassword('');
       fetchUsers();
@@ -131,7 +135,7 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
               <Shield className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-black text-amber-400">管理员控制台 · 账号与权限管理</h3>
+              <h3 className="text-lg font-black text-amber-400">账号管理</h3>
             </div>
           </div>
 
@@ -170,24 +174,24 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
         {/* Add User Panel */}
         {showAddForm && (
           <form onSubmit={handleCreateUser} className="bg-slate-900/90 border border-amber-500/40 rounded-2xl p-4 flex flex-col gap-3 shadow-xl animate-fade-in">
-            <div className="text-xs font-black text-amber-300 uppercase tracking-wide">添加新玩家账号</div>
+            <div className="text-xs font-black text-amber-300 uppercase tracking-wide">新账号</div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <input
                 type="text"
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="登录账号 (Username)"
+                placeholder="用户名"
                 className="bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-xs focus:border-amber-400 focus:outline-none"
               />
               <input
                 type="text"
                 value={newNickname}
                 onChange={(e) => setNewNickname(e.target.value)}
-                placeholder="显示昵称 (Nickname)"
+                placeholder="昵称"
                 className="bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-xs focus:border-amber-400 focus:outline-none"
               />
               <input
-                type="text"
+                type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="初始密码"
@@ -202,14 +206,14 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
                   onChange={(e) => setNewIsAdmin(e.target.checked)}
                   className="rounded accent-amber-400"
                 />
-                设为管理员账号 (Admin)
+                管理员
               </label>
 
               <button
                 type="submit"
                 className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 rounded-xl text-xs font-black shadow transition active:scale-95 cursor-pointer"
               >
-                确认创建
+                创建
               </button>
             </div>
           </form>

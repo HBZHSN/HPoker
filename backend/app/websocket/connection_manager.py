@@ -29,6 +29,29 @@ class ConnectionManager:
         self.socket_info[websocket] = (room_id, user_id)
         logger.info(f"User {user_id} connected to room {room_id}")
 
+    def get_room_connections(self, room_id: str) -> Set[WebSocket]:
+        """Return the set of active WebSockets for a room."""
+        return set(self.room_connections.get(room_id, set()))
+
+    def get_room_connection_count(self, room_id: str) -> int:
+        """Return number of active WebSocket connections in a room."""
+        return len(self.room_connections.get(room_id, set()))
+
+    def has_connections(self, room_id: str) -> bool:
+        """Check if a room currently has any connected clients."""
+        return self.get_room_connection_count(room_id) > 0
+
+    async def close_room_connections(self, room_id: str, reason: str = "Room deleted") -> None:
+        """Close all WebSocket connections associated with a room."""
+        sockets = list(self.room_connections.get(room_id, set()))
+        for ws in sockets:
+            self.socket_info.pop(ws, None)
+            try:
+                await ws.close(reason=reason)
+            except Exception:
+                pass
+        self.room_connections.pop(room_id, None)
+
     def disconnect(self, websocket: WebSocket) -> tuple[Optional[str], Optional[str]]:
         info = self.socket_info.pop(websocket, None)
         if info:

@@ -1,6 +1,6 @@
 import React from 'react';
 import CardView from './CardView';
-import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, Sparkles, X, RefreshCw, Layers } from 'lucide-react';
+import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers } from 'lucide-react';
 
 export default function HandResultModal({
   isOpen,
@@ -63,17 +63,17 @@ export default function HandResultModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base md:text-lg font-black text-amber-400 tracking-wide">
-                  第 #{handNumber} 手牌战局结算
+                  第 {handNumber} 局
                 </h2>
                 {hasTwoBoards && (
                   <span className="text-[10px] bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-black px-2 py-0.5 rounded-full border border-purple-400/50 shadow flex items-center gap-1">
                     <Layers className="w-3 h-3" />
-                    发 2 次牌 (Run It Twice)
+                    两次发牌
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-400">
-                底池总额: <strong className="text-amber-300 font-black">${totalPot}</strong>
+                底池: <strong className="text-amber-300 font-black">${totalPot}</strong>
               </p>
             </div>
           </div>
@@ -109,7 +109,7 @@ export default function HandResultModal({
               <button
                 onClick={onClose}
                 className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
-                title="关闭弹窗查看牌桌"
+                title="返回牌桌"
               >
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -119,36 +119,10 @@ export default function HandResultModal({
 
         {/* Body: Player Profit/Loss & Hand Rankings List */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-3">
-          {/* Immediate Re-buy Banner when Chips are Busted */}
-          {isBusted && onRebuy && (
-            <div className="bg-gradient-to-r from-red-950/90 via-amber-950/90 to-red-950/90 border-2 border-amber-400/80 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-glow-gold animate-pulse">
-              <div className="flex items-center gap-3 text-center sm:text-left">
-                <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-slate-950 font-black text-xl shadow flex-shrink-0">
-                  💸
-                </div>
-                <div>
-                  <div className="text-sm font-black text-amber-300">
-                    您的筹码已全部输完 (余额: $0)
-                  </div>
-                  <div className="text-xs text-slate-300">
-                    立即补充买入 ${buyinChips} 筹码，即可继续参加下一局！
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={onRebuy}
-                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-black text-sm rounded-xl shadow-xl transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 flex-shrink-0"
-              >
-                <RefreshCw className="w-4 h-4" />
-                立即补充买入 (${buyinChips})
-              </button>
-            </div>
-          )}
-
           <div className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center justify-between px-1">
-            <span>玩家战绩与牌型明细</span>
+            <span>牌局结果</span>
             <span>
-              准备进度: <strong className="text-amber-300 font-black">{readyCount}</strong> / {totalEligible} 人已确认
+              准备 <strong className="text-amber-300 font-black">{readyCount}</strong> / {totalEligible}
             </span>
           </div>
 
@@ -157,7 +131,7 @@ export default function HandResultModal({
               const isMe = selfSeat && res.player_id === selfSeat.player_id;
               const isWinner = !!res.is_winner;
               const isReady = readyPlayerIds && readyPlayerIds.includes(res.player_id);
-              const playerName = res.name || `玩家 (Seat ${res.seat_index !== undefined ? res.seat_index + 1 : idx + 1})`;
+              const playerName = res.name || `玩家 ${res.seat_index !== undefined ? res.seat_index + 1 : idx + 1}`;
 
               return (
                 <div
@@ -176,11 +150,6 @@ export default function HandResultModal({
                       <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">
                         {playerName.includes('Admin') ? '👑' : isMe ? '👤' : '🦁'}
                       </div>
-                      {isWinner && (
-                        <div className="absolute -top-2 -right-1 text-amber-400">
-                          <Sparkles className="w-4 h-4 fill-amber-400 animate-spin" />
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex flex-col">
@@ -193,7 +162,7 @@ export default function HandResultModal({
                         )}
                         {isWinner && (
                           <span className="text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded font-black">
-                            获胜 WINNER
+                            赢家
                           </span>
                         )}
                       </div>
@@ -322,8 +291,8 @@ export default function HandResultModal({
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-xs font-bold text-slate-400 bg-slate-900 px-2 py-1 rounded-lg border border-slate-800">
-                          <Clock className="w-3.5 h-3.5 animate-spin" />
-                          思考中
+                          <Clock className="w-3.5 h-3.5" />
+                          未准备
                         </span>
                       )}
                     </div>
@@ -339,11 +308,8 @@ export default function HandResultModal({
               <div className="flex flex-col gap-1 text-center sm:text-left">
                 <div className="flex items-center gap-1.5 justify-center sm:justify-start">
                   <Eye className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-black text-slate-100">局末亮牌选择 (Show Cards)</span>
+                  <span className="text-sm font-black text-slate-100">亮牌</span>
                 </div>
-                <span className="text-xs text-slate-400">
-                  点击手牌可单独亮出或隐藏，供所有玩家查看
-                </span>
               </div>
 
               {/* Two Clickable Cards */}
@@ -370,7 +336,7 @@ export default function HandResultModal({
                           isCardShown ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-300'
                         }`}
                       >
-                        {isCardShown ? '已亮出' : '点击亮'}
+                        {isCardShown ? '已亮出' : '亮牌'}
                       </div>
                     </button>
                   );
@@ -391,7 +357,7 @@ export default function HandResultModal({
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer flex items-center gap-1"
                 >
                   <EyeOff className="w-3.5 h-3.5" />
-                  藏牌 (Muck)
+                  不亮牌
                 </button>
               </div>
             </div>
@@ -400,14 +366,6 @@ export default function HandResultModal({
 
         {/* Footer: Confirm Ready / Start Hand Controls */}
         <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-slate-800 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-slate-400 font-bold text-center sm:text-left">
-            {isBusted
-              ? '筹码已输光，请先“补充买入”再准备'
-              : isHost
-              ? '房主可随时点击“立即开局”，或等待全员就绪'
-              : '请点击“确认并准备下一局”等待开始'}
-          </div>
-
           <div className="flex items-center gap-3 w-full sm:w-auto">
             {isBusted && onRebuy ? (
               <button
@@ -415,7 +373,7 @@ export default function HandResultModal({
                 className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 animate-pulse"
               >
                 <RefreshCw className="w-4 h-4" />
-                立即补充买入 (${buyinChips})
+                补码 (${buyinChips})
               </button>
             ) : selfSeat ? (
               <button
@@ -429,12 +387,12 @@ export default function HandResultModal({
                 {isSelfReady ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    已准备 (等待他人)
+                    已准备
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    确认并准备下一局
+                    准备下一局
                   </>
                 )}
               </button>
@@ -446,7 +404,7 @@ export default function HandResultModal({
                 className="flex-1 sm:flex-none px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
               >
                 <Play className="w-4 h-4 fill-slate-950" />
-                立即开局
+                开局
               </button>
             )}
           </div>

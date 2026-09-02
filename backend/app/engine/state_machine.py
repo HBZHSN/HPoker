@@ -48,6 +48,7 @@ class PlayerSeat:
     name: str
     seat_index: int
     chips: int
+    avatar: str = "👤"
     hole_cards: List[Card] = field(default_factory=list)
     is_folded: bool = False
     is_all_in: bool = False
@@ -85,6 +86,7 @@ class PlayerSeat:
         return {
             "player_id": self.player_id,
             "name": self.name,
+            "avatar": self.avatar,
             "seat_index": self.seat_index,
             "chips": self.chips,
             "hole_cards": [c.to_dict() for c in self.hole_cards] if include_private_cards else [],
@@ -187,7 +189,7 @@ class TableStateMachine:
 
     # ----------------- Seat & Player Management -----------------
 
-    def sit_down(self, player_id: str, name: str, seat_index: int, chips: int, total_buyin: int = 0) -> bool:
+    def sit_down(self, player_id: str, name: str, seat_index: int, chips: int, total_buyin: int = 0, avatar: str = "👤") -> bool:
         if not (0 <= seat_index < self.max_seats):
             return False
         if self.seats[seat_index] is not None:
@@ -205,6 +207,7 @@ class TableStateMachine:
             total_buyin_chips=total_buyin or chips,
             rebuy_count=1,
             time_bank_cards=3,
+            avatar=avatar or "👤",
         )
         return True
 
@@ -1023,7 +1026,10 @@ class TableStateMachine:
             "total_pot": self.pot_manager.total_pot_amount,
             "pots": [p.to_dict() for p in pots],
             "seats": [
-                s.to_dict(include_private_cards=(s.player_id == viewer_player_id))
+                {
+                    **s.to_dict(include_private_cards=(s.player_id == viewer_player_id)),
+                    "current_round_bet": self.pot_manager.get_player_current_bet(s.player_id),
+                }
                 if s else None
                 for s in self.seats
             ],

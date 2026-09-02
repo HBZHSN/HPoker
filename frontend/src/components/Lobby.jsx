@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight } from 'lucide-react';
+import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2 } from 'lucide-react';
 
 export default function Lobby({
   users,
@@ -11,10 +11,11 @@ export default function Lobby({
   onLogout,
   rooms,
   onCreateRoom,
+  onDeleteRoom,
   onJoinRoom,
 }) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [roomName, setRoomName] = useState('GGPoker 高端现金桌');
+  const [roomName, setRoomName] = useState('新现金桌');
   const [buyinChips, setBuyinChips] = useState(1000);
   const [cashValue, setCashValue] = useState(100);
   const [smallBlind, setSmallBlind] = useState(5);
@@ -43,11 +44,11 @@ export default function Lobby({
       <header className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900/80 border border-amber-500/30 p-5 rounded-3xl backdrop-blur-md shadow-2xl">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-black text-xl shadow-glow-gold">
-            GG
+            H
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-black text-white tracking-wider flex items-center gap-2">
-              GGPOKER 在线德州现金局
+              HPOKER 在线德州现金局
             </h1>
           </div>
         </div>
@@ -117,7 +118,7 @@ export default function Lobby({
             className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95"
           >
             <PlusCircle className="w-4 h-4" />
-            创建现金局房间
+            创建房间
           </button>
         </div>
 
@@ -127,57 +128,83 @@ export default function Lobby({
             <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 text-2xl">
               ♠️
             </div>
-            <p className="text-sm text-slate-400 font-medium">暂无活跃房间，快来创建第一张现金桌吧！</p>
+            <p className="text-sm text-slate-400 font-medium">暂无牌桌</p>
             <button
               onClick={() => setCreateModalOpen(true)}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold rounded-xl border border-slate-700 transition"
             >
-              立即创建
+              创建房间
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rooms.map((r) => (
-              <div
-                key={r.room_id}
-                className="flex flex-col justify-between p-5 bg-gradient-to-b from-slate-900/90 to-slate-950 border border-slate-800 hover:border-amber-500/50 rounded-2xl shadow-xl transition-all duration-200 group"
-              >
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-extrabold text-white text-base group-hover:text-amber-400 transition">
-                        {r.room_name}
-                      </h3>
-                      <span className="text-[11px] text-slate-400 font-mono">
-                        ID: {r.room_id}
+            {rooms.map((r) => {
+              const canDelete = currentUser?.user_id === r.host_player_id || currentUser?.is_admin;
+              return (
+                <div
+                  key={r.room_id}
+                  className="flex flex-col justify-between p-5 bg-gradient-to-b from-slate-900/90 to-slate-950 border border-slate-800 hover:border-amber-500/50 rounded-2xl shadow-xl transition-all duration-200 group"
+                >
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-extrabold text-white text-base group-hover:text-amber-400 transition">
+                            {r.room_name}
+                          </h3>
+                          {r.host_player_id === currentUser?.user_id && (
+                            <span className="text-[10px] bg-amber-950 text-amber-300 font-bold px-1.5 py-0.2 rounded border border-amber-500/30">
+                              房主
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          ID: {r.room_id}
+                        </span>
+                      </div>
+                      <span className="text-xs bg-amber-950 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+                        ${r.small_blind}/${r.big_blind}
                       </span>
                     </div>
-                    <span className="text-xs bg-amber-950 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
-                      ${r.small_blind}/${r.big_blind}
-                    </span>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+                      <div className="flex items-center gap-1.5 bg-slate-800/50 p-2 rounded-xl border border-slate-800">
+                        <DollarSign className="w-3.5 h-3.5 text-amber-400" />
+                        <span>买入: ${r.buyin_chips} = ¥{r.cash_value}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-slate-800/50 p-2 rounded-xl border border-slate-800">
+                        <Users className="w-3.5 h-3.5 text-sky-400" />
+                        <span>在座: {r.seated_count}/{r.max_seats}</span>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
-                    <div className="flex items-center gap-1.5 bg-slate-800/50 p-2 rounded-xl border border-slate-800">
-                      <DollarSign className="w-3.5 h-3.5 text-amber-400" />
-                      <span>买入: ${r.buyin_chips} = ¥{r.cash_value}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 bg-slate-800/50 p-2 rounded-xl border border-slate-800">
-                      <Users className="w-3.5 h-3.5 text-sky-400" />
-                      <span>在座: {r.seated_count}/{r.max_seats}</span>
-                    </div>
+                  <div className="mt-4 flex items-center gap-2">
+                    <button
+                      onClick={() => onJoinRoom(r.room_id)}
+                      className="flex-1 py-2.5 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl border border-slate-700 hover:border-amber-400 transition flex items-center justify-center gap-1.5 shadow cursor-pointer"
+                    >
+                      进入牌桌
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`确定要解散并删除房间 "${r.room_name}" 吗？`)) {
+                            onDeleteRoom?.(r.room_id);
+                          }
+                        }}
+                        className="p-2.5 bg-red-950/70 hover:bg-red-900 text-red-300 hover:text-white rounded-xl border border-red-500/40 transition active:scale-95 cursor-pointer shadow flex items-center justify-center"
+                        title="解散/删除此房间"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                <button
-                  onClick={() => onJoinRoom(r.room_id)}
-                  className="mt-4 w-full py-2.5 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl border border-slate-700 hover:border-amber-400 transition flex items-center justify-center gap-1.5 shadow"
-                >
-                  进入牌桌
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
@@ -186,7 +213,7 @@ export default function Lobby({
       {createModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
-            <h3 className="text-lg font-black text-white">创建现金局房间</h3>
+            <h3 className="text-lg font-black text-white">创建房间</h3>
 
             <form onSubmit={handleSubmitCreate} className="flex flex-col gap-3 text-xs">
               <div>
@@ -270,8 +297,8 @@ export default function Lobby({
                     onChange={(e) => setMaxSeats(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
                   >
-                    <option value={6}>6 人桌 (短牌/标准)</option>
-                    <option value={9}>9 人桌 (满员桌)</option>
+                    <option value={6}>6 人桌</option>
+                    <option value={9}>9 人桌</option>
                   </select>
                 </div>
               </div>

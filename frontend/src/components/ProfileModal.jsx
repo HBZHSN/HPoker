@@ -41,7 +41,7 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
         throw new Error(data.detail || '更新失败');
       }
 
-      setSuccess('个人资料更新成功！');
+      setSuccess('已保存');
       onUpdateUser(data.user);
       setTimeout(() => {
         onClose();
@@ -94,7 +94,7 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
         <form onSubmit={handleSave} className="flex flex-col gap-3">
           {/* Avatar selector */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-slate-300">头像选择 / Avatar</label>
+            <label className="text-xs font-bold text-slate-300">头像</label>
             <div className="flex flex-wrap gap-1.5 bg-slate-950 p-2 rounded-xl border border-slate-800">
               {AVATAR_OPTIONS.map((av, idx) => (
                 <button
@@ -114,23 +114,21 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-300">显示昵称 / Nickname</label>
+            <label className="text-xs font-bold text-slate-300">昵称</label>
             <input
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              placeholder="牌桌上展示的昵称"
               className="w-full bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-300">登录用户名 / Username</label>
+            <label className="text-xs font-bold text-slate-300">用户名</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="登录时使用的账号名称"
               className="w-full bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none"
             />
           </div>
@@ -138,13 +136,13 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
               <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-              修改密码 / New Password
+              新密码
             </label>
             <input
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="留空则不修改密码"
+              placeholder="不修改请留空"
               className="w-full bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none"
             />
           </div>

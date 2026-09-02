@@ -23,6 +23,7 @@ export default {
       boxShadow: {
         'glow-gold': '0 0 15px rgba(230, 176, 76, 0.4)',
         'glow-cyan': '0 0 20px rgba(56, 189, 248, 0.5)',
+        'glow-red': '0 0 15px rgba(239, 68, 68, 0.6)',
         'table': 'inset 0 0 80px rgba(0,0,0,0.8), 0 20px 50px rgba(0,0,0,0.9)',
       }
     },

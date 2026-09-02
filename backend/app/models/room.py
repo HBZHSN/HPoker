@@ -12,7 +12,7 @@ from backend.app.services.settlement import SettlementReport, SettlementEngine
 
 @dataclass
 class RoomConfig:
-    room_name: str = "GGPoker 现金桌"
+    room_name: str = "HPoker 现金桌"
     buyin_chips: int = 1000
     cash_value: float = 100.0        # e.g., 100 RMB for 1000 chips (0.1 RMB/chip)
     small_blind: int = 5
@@ -85,7 +85,7 @@ class Room:
             self.historical_players[player_id]["total_buyin_chips"] += chips_added
             self.historical_players[player_id]["is_seated"] = True
 
-    def sit_down_player(self, player_id: str, name: str, seat_index: int) -> bool:
+    def sit_down_player(self, player_id: str, name: str, seat_index: int, avatar: str = "👤") -> bool:
         """Sit a player down with initial room buy-in."""
         if self.is_ended:
             return False
@@ -95,7 +95,8 @@ class Room:
             name=name,
             seat_index=seat_index,
             chips=buyin,
-            total_buyin=buyin
+            total_buyin=buyin,
+            avatar=avatar,
         )
         if success:
             self.track_player(player_id, name, buyin)

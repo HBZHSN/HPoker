@@ -49,10 +49,10 @@ export default function PlayerSeat({
   // Empty seat
   if (!seatData) {
     return (
-      <div className="flex flex-col items-center justify-center">
+      <div className="relative flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 select-none">
         <button
           onClick={() => onSitDown && onSitDown(seatIndex)}
-          className="group relative flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-dashed border-slate-700/60 bg-black/40 hover:border-amber-500/40 hover:bg-amber-950/20 transition-all duration-300 backdrop-blur-sm shadow-inner cursor-pointer"
+          className="group relative flex flex-col items-center justify-center w-full h-full rounded-2xl border-2 border-dashed border-slate-700/60 bg-black/40 hover:border-amber-500/40 hover:bg-amber-950/20 transition-all duration-300 backdrop-blur-sm shadow-inner cursor-pointer"
         >
           <UserPlus className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors" />
           <span className="text-[11px] font-bold text-slate-400 group-hover:text-amber-300 mt-1">
@@ -70,49 +70,57 @@ export default function PlayerSeat({
 
   // Bet chips position classes based on direction relative to center table
   const betPosClasses = {
-    top: 'bottom-[calc(100%+16px)] left-1/2 -translate-x-1/2',
-    bottom: 'top-[calc(100%+16px)] left-1/2 -translate-x-1/2',
-    left: 'top-1/2 right-[calc(100%+16px)] -translate-y-1/2',
-    right: 'top-1/2 left-[calc(100%+16px)] -translate-y-1/2',
-  }[betDirection] || 'bottom-[calc(100%+16px)] left-1/2 -translate-x-1/2';
+    top: 'bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2',
+    bottom: 'top-[calc(100%+54px)] left-1/2 -translate-x-1/2',
+    left: 'top-1/2 right-[calc(100%+14px)] -translate-y-1/2',
+    right: 'top-1/2 left-[calc(100%+14px)] -translate-y-1/2',
+  }[betDirection] || 'bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2';
 
   return (
-    <div className={`relative flex flex-col items-center select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
+    <div className={`relative flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
       {/* Anchor Container for Avatar Card & Floating Badges */}
-      <div className="relative flex flex-col items-center justify-center">
+      <div className="relative w-full h-full flex flex-col items-center justify-center">
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {isCurrentTurn ? (
           isUsingTimeBank ? (
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-gradient-to-r from-purple-950 to-indigo-950 border-2 border-purple-400 text-[11px] font-black text-purple-200 shadow-glow-cyan whitespace-nowrap animate-pulse">
-              <Clock className="w-3 h-3 text-purple-300 animate-spin" />
+            <div className={`absolute -top-4 md:-top-4.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-3 py-0.5 md:py-1 rounded-full ${
+              timeLeft <= 5
+                ? 'bg-red-950/95 border-2 border-red-500 text-red-200 shadow-glow-red animate-bounce'
+                : 'bg-gradient-to-r from-purple-950 to-indigo-950 border-2 border-purple-400 text-purple-200 shadow-glow-cyan animate-pulse'
+            } text-xs md:text-sm font-black whitespace-nowrap transition-all`}>
+              <Clock className={`w-3.5 h-3.5 ${timeLeft <= 5 ? 'text-red-400 animate-spin' : 'text-purple-300 animate-spin'}`} />
               <span>时间卡 +{Math.ceil(timeLeft)}s</span>
             </div>
           ) : (
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-950 border-2 border-amber-400 text-[11px] font-black text-amber-300 shadow-glow-gold whitespace-nowrap animate-pulse">
-              <Clock className="w-3 h-3 text-amber-400 animate-spin" />
+            <div className={`absolute -top-4 md:-top-4.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-3 py-0.5 md:py-1 rounded-full ${
+              timeLeft <= 5
+                ? 'bg-red-950/95 border-2 border-red-500 text-red-200 shadow-glow-red animate-bounce scale-105'
+                : 'bg-slate-950 border-2 border-amber-400 text-amber-300 shadow-glow-gold animate-pulse'
+            } text-xs md:text-sm font-black whitespace-nowrap transition-all`}>
+              <Clock className={`w-3.5 h-3.5 ${timeLeft <= 5 ? 'text-red-400 animate-spin' : 'text-amber-400 animate-spin'}`} />
               <span>{Math.ceil(timeLeft)}s</span>
             </div>
           )
         ) : payoutInfo ? (
-          <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border-2 border-emerald-400 px-3 py-1 rounded-xl text-xs font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
+          <div className="absolute -top-4 md:-top-5 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border-2 border-emerald-400 px-3.5 py-1 rounded-xl text-xs md:text-sm font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
             +${payoutInfo.amount} ({payoutInfo.pot_name})
           </div>
         ) : seatData.last_action ? (
           <div
-            className={`absolute -top-3.5 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[11px] font-black shadow-xl z-30 whitespace-nowrap border transition-all ${
+            className={`absolute -top-4 md:-top-5 left-1/2 -translate-x-1/2 px-3.5 py-1 md:px-4 md:py-1 rounded-full text-xs md:text-sm font-black shadow-2xl z-30 whitespace-nowrap border-2 transition-all ${
               seatData.last_action.startsWith('Raise') || seatData.last_action.startsWith('加注')
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 border-amber-300 shadow-glow-gold scale-105'
+                ? 'bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 text-slate-950 border-amber-200 shadow-glow-gold scale-105'
                 : seatData.last_action.startsWith('Bet') || seatData.last_action.startsWith('下注')
-                ? 'bg-amber-600 text-white border-amber-400 shadow-md'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 border-amber-300 shadow-glow-gold scale-105'
                 : seatData.last_action.startsWith('All-In') || seatData.last_action.startsWith('全下')
-                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white border-red-400 shadow-lg animate-pulse'
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white border-red-300 shadow-glow-red scale-105 animate-pulse'
                 : seatData.last_action.startsWith('Call') || seatData.last_action.startsWith('跟注')
-                ? 'bg-emerald-700 text-emerald-100 border-emerald-400 shadow-md'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white border-emerald-300 shadow-md'
                 : seatData.last_action.startsWith('Check') || seatData.last_action.startsWith('过牌')
-                ? 'bg-slate-800 text-slate-200 border-slate-600 shadow-md'
+                ? 'bg-slate-800 text-slate-200 border-slate-500 shadow-md'
                 : seatData.last_action.startsWith('Fold') || seatData.last_action.startsWith('弃牌')
                 ? 'bg-slate-900 text-slate-400 border-slate-700 shadow-md'
-                : 'bg-slate-900/95 text-amber-300 border-amber-500/40 shadow-md'
+                : 'bg-slate-900/95 text-amber-300 border-amber-500/60 shadow-md'
             }`}
           >
             {seatData.last_action}
@@ -142,7 +150,6 @@ export default function PlayerSeat({
           className="absolute -bottom-2.5 -left-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
           title={`时间卡: 剩余 ${seatData.time_bank_cards ?? 3} 张 (每张+30秒)`}
         >
-          <span className="text-[10px]">⏱️</span>
           <span>x{seatData.time_bank_cards ?? 3}</span>
         </div>
 
@@ -151,7 +158,7 @@ export default function PlayerSeat({
           {isDealer && (
             <span
               className="w-5 h-5 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-slate-950 font-black text-[10px] flex items-center justify-center shadow-md ring-2 ring-slate-900"
-              title="庄家 (Dealer / Button)"
+              title="庄家"
             >
               D
             </span>
@@ -159,7 +166,7 @@ export default function PlayerSeat({
           {isSB && (
             <span
               className="w-5 h-5 rounded-full bg-blue-500 text-white font-black text-[10px] flex items-center justify-center shadow-md ring-2 ring-slate-900"
-              title="小盲注 (Small Blind)"
+              title="小盲注"
             >
               SB
             </span>
@@ -167,7 +174,7 @@ export default function PlayerSeat({
           {isBB && (
             <span
               className="w-5 h-5 rounded-full bg-purple-600 text-white font-black text-[10px] flex items-center justify-center shadow-md ring-2 ring-slate-900"
-              title="大盲注 (Big Blind)"
+              title="大盲注"
             >
               BB
             </span>
@@ -176,7 +183,7 @@ export default function PlayerSeat({
 
         {/* === MAIN AVATAR CARD === */}
         <div
-          className={`relative flex flex-col items-center justify-between w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 bg-gradient-to-b from-slate-850 via-slate-900 to-slate-950 shadow-2xl p-1.5 transition-all duration-300 overflow-hidden ${
+          className={`relative flex flex-col items-center justify-between w-full h-full rounded-2xl border-2 bg-gradient-to-b from-slate-850 via-slate-900 to-slate-950 shadow-2xl p-1.5 transition-all duration-300 overflow-hidden ${
             isCurrentTurn && isUsingTimeBank
               ? 'border-purple-400 shadow-glow-cyan scale-105 ring-2 ring-purple-400/80'
               : isCurrentTurn
@@ -190,19 +197,7 @@ export default function PlayerSeat({
         >
           {/* Avatar Emoji Icon */}
           <div className="text-2xl md:text-3xl leading-none select-none mt-0.5">
-            {seatData.player_id.startsWith('u_admin')
-              ? '👑'
-              : seatData.player_id.startsWith('u_tom')
-              ? '🦈'
-              : seatData.player_id.startsWith('u_ivey')
-              ? '🦁'
-              : seatData.player_id.startsWith('u_antonius')
-              ? '🐺'
-              : seatData.player_id.startsWith('u_linus')
-              ? '🦅'
-              : seatData.player_id.startsWith('u_negr')
-              ? '🦊'
-              : '👤'}
+            {seatData.avatar || '👤'}
           </div>
 
           {/* Nickname */}
@@ -250,7 +245,7 @@ export default function PlayerSeat({
         </div>
       </div>
 
-      {/* Cards Display - displayed right below the avatar */}
+      {/* Cards Display - displayed directly below the avatar */}
       {(() => {
         const shownCards = seatData.shown_cards || [];
         const holeCards = seatData.hole_cards || [];
@@ -259,7 +254,7 @@ export default function PlayerSeat({
           if (isSelf && holeCards.length > 0) {
             // For self: show all hole cards, with revealed cards highlighted
             return (
-              <div className="flex -space-x-3 mt-1.5 z-10">
+              <div className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3.5 z-10">
                 {holeCards.map((c, i) => {
                   const isShown = shownCards.some(
                     (sc) =>
@@ -290,7 +285,7 @@ export default function PlayerSeat({
           } else {
             // For opponents: show ONLY revealed cards (+ 1 card back if only 1 of 2 was revealed)
             return (
-              <div className="flex -space-x-3 mt-1.5 z-10">
+              <div className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3 z-10">
                 {shownCards.map((c, i) => (
                   <CardView key={i} card={c} size="sm" className="shadow-xl ring-2 ring-amber-400" />
                 ))}
@@ -304,7 +299,7 @@ export default function PlayerSeat({
 
         if (holeCards.length > 0) {
           return (
-            <div className="flex -space-x-4 mt-1.5 z-10">
+            <div className={`absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
               {holeCards.map((c, i) => (
                 <CardView
                   key={i}
@@ -319,7 +314,7 @@ export default function PlayerSeat({
 
         if (seatData.has_cards && !isFolded) {
           return (
-            <div className="flex -space-x-4 mt-1.5 z-10">
+            <div className={`absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
               <CardView isBack size={isSelf ? 'md' : 'sm'} className="-rotate-6 shadow-md" />
               <CardView isBack size={isSelf ? 'md' : 'sm'} className="rotate-6 shadow-md" />
             </div>
@@ -332,9 +327,9 @@ export default function PlayerSeat({
       {/* Current Round Bet Chip Stack on Table (Large, High Contrast) */}
       {currentRoundBet > 0 && (
         <div
-          className={`absolute ${betPosClasses} flex items-center gap-1.5 bg-gradient-to-r from-slate-950 via-amber-950 to-slate-950 px-3 py-1 rounded-full border-2 border-amber-400 text-amber-300 text-xs md:text-sm font-black shadow-2xl animate-chip-slide z-40 whitespace-nowrap`}
+          className={`absolute ${betPosClasses} flex items-center gap-1.5 bg-gradient-to-r from-slate-950 via-amber-950 to-slate-950 px-3.5 py-1.5 md:px-4 md:py-1.5 rounded-full border-2 border-amber-400 text-amber-300 text-sm md:text-base font-black shadow-2xl animate-chip-slide z-40 whitespace-nowrap`}
         >
-          <div className="w-4 h-4 rounded-full bg-amber-400 border border-black shadow-inner flex-shrink-0 flex items-center justify-center text-[10px] text-slate-950 font-black">
+          <div className="w-5 h-5 rounded-full bg-amber-400 border border-black shadow-inner flex-shrink-0 flex items-center justify-center text-xs text-slate-950 font-black">
             $
           </div>
           <span>${currentRoundBet.toLocaleString()}</span>

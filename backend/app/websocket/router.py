@@ -185,6 +185,17 @@ async def trigger_room_turn_timer(room_id: str):
     )
 
 
+def schedule_room_empty_check(room_id: str, delay_seconds: float = 3.0) -> None:
+    """Schedule auto-deletion of a room if no players remain connected."""
+    async def _cleanup_if_empty(r_id: str):
+        if ws_manager.get_room_connection_count(r_id) == 0:
+            logger.info(f"Room {r_id} is empty (0 connections), auto-deleting room.")
+            timeout_manager.cancel_all_timers(r_id)
+            room_manager.delete_room(r_id)
+
+    timeout_manager.schedule_empty_room_cleanup(room_id, delay_seconds, _cleanup_if_empty)
+
+
 @ws_router.websocket("/ws/{room_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     room = room_manager.get_room(room_id)
@@ -196,6 +207,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
 
     user = user_manager.get_user(user_id)
     nickname = user.nickname if user else f"Player_{user_id[-4:]}"
+    avatar = user.avatar if user else "👤"
 
     # Auto-seat player if room is active and player is not yet seated
     if not room.is_ended:
@@ -203,9 +215,10 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
         if not is_already_seated:
             for idx in range(room.config.max_seats):
                 if room.table.seats[idx] is None:
-                    room.sit_down_player(user_id, nickname, idx)
+                    room.sit_down_player(user_id, nickname, idx, avatar=avatar)
                     break
 
+    timeout_manager.cancel_empty_room_cleanup(room_id)
     await ws_manager.connect(websocket, room_id, user_id)
     ensure_room_replenish_task(room_id)
 
@@ -230,7 +243,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
             elif event == EventType.SIT_DOWN:
                 seat_index = payload.get("seat_index")
                 if seat_index is not None:
-                    ok = room.sit_down_player(user_id, nickname, seat_index)
+                    ok = room.sit_down_player(user_id, nickname, seat_index, avatar=avatar)
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
@@ -352,10 +365,38 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     await ws_manager.broadcast_sound(room_id, "win_pot")
                     await ws_manager.broadcast_room_state(room)
 
+            elif event == EventType.DELETE_ROOM:
+                requester = user_manager.get_user(user_id)
+                is_admin = requester.is_admin if requester else False
+                if user_id == room.host_player_id or is_admin:
+                    msg = make_message(EventType.ROOM_DELETED, {
+                        "room_id": room_id,
+                        "message": "房间已被房主解散",
+                        "deleted_by": user_id,
+                    }, room_id=room_id)
+                    raw_msg = json.dumps(msg)
+                    for ws in list(ws_manager.get_room_connections(room_id)):
+                        try:
+                            await ws.send_text(raw_msg)
+                        except Exception:
+                            pass
+                    timeout_manager.cancel_all_timers(room_id)
+                    room_manager.delete_room(room_id)
+                    await ws_manager.close_room_connections(room_id, reason="Room deleted by host")
+                    return
+
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket)
+        pass
     except Exception as e:
         logger.exception(f"Unexpected WebSocket error: {e}")
-        ws_manager.disconnect(websocket)
+    finally:
+        r_id, u_id = ws_manager.disconnect(websocket)
+        if r_id:
+            if ws_manager.get_room_connection_count(r_id) == 0:
+                schedule_room_empty_check(r_id, delay_seconds=3.0)
+            else:
+                active_r = room_manager.get_room(r_id)
+                if active_r and not active_r.is_ended:
+                    await ws_manager.broadcast_room_state(active_r)
 
 

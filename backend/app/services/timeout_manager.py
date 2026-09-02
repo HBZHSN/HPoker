@@ -20,6 +20,8 @@ class TimeoutManager:
         self._deal_tasks: Dict[str, asyncio.Task] = {}
         # room_id -> active recurring replenishment asyncio.Task
         self._replenish_tasks: Dict[str, asyncio.Task] = {}
+        # room_id -> active empty room auto-cleanup asyncio.Task
+        self._empty_room_tasks: Dict[str, asyncio.Task] = {}
 
     def cancel_turn_timer(self, room_id: str) -> None:
         """Cancel existing turn timer for a room if any."""
@@ -45,16 +47,53 @@ class TimeoutManager:
         if task and not task.done():
             task.cancel()
 
+    def cancel_empty_room_cleanup(self, room_id: str) -> None:
+        """Cancel existing empty room auto-cleanup task for a room if any."""
+        task = self._empty_room_tasks.pop(room_id, None)
+        if task and not task.done():
+            task.cancel()
+
     # Backwards-compatible alias
     def cancel_timer(self, room_id: str) -> None:
         self.cancel_turn_timer(room_id)
 
     def cancel_all_timers(self, room_id: str) -> None:
-        """Cancel all turn timers, RIT timers, dealing tasks, and replenish tasks for a room."""
+        """Cancel all turn timers, RIT timers, dealing tasks, replenish tasks, and empty room cleanup for a room."""
         self.cancel_turn_timer(room_id)
         self.cancel_rit_timer(room_id)
         self.cancel_deal_task(room_id)
         self.cancel_replenish_task(room_id)
+        self.cancel_empty_room_cleanup(room_id)
+
+    def schedule_empty_room_cleanup(
+        self,
+        room_id: str,
+        delay_seconds: float,
+        cleanup_callback: Callable[[str], Awaitable[None]]
+    ) -> None:
+        """Schedule an auto-cleanup task if room stays empty for delay_seconds."""
+        self.cancel_empty_room_cleanup(room_id)
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            async def _empty_room_worker():
+                current_task = asyncio.current_task()
+                try:
+                    await asyncio.sleep(delay_seconds)
+                    await cleanup_callback(room_id)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.exception(f"Error in empty room cleanup worker for room {room_id}: {e}")
+                finally:
+                    if self._empty_room_tasks.get(room_id) is current_task:
+                        self._empty_room_tasks.pop(room_id, None)
+
+            self._empty_room_tasks[room_id] = loop.create_task(_empty_room_worker())
 
     def start_replenish_task(
         self,
@@ -65,21 +104,27 @@ class TimeoutManager:
         """Start a recurring background timer for periodic time card replenishment."""
         self.cancel_replenish_task(room_id)
 
-        async def _replenish_worker():
-            current_task = asyncio.current_task()
-            try:
-                while True:
-                    await asyncio.sleep(interval_seconds)
-                    await on_replenish_callback(room_id)
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.exception(f"Error in replenish worker for room {room_id}: {e}")
-            finally:
-                if self._replenish_tasks.get(room_id) is current_task:
-                    self._replenish_tasks.pop(room_id, None)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
-        self._replenish_tasks[room_id] = asyncio.create_task(_replenish_worker())
+        if loop and loop.is_running():
+            async def _replenish_worker():
+                current_task = asyncio.current_task()
+                try:
+                    while True:
+                        await asyncio.sleep(interval_seconds)
+                        await on_replenish_callback(room_id)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.exception(f"Error in replenish worker for room {room_id}: {e}")
+                finally:
+                    if self._replenish_tasks.get(room_id) is current_task:
+                        self._replenish_tasks.pop(room_id, None)
+
+            self._replenish_tasks[room_id] = loop.create_task(_replenish_worker())
 
     def start_turn_timer(
         self,
@@ -90,20 +135,26 @@ class TimeoutManager:
         """Start a countdown timer for current player's turn."""
         self.cancel_turn_timer(room_id)
 
-        async def _turn_worker():
-            current_task = asyncio.current_task()
-            try:
-                await asyncio.sleep(timeout_seconds)
-                await on_timeout_callback(room_id)
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.exception(f"Error in turn timeout worker for room {room_id}: {e}")
-            finally:
-                if self._turn_tasks.get(room_id) is current_task:
-                    self._turn_tasks.pop(room_id, None)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
-        self._turn_tasks[room_id] = asyncio.create_task(_turn_worker())
+        if loop and loop.is_running():
+            async def _turn_worker():
+                current_task = asyncio.current_task()
+                try:
+                    await asyncio.sleep(timeout_seconds)
+                    await on_timeout_callback(room_id)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.exception(f"Error in turn timeout worker for room {room_id}: {e}")
+                finally:
+                    if self._turn_tasks.get(room_id) is current_task:
+                        self._turn_tasks.pop(room_id, None)
+
+            self._turn_tasks[room_id] = loop.create_task(_turn_worker())
 
     def start_rit_timer(
         self,
@@ -114,20 +165,26 @@ class TimeoutManager:
         """Start a countdown timer for Run-It-Twice voting."""
         self.cancel_rit_timer(room_id)
 
-        async def _rit_worker():
-            current_task = asyncio.current_task()
-            try:
-                await asyncio.sleep(timeout_seconds)
-                await on_timeout_callback(room_id)
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.exception(f"Error in RIT timeout worker for room {room_id}: {e}")
-            finally:
-                if self._rit_tasks.get(room_id) is current_task:
-                    self._rit_tasks.pop(room_id, None)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
-        self._rit_tasks[room_id] = asyncio.create_task(_rit_worker())
+        if loop and loop.is_running():
+            async def _rit_worker():
+                current_task = asyncio.current_task()
+                try:
+                    await asyncio.sleep(timeout_seconds)
+                    await on_timeout_callback(room_id)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.exception(f"Error in RIT timeout worker for room {room_id}: {e}")
+                finally:
+                    if self._rit_tasks.get(room_id) is current_task:
+                        self._rit_tasks.pop(room_id, None)
+
+            self._rit_tasks[room_id] = loop.create_task(_rit_worker())
 
     def start_deal_task(
         self,
@@ -137,19 +194,25 @@ class TimeoutManager:
         """Start background slow dealing task."""
         self.cancel_deal_task(room_id)
 
-        async def _deal_worker():
-            current_task = asyncio.current_task()
-            try:
-                await deal_coroutine(room_id)
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.exception(f"Error in slow dealing task for room {room_id}: {e}")
-            finally:
-                if self._deal_tasks.get(room_id) is current_task:
-                    self._deal_tasks.pop(room_id, None)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
-        self._deal_tasks[room_id] = asyncio.create_task(_deal_worker())
+        if loop and loop.is_running():
+            async def _deal_worker():
+                current_task = asyncio.current_task()
+                try:
+                    await deal_coroutine(room_id)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.exception(f"Error in slow dealing task for room {room_id}: {e}")
+                finally:
+                    if self._deal_tasks.get(room_id) is current_task:
+                        self._deal_tasks.pop(room_id, None)
+
+            self._deal_tasks[room_id] = loop.create_task(_deal_worker())
 
     # Backwards-compatible alias
     def start_timer(

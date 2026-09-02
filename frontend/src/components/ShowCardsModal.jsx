@@ -13,7 +13,7 @@ export default function ShowCardsModal({
     <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 border-2 border-amber-500/60 rounded-2xl p-4 shadow-2xl backdrop-blur-md flex flex-col items-center gap-3">
       <div className="text-sm font-bold text-amber-300 flex items-center gap-1.5">
         <Eye className="w-4 h-4 text-amber-400" />
-        局末亮牌展示选择
+        亮牌
       </div>
 
       <div className="flex gap-4 items-center">
@@ -52,7 +52,7 @@ export default function ShowCardsModal({
           className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg border border-slate-600 shadow transition active:scale-95 flex items-center gap-1"
         >
           <EyeOff className="w-3.5 h-3.5" />
-          藏牌 (Muck)
+          不亮牌
         </button>
       </div>
     </div>

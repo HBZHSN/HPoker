@@ -97,11 +97,11 @@
 
 ---
 
-## 🎨 5. 前端交互与 GGPoker 体验规范
+## 🎨 5. 前端交互与 HPoker 体验规范
 
 - **界面设计**：暗黑奢华风、金属光泽按钮、筹码拟真堆叠、动态发牌轨迹与收池动画。
 - **操作快捷键与尺度**：
-  - Min、1/3 Pot、1/2 Pot、2/3 Pot、3/4 Pot、Pot、All-in 快捷按钮。
+  - 1/3 Pot、1/2 Pot、2/3 Pot、Pot、1.5 Pot、2 Pot、3 Pot、All-in 快捷按钮（含实时筹码金额显示）。
   - 下注滑块支持 +1BB / -1BB 微调。
   - 支持键盘快捷键（Space: Check/Call, F: Fold, R: Raise, A: All-in）。
 - **手牌展示（Showdown & Muck）**：

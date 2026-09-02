@@ -108,9 +108,9 @@ async def test_time_card_auto_consumption_sequence():
         action_timeout=1,
         max_seats=6
     )
-    room = room_manager.create_room(host_player_id="u_tom", config=config)
-    room.sit_down_player("u_tom", "Tom Dwan", 0)
-    room.sit_down_player("u_ivey", "Phil Ivey", 1)
+    room = room_manager.create_room(host_player_id="u_fwd", config=config)
+    room.sit_down_player("u_fwd", "fwd", 0)
+    room.sit_down_player("u_hx", "hx", 1)
 
     assert room.table.start_new_hand() is True
     turn_seat = room.table.current_turn_seat

@@ -5,44 +5,30 @@ import {
   ChevronDown,
   Flame,
   Clock,
-  Play,
   Zap,
   History,
-  Shield,
-  CheckCircle2,
-  XCircle,
   RefreshCw,
   AlertCircle,
-  Layers,
 } from 'lucide-react';
 
 export default function ActionBar({
   legalActions,
   totalPot = 0,
   bigBlind = 10,
-  smallBlind = 5,
   buyinChips = 1000,
   onAction,
   disabled = false,
   selfSeat = null,
-  isHost = false,
-  readyPlayerIds = [],
-  onToggleReady,
   onRebuy,
   currentTurnPlayer = null,
   isMyTurn = false,
   street = 'IDLE',
   actionHistory = [],
-  onStartGame,
   actionTimeout = 15,
   currentTurnDuration = 15,
   isUsingTimeBank = false,
   onUseTimeCard,
   seats = [],
-  ritStatus = null,
-  ritVoters = [],
-  ritVotes = {},
-  onRitChoice,
   turnCount = 0,
 }) {
   const minVal = legalActions?.can_bet ? legalActions.min_bet : (legalActions?.min_raise_to || 0);
@@ -123,17 +109,27 @@ export default function ActionBar({
   }, [disabled, onAction, isMyTurn]);
 
   // Preset Bet Sizing helpers
-  const applyPresetRatio = (ratio) => {
+  const calcPresetAmount = (ratio) => {
     let target = Math.round(totalPot * ratio);
-    if (target < minVal) target = minVal;
-    if (target > maxVal) target = maxVal;
+    if (minVal > 0 && target < minVal) target = minVal;
+    if (maxVal > 0 && target > maxVal) target = maxVal;
+    return target;
+  };
+
+  const applyPresetRatio = (ratio) => {
+    const target = calcPresetAmount(ratio);
     setRaiseAmount(target);
   };
 
-  const applyBBMultiplier = (mult) => {
+  const calcBBAmount = (mult) => {
     let target = Math.round(mult * bigBlind);
-    if (target < minVal) target = minVal;
-    if (target > maxVal) target = maxVal;
+    if (minVal > 0 && target < minVal) target = minVal;
+    if (maxVal > 0 && target > maxVal) target = maxVal;
+    return target;
+  };
+
+  const applyBBMultiplier = (mult) => {
+    const target = calcBBAmount(mult);
     setRaiseAmount(target);
   };
 
@@ -143,6 +139,24 @@ export default function ActionBar({
     if (next > maxVal) next = maxVal;
     setRaiseAmount(next);
   };
+
+  const potPresets = [
+    { label: '1/3 底池', ratio: 1 / 3 },
+    { label: '1/2 底池', ratio: 1 / 2 },
+    { label: '2/3 底池', ratio: 2 / 3 },
+    { label: '底池', ratio: 1.0 },
+    { label: '1.5底池', ratio: 1.5 },
+    { label: '2底池', ratio: 2.0 },
+    { label: '3底池', ratio: 3.0 },
+    { label: '全下', isMax: true },
+  ];
+
+  const bbPresets = [
+    { label: '2.5 BB', mult: 2.5 },
+    { label: '3 BB', mult: 3 },
+    { label: '4 BB', mult: 4 },
+    { label: '5 BB', mult: 5 },
+  ];
 
   const handleRaiseSubmit = () => {
     if (!legalActions) return;
@@ -205,24 +219,26 @@ export default function ActionBar({
             )}
             <span className="text-sm font-black tracking-wide">
               {isMyTurn && isUsingTimeBank
-                ? '⚡ 正在使用时间卡延时 (+30s)'
+                ? '时间卡 +30 秒'
                 : isMyTurn
-                ? '⚡ 轮到您的行动回合！'
+                ? '轮到你'
                 : currentTurnPlayer
-                ? `等待 ${currentTurnPlayer.name} 行动...`
+                ? `等待 ${currentTurnPlayer.name}`
                 : street === 'HAND_END'
-                ? `本手牌局已结束`
-                : '牌桌等待开局'}
+                ? '本局结束'
+                : '等待开局'}
             </span>
           </div>
 
           {currentTurnPlayer && (
-            <div className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-black ${
-              isUsingTimeBank
+            <div className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-black transition-all ${
+              turnTimeLeft <= 5
+                ? 'bg-red-950/90 border-red-500 text-red-200 shadow-glow-red animate-bounce'
+                : isUsingTimeBank
                 ? 'bg-purple-950 border-purple-400/70 text-purple-200 shadow-glow-cyan'
                 : 'bg-slate-950/80 border-amber-500/40 text-amber-300'
             }`}>
-              <Clock className={`w-3 h-3 ${isUsingTimeBank ? 'text-purple-300' : 'text-amber-400'} animate-spin`} />
+              <Clock className={`w-3 h-3 ${turnTimeLeft <= 5 ? 'text-red-400 animate-spin' : isUsingTimeBank ? 'text-purple-300 animate-spin' : 'text-amber-400 animate-spin'}`} />
               <span>{Math.ceil(turnTimeLeft)}s</span>
             </div>
           )}
@@ -250,60 +266,28 @@ export default function ActionBar({
         {isMyTurn && (
           <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/80">
             <div className="flex items-center gap-1.5 text-xs text-slate-300 font-bold">
-              <span>⏱️ 时间卡:</span>
+              <span>时间卡:</span>
               <span className="text-amber-400 font-black">{selfSeat?.time_bank_cards ?? 3} 张</span>
-              <span className="text-slate-500 text-[10px]">(每张+30s)</span>
             </div>
             {!isUsingTimeBank && (selfSeat?.time_bank_cards ?? 0) > 0 && onUseTimeCard ? (
               <button
                 onClick={onUseTimeCard}
                 className="px-2.5 py-1 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-purple-100 rounded-lg text-xs font-black border border-purple-400/50 shadow-md transition active:scale-95 cursor-pointer flex items-center gap-1"
-                title="立即消耗1张时间卡，延长30秒思考时间"
+                title="使用 1 张时间卡"
               >
                 <Clock className="w-3 h-3 text-purple-300 animate-spin" />
-                <span>使用时间卡 (+30s)</span>
+                <span>+30 秒</span>
               </button>
             ) : isUsingTimeBank ? (
               <span className="text-[11px] font-black text-purple-300 animate-pulse">
-                时间卡思考中 (+30s)
+                时间卡生效
               </span>
             ) : (
-              <span className="text-[10px] text-slate-500 font-medium">
-                时间卡已耗尽
-              </span>
+              null
             )}
           </div>
         )}
 
-        {/* Hand End Notice */}
-        {street === 'HAND_END' && (
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800">
-            <span className="text-xs text-slate-400 font-bold">
-              {isHost ? '房主可随时开局' : '本局已结束，请准备'}
-            </span>
-            {isHost && onStartGame ? (
-              <button
-                onClick={onStartGame}
-                className="px-3 py-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-lg text-xs font-black shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1"
-              >
-                <Play className="w-3 h-3 fill-slate-950" />
-                立即开局
-              </button>
-            ) : selfSeat && onToggleReady ? (
-              <button
-                onClick={onToggleReady}
-                className={`px-3 py-1 rounded-lg text-xs font-black shadow transition active:scale-95 cursor-pointer flex items-center gap-1 ${
-                  readyPlayerIds?.includes(selfSeat.player_id)
-                    ? 'bg-slate-800 text-emerald-300 border border-emerald-500/50'
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                }`}
-              >
-                <CheckCircle2 className="w-3 h-3" />
-                {readyPlayerIds?.includes(selfSeat.player_id) ? '已准备' : '确认准备'}
-              </button>
-            ) : null}
-          </div>
-        )}
       </div>
 
       {/* 2. Rebuy Alert Card (Only when player has 0 chips) */}
@@ -312,10 +296,7 @@ export default function ActionBar({
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-black text-amber-300 flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-              筹码已输尽 ($0)
-            </span>
-            <span className="text-[11px] text-slate-300 font-medium">
-              补充买入后可继续参与游戏
+              筹码为 0
             </span>
           </div>
           {onRebuy && (
@@ -324,7 +305,7 @@ export default function ActionBar({
               className="px-3.5 py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 text-xs font-black rounded-xl shadow-lg transition active:scale-95 cursor-pointer flex items-center gap-1"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Re-buy (${buyinChips})
+              补码 (${buyinChips})
             </button>
           )}
         </div>
@@ -336,9 +317,6 @@ export default function ActionBar({
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-black text-slate-100">{selfSeat.name}</span>
-              <span className="text-[10px] bg-slate-800 text-sky-300 px-1.5 py-0.5 rounded border border-sky-500/30 font-bold">
-                本人
-              </span>
             </div>
             <div className="flex items-baseline gap-1">
               <span className="text-xs text-slate-400 font-bold">筹码:</span>
@@ -349,7 +327,7 @@ export default function ActionBar({
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className="text-[10px] text-slate-400 font-bold">时间卡:</span>
               <span className="text-[11px] text-amber-300 font-black bg-slate-950 px-2 py-0.2 rounded-full border border-amber-500/30 flex items-center gap-1">
-                <span>⏱️ {selfSeat.time_bank_cards ?? 3} / 5</span>
+                <span>{selfSeat.time_bank_cards ?? 3} / 5</span>
               </span>
             </div>
           </div>
@@ -367,56 +345,11 @@ export default function ActionBar({
         </div>
       )}
 
-      {/* RIT Voting Controls in Sidebar */}
-      {(street === 'RIT_DECISION' || ritStatus === 'VOTING') && (
-        <div className="bg-gradient-to-br from-purple-950/90 via-slate-900 to-indigo-950/90 border-2 border-purple-400/70 rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-glow-gold animate-fade-in">
-          <div className="flex items-center gap-1.5 text-xs font-black text-purple-300">
-            <Layers className="w-4 h-4 text-purple-400" />
-            ALL-IN 发牌次数协商 (Run It Once / Twice)
-          </div>
-          <p className="text-[11px] text-slate-300 leading-tight">
-            双方均同意发 2 次将平分底池并分别发两副牌；任意一人选择 1 次则只发 1 次。
-          </p>
-
-          {selfSeat && ritVoters?.includes(selfSeat.player_id) ? (
-            <div className="grid grid-cols-2 gap-2 mt-1">
-              <button
-                onClick={() => onRitChoice && onRitChoice(1)}
-                className={`py-2.5 px-2 rounded-xl font-black text-xs transition active:scale-95 cursor-pointer flex flex-col items-center justify-center border-2 ${
-                  ritVotes?.[selfSeat.player_id] === 1
-                    ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-glow-gold'
-                    : 'bg-slate-800/90 hover:bg-slate-700 text-amber-300 border-amber-500/50'
-                }`}
-              >
-                <span className="font-black text-sm">发 1 次</span>
-                <span className="text-[10px] opacity-80 font-medium">Run It Once</span>
-              </button>
-
-              <button
-                onClick={() => onRitChoice && onRitChoice(2)}
-                className={`py-2.5 px-2 rounded-xl font-black text-xs transition active:scale-95 cursor-pointer flex flex-col items-center justify-center border-2 ${
-                  ritVotes?.[selfSeat.player_id] === 2
-                    ? 'bg-purple-600 text-white border-purple-300 shadow-glow-cyan'
-                    : 'bg-slate-800/90 hover:bg-slate-700 text-purple-300 border-purple-500/50'
-                }`}
-              >
-                <span className="font-black text-sm">发 2 次</span>
-                <span className="text-[10px] opacity-80 font-medium">Run It Twice</span>
-              </button>
-            </div>
-          ) : (
-            <div className="text-center py-2 text-xs text-slate-400 font-bold bg-slate-950/60 rounded-xl">
-              正在等待对决玩家选择发牌次数...
-            </div>
-          )}
-        </div>
-      )}
-
       {/* 4. Main Action Buttons Grid */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2.5 shadow-xl">
         <div className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
           <Zap className="w-3.5 h-3.5 text-amber-400" />
-          决策操作台 (Action Controls)
+          操作
         </div>
 
         <div className="grid grid-cols-2 gap-2">
@@ -486,7 +419,7 @@ export default function ActionBar({
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2.5 shadow-xl">
         <div className="flex items-center justify-between">
           <span className="text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-            加注额度调整 (Raise Sizing)
+            下注额
           </span>
           <div className="flex items-center gap-1 bg-slate-950 px-2.5 py-0.5 rounded-lg border border-amber-500/40">
             <span className="text-amber-400 font-black text-sm">$</span>
@@ -503,87 +436,68 @@ export default function ActionBar({
           </div>
         </div>
 
-        {/* Preset Ratio Buttons (Row 1: Pot fractions) */}
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            onClick={() => setRaiseAmount(minVal)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-amber-300 rounded-lg text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer"
-          >
-            Min (${minVal})
-          </button>
-          <button
-            onClick={() => applyPresetRatio(1 / 3)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer"
-          >
-            1/3 底池
-          </button>
-          <button
-            onClick={() => applyPresetRatio(1 / 2)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer"
-          >
-            1/2 底池
-          </button>
-        </div>
-
-        {/* Preset Ratio Buttons (Row 2: Pot, 2/3, All-in) */}
-        <div className="grid grid-cols-3 gap-1.5">
-          <button
-            onClick={() => applyPresetRatio(2 / 3)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer"
-          >
-            2/3 底池
-          </button>
-          <button
-            onClick={() => applyPresetRatio(1.0)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-lg text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer"
-          >
-            底池 (Pot)
-          </button>
-          <button
-            onClick={() => setRaiseAmount(maxVal)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-2 py-1.5 bg-gradient-to-r from-red-900 to-amber-900 hover:from-red-800 hover:to-amber-800 disabled:opacity-40 text-amber-300 rounded-lg text-xs font-black border border-amber-500/40 transition active:scale-95 cursor-pointer flex items-center justify-center gap-0.5"
-          >
-            <Flame className="w-3 h-3 text-red-400 fill-red-400" />
-            Max (All-In)
-          </button>
+        {/* Preset Ratio Buttons (Pot fractions: 1/3, 1/2, 2/3, Pot, 1.5 Pot, 2 Pot, 3 Pot, All-in) */}
+        <div className="grid grid-cols-4 gap-1.5">
+          {potPresets.map((preset, idx) => {
+            const amount = preset.isMax ? maxVal : calcPresetAmount(preset.ratio);
+            const isSelected = isMyTurn && currentAmount === amount && (legalActions?.can_bet || legalActions?.can_raise);
+            return (
+              <button
+                key={idx}
+                onClick={() => (preset.isMax ? setRaiseAmount(maxVal) : applyPresetRatio(preset.ratio))}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+                className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition active:scale-95 cursor-pointer border ${
+                  isSelected
+                    ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
+                    : preset.isMax
+                    ? 'bg-gradient-to-b from-red-950/80 to-slate-900 border-red-500/40 hover:from-red-900/80 hover:to-slate-800'
+                    : 'bg-slate-800/90 hover:bg-slate-700/90 border-slate-700/80'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                <span
+                  className={`text-[11px] font-bold tracking-tight ${
+                    preset.isMax ? 'text-red-300' : isSelected ? 'text-amber-200' : 'text-slate-300'
+                  }`}
+                >
+                  {preset.label}
+                </span>
+                <span
+                  className={`text-xs font-black ${
+                    preset.isMax ? 'text-amber-400' : isSelected ? 'text-amber-300' : 'text-amber-400/90'
+                  }`}
+                >
+                  ${amount}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* BB Multipliers */}
         <div className="grid grid-cols-4 gap-1.5">
-          <button
-            onClick={() => applyBBMultiplier(2.5)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 rounded-lg text-[11px] font-bold border border-slate-700 transition"
-          >
-            2.5 BB
-          </button>
-          <button
-            onClick={() => applyBBMultiplier(3)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 rounded-lg text-[11px] font-bold border border-slate-700 transition"
-          >
-            3 BB
-          </button>
-          <button
-            onClick={() => applyBBMultiplier(4)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 rounded-lg text-[11px] font-bold border border-slate-700 transition"
-          >
-            4 BB
-          </button>
-          <button
-            onClick={() => applyBBMultiplier(5)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 rounded-lg text-[11px] font-bold border border-slate-700 transition"
-          >
-            5 BB
-          </button>
+          {bbPresets.map((preset, idx) => {
+            const amount = calcBBAmount(preset.mult);
+            const isSelected = isMyTurn && currentAmount === amount && (legalActions?.can_bet || legalActions?.can_raise);
+            return (
+              <button
+                key={idx}
+                onClick={() => applyBBMultiplier(preset.mult)}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+                className={`flex flex-col items-center justify-center py-1 px-1 rounded-lg transition active:scale-95 cursor-pointer border ${
+                  isSelected
+                    ? 'bg-amber-950/60 border-amber-400/80 shadow-[0_0_8px_rgba(251,191,36,0.2)]'
+                    : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/70'
+                } disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                <span className={`text-[10px] font-bold ${isSelected ? 'text-amber-200' : 'text-slate-300'}`}>
+                  {preset.label}
+                </span>
+                <span className={`text-[11px] font-black ${isSelected ? 'text-amber-300' : 'text-slate-400'}`}>
+                  ${amount}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Slider & Stepper Controls */}
@@ -619,16 +533,16 @@ export default function ActionBar({
         </div>
       </div>
 
-      {/* 5. Live Action History Feed (战局动态) */}
-      <div className="flex-1 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 shadow-xl min-h-[140px] max-h-[220px] overflow-hidden">
-        <div className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 flex-shrink-0">
-          <History className="w-3.5 h-3.5 text-sky-400" />
-          战局动态 (Live Hand Log)
-        </div>
+        {/* 行动记录 */}
+      {actionHistory && actionHistory.length > 0 && (
+        <div className="flex-1 bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-col gap-2 shadow-xl min-h-[140px] max-h-[220px] overflow-hidden">
+          <div className="text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 flex-shrink-0">
+            <History className="w-3.5 h-3.5 text-sky-400" />
+            行动记录
+          </div>
 
-        <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1.5 text-xs">
-          {actionHistory && actionHistory.length > 0 ? (
-            actionHistory.map((item, idx) => (
+          <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-1.5 text-xs">
+            {actionHistory.map((item, idx) => (
               <div
                 key={idx}
                 className="flex items-center justify-between py-1 px-2 rounded-lg bg-slate-950/60 border border-slate-800/80"
@@ -642,7 +556,7 @@ export default function ActionBar({
                   </span>
                 </div>
                 <span
-                  className={`font-black whitespace-nowrap ${
+                  className={`font-black whitespace-nowrap text-xs md:text-sm ${
                     item.action === 'FOLD'
                       ? 'text-red-400'
                       : item.action === 'CHECK'
@@ -657,14 +571,10 @@ export default function ActionBar({
                   {formatActionName(item.action, item.amount)}
                 </span>
               </div>
-            ))
-          ) : (
-            <div className="text-slate-500 text-xs text-center py-4 italic">暂无本局行动记录</div>
-          )}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
-
-

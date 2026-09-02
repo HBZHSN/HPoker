@@ -40,7 +40,7 @@ export default function CardView({
         <div className="w-full h-full p-1 flex items-center justify-center">
           <div className="w-full h-full border border-amber-500/40 rounded flex items-center justify-center bg-[radial-gradient(#d97706_1.5px,transparent_1.5px)] [background-size:6px_6px]">
             <span className="text-amber-400 font-black text-xs md:text-sm tracking-tighter select-none opacity-90 drop-shadow">
-              GG
+              H
             </span>
           </div>
         </div>

@@ -7,4 +7,4 @@ def test_frontend_static_serving():
     client = TestClient(app)
     resp = client.get("/")
     assert resp.status_code == 200
-    assert "GGPoker" in resp.text
+    assert "HPoker" in resp.text

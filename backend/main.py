@@ -9,8 +9,8 @@ from backend.app.api.endpoints import api_router
 from backend.app.websocket.router import ws_router
 
 app = FastAPI(
-    title="GGPoker Texas Hold'em Online",
-    description="Multiplayer Texas Hold'em Cash Game Engine with GGPoker UI",
+    title="HPoker Texas Hold'em Online",
+    description="Multiplayer Texas Hold'em Cash Game Engine with HPoker UI",
     version="1.0.0",
 )
 

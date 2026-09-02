@@ -7,9 +7,9 @@ import AdminUserModal from './components/AdminUserModal';
 import { soundEngine } from './sound/SoundEngine';
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem('ggpoker_token') || '');
+  const [token, setToken] = useState(() => localStorage.getItem('hpoker_token') || localStorage.getItem('ggpoker_token') || '');
   const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('ggpoker_user');
+    const saved = localStorage.getItem('hpoker_user') || localStorage.getItem('ggpoker_user');
     return saved ? JSON.parse(saved) : null;
   });
 
@@ -29,27 +29,40 @@ export default function App() {
     if (token) {
       fetch(`/api/auth/me?token=${token}`)
         .then((res) => {
-          if (!res.ok) throw new Error('Token expired');
+          if (res.status === 401) {
+            throw new Error('Token expired');
+          }
+          if (!res.ok) {
+            return null;
+          }
           return res.json();
         })
         .then((data) => {
-          setCurrentUser(data.user);
-          localStorage.setItem('ggpoker_user', JSON.stringify(data.user));
+          if (data && data.user) {
+            setCurrentUser(data.user);
+            localStorage.setItem('hpoker_user', JSON.stringify(data.user));
+          }
         })
-        .catch(() => {
-          setToken('');
-          setCurrentUser(null);
-          localStorage.removeItem('ggpoker_token');
-          localStorage.removeItem('ggpoker_user');
+        .catch((err) => {
+          if (err.message === 'Token expired') {
+            setToken('');
+            setCurrentUser(null);
+            localStorage.removeItem('hpoker_token');
+            localStorage.removeItem('hpoker_user');
+            localStorage.removeItem('ggpoker_token');
+            localStorage.removeItem('ggpoker_user');
+          }
         });
     }
   }, [token]);
 
-  const handleLoginSuccess = (user, authToken) => {
+  const handleLoginSuccess = (user, authToken, remember = true) => {
     setCurrentUser(user);
     setToken(authToken);
-    localStorage.setItem('ggpoker_token', authToken);
-    localStorage.setItem('ggpoker_user', JSON.stringify(user));
+    if (remember) {
+      localStorage.setItem('hpoker_token', authToken);
+      localStorage.setItem('hpoker_user', JSON.stringify(user));
+    }
   };
 
   const handleLogout = () => {
@@ -57,13 +70,15 @@ export default function App() {
     setCurrentUser(null);
     setActiveRoomId(null);
     setRoomData(null);
+    localStorage.removeItem('hpoker_token');
+    localStorage.removeItem('hpoker_user');
     localStorage.removeItem('ggpoker_token');
     localStorage.removeItem('ggpoker_user');
   };
 
   const handleUpdateUser = (updatedUser) => {
     setCurrentUser(updatedUser);
-    localStorage.setItem('ggpoker_user', JSON.stringify(updatedUser));
+    localStorage.setItem('hpoker_user', JSON.stringify(updatedUser));
   };
 
   // Fetch initial users and active rooms
@@ -115,6 +130,9 @@ export default function App() {
           setRoomData(msg.payload);
         } else if (msg.event === 'SOUND_EFFECT') {
           soundEngine.play(msg.payload.sound);
+        } else if (msg.event === 'ROOM_DELETED') {
+          alert(msg.payload?.message || '房间已被房主解散');
+          handleLeaveRoom();
         }
       } catch (err) {
         console.error("Error parsing WS message:", err);
@@ -148,6 +166,27 @@ export default function App() {
       setActiveRoomId(data.room_id);
     } catch (e) {
       console.error("Failed to create room:", e);
+    }
+  };
+
+  const handleDeleteRoom = async (roomId) => {
+    try {
+      const res = await fetch(`/api/rooms/${roomId}?requester_id=${currentUser?.user_id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        if (activeRoomId === roomId) {
+          handleLeaveRoom();
+        } else {
+          fetchLobbyData();
+        }
+      } else {
+        const data = await res.json();
+        alert(data.detail || '删除房间失败');
+      }
+    } catch (e) {
+      console.error("Failed to delete room:", e);
+      alert('网络错误，删除房间失败');
     }
   };
 
@@ -190,6 +229,7 @@ export default function App() {
           onLogout={handleLogout}
           rooms={rooms}
           onCreateRoom={handleCreateRoom}
+          onDeleteRoom={handleDeleteRoom}
           onJoinRoom={handleJoinRoom}
         />
       )}
