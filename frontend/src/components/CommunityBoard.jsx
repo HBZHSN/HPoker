@@ -91,8 +91,8 @@ export default function CommunityBoard({
     (hasSecondBoard && secondBoard.length < BOARD_SIZE);
   const canReveal = isHandEnd && !boardCardsRevealed && hasHiddenCards && typeof onReveal === 'function';
   const rootClassName = compact
-    ? 'flex flex-col items-center gap-1.5 bg-black/55 p-1.5 rounded-xl border border-slate-800/90 shadow-xl'
-    : 'flex flex-col items-center gap-2 bg-black/60 p-3 rounded-2xl border border-amber-500/25 backdrop-blur-md shadow-2xl overflow-x-auto';
+    ? 'pointer-events-auto flex flex-col items-center gap-1.5 bg-black/55 p-1.5 rounded-xl border border-slate-800/90 shadow-xl'
+    : 'pointer-events-auto flex flex-col items-center gap-2 bg-black/60 p-3 rounded-2xl border border-amber-500/25 backdrop-blur-md shadow-2xl overflow-x-auto';
 
   return (
     <div className={rootClassName}>
