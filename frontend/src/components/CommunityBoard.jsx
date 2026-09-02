@@ -1,6 +1,6 @@
 import React from 'react';
 import CardView from './CardView';
-import { Eye, Sparkles } from 'lucide-react';
+import { Eye } from 'lucide-react';
 
 const BOARD_SIZE = 5;
 
@@ -103,14 +103,6 @@ export default function CommunityBoard({
 
   return (
     <div className={rootClassName}>
-      {!compact && (
-        <div className="flex items-center justify-center gap-1.5 text-[10px] md:text-[11px] font-black text-amber-300/90 uppercase tracking-wider">
-          <Sparkles className="w-3 h-3" />
-          <span>公共牌</span>
-          <span className="text-slate-500 font-bold normal-case">{revealedCount}/5 已翻开</span>
-        </div>
-      )}
-
       {hasSecondBoard ? (
         <div className="flex flex-col gap-1.5">
           <BoardRow
@@ -156,10 +148,6 @@ export default function CommunityBoard({
           <Eye className="w-3.5 h-3.5" />
           {revealLabel}
         </button>
-      )}
-
-      {!compact && !isHandEnd && hasHiddenCards && (
-        <span className="text-[10px] font-bold text-slate-500">未发出的牌会在对应街道翻开</span>
       )}
     </div>
   );
