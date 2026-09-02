@@ -6,7 +6,7 @@ from typing import Dict, Optional, List
 import time
 import uuid
 
-from backend.app.engine.state_machine import TableStateMachine
+from backend.app.engine.state_machine import Street, TableStateMachine
 from backend.app.services.settlement import SettlementReport, SettlementEngine
 
 
@@ -69,6 +69,7 @@ class Room:
 
         # Historical participant tracker (player_id -> dict of stats)
         self.historical_players: Dict[str, dict] = {}
+        self._next_test_bot_number = 1
 
     def add_periodic_time_cards(self) -> int:
         """Add 1 periodic time card to all active seated players up to max_time_cards."""
@@ -76,12 +77,13 @@ class Room:
             return 0
         return self.table.add_periodic_time_cards(max_cards=self.config.max_time_cards)
 
-    def track_player(self, player_id: str, name: str, chips_added: int) -> None:
+    def track_player(self, player_id: str, name: str, chips_added: int, is_bot: bool = False) -> None:
         """Record buyin or rebuy for historical accounting."""
         if player_id not in self.historical_players:
             self.historical_players[player_id] = {
                 "player_id": player_id,
                 "player_name": name,
+                "is_bot": is_bot,
                 "rebuy_count": 1,
                 "total_buyin_chips": chips_added,
                 "final_chips": 0,
@@ -92,7 +94,14 @@ class Room:
             self.historical_players[player_id]["total_buyin_chips"] += chips_added
             self.historical_players[player_id]["is_seated"] = True
 
-    def sit_down_player(self, player_id: str, name: str, seat_index: int, avatar: str = "👤") -> bool:
+    def sit_down_player(
+        self,
+        player_id: str,
+        name: str,
+        seat_index: int,
+        avatar: str = "👤",
+        is_bot: bool = False,
+    ) -> bool:
         """Sit a player down with initial room buy-in."""
         if self.is_ended:
             return False
@@ -104,10 +113,38 @@ class Room:
             chips=buyin,
             total_buyin=buyin,
             avatar=avatar,
+            is_bot=is_bot,
         )
         if success:
-            self.track_player(player_id, name, buyin)
+            self.track_player(player_id, name, buyin, is_bot=is_bot)
         return success
+
+    def add_test_bot(self, seat_index: Optional[int] = None) -> Optional[dict]:
+        """Add a virtual test bot to an empty seat between hands."""
+        if self.is_ended or self.table.street not in (Street.IDLE, Street.HAND_END):
+            return None
+
+        if seat_index is None:
+            seat_index = next(
+                (idx for idx, seat in enumerate(self.table.seats) if seat is None),
+                None,
+            )
+        if seat_index is None or not (0 <= seat_index < self.config.max_seats):
+            return None
+
+        bot_id = f"bot_{uuid.uuid4().hex[:10]}"
+        bot_name = f"测试机器人 {self._next_test_bot_number}"
+        if not self.sit_down_player(
+            player_id=bot_id,
+            name=bot_name,
+            seat_index=seat_index,
+            avatar="🤖",
+            is_bot=True,
+        ):
+            return None
+
+        self._next_test_bot_number += 1
+        return self.table.seats[seat_index].to_dict() if self.table.seats[seat_index] else None
 
     def rebuy_player(self, player_id: str) -> bool:
         """Process rebuy for a seated player."""

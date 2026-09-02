@@ -50,6 +50,7 @@ class PlayerSeat:
     seat_index: int
     chips: int
     avatar: str = "👤"
+    is_bot: bool = False
     hole_cards: List[Card] = field(default_factory=list)
     is_folded: bool = False
     is_all_in: bool = False
@@ -88,6 +89,7 @@ class PlayerSeat:
             "player_id": self.player_id,
             "name": self.name,
             "avatar": self.avatar,
+            "is_bot": self.is_bot,
             "seat_index": self.seat_index,
             "chips": self.chips,
             "hole_cards": [c.to_dict() for c in self.hole_cards] if include_private_cards else [],
@@ -198,7 +200,16 @@ class TableStateMachine:
 
     # ----------------- Seat & Player Management -----------------
 
-    def sit_down(self, player_id: str, name: str, seat_index: int, chips: int, total_buyin: int = 0, avatar: str = "👤") -> bool:
+    def sit_down(
+        self,
+        player_id: str,
+        name: str,
+        seat_index: int,
+        chips: int,
+        total_buyin: int = 0,
+        avatar: str = "👤",
+        is_bot: bool = False,
+    ) -> bool:
         if not (0 <= seat_index < self.max_seats):
             return False
         if self.seats[seat_index] is not None:
@@ -217,6 +228,7 @@ class TableStateMachine:
             rebuy_count=1,
             time_bank_cards=3,
             avatar=avatar or "👤",
+            is_bot=is_bot,
         )
         return True
 
