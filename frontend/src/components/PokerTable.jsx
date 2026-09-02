@@ -71,25 +71,25 @@ export default function PokerTable({
   const visualScreenPositions = useMemo(() => {
     if (maxSeats === 6) {
       return [
-        { top: '92%', left: '50%', betDirection: 'top' },    // Screen Pos 0 (Bottom Center - Hero)
-        { top: '68%', left: '15%', betDirection: 'right' },  // Screen Pos 1 (Bottom Left)
-        { top: '24%', left: '15%', betDirection: 'right' },  // Screen Pos 2 (Top Left)
-        { top: '11%', left: '50%', betDirection: 'bottom' }, // Screen Pos 3 (Top Center)
-        { top: '24%', left: '85%', betDirection: 'left' },   // Screen Pos 4 (Top Right)
-        { top: '68%', left: '85%', betDirection: 'left' },   // Screen Pos 5 (Bottom Right)
+        { top: '92%', left: '50%' },    // Screen Pos 0 (Bottom Center - Hero)
+        { top: '68%', left: '15%' },  // Screen Pos 1 (Bottom Left)
+        { top: '24%', left: '15%' },  // Screen Pos 2 (Top Left)
+        { top: '11%', left: '50%' }, // Screen Pos 3 (Top Center)
+        { top: '24%', left: '85%' },   // Screen Pos 4 (Top Right)
+        { top: '68%', left: '85%' },   // Screen Pos 5 (Bottom Right)
       ];
     }
     // 9 Seats layout
     return [
-      { top: '93%', left: '50%', betDirection: 'top' },    // 0 Bottom (Hero)
-      { top: '76%', left: '16%', betDirection: 'right' },  // 1 Bottom Left
-      { top: '48%', left: '9%', betDirection: 'right' },   // 2 Mid Left
-      { top: '20%', left: '16%', betDirection: 'bottom' }, // 3 Top Left
-      { top: '10%', left: '37%', betDirection: 'bottom' }, // 4 Top Left-Center
-      { top: '10%', left: '63%', betDirection: 'bottom' }, // 5 Top Right-Center
-      { top: '20%', left: '84%', betDirection: 'bottom' }, // 6 Top Right
-      { top: '48%', left: '91%', betDirection: 'left' },   // 7 Mid Right
-      { top: '76%', left: '84%', betDirection: 'left' },   // 8 Bottom Right
+      { top: '93%', left: '50%' },    // 0 Bottom (Hero)
+      { top: '76%', left: '16%' },  // 1 Bottom Left
+      { top: '48%', left: '9%' },   // 2 Mid Left
+      { top: '20%', left: '16%' }, // 3 Top Left
+      { top: '10%', left: '37%' }, // 4 Top Left-Center
+      { top: '10%', left: '63%' }, // 5 Top Right-Center
+      { top: '20%', left: '84%' }, // 6 Top Right
+      { top: '48%', left: '91%' },   // 7 Mid Right
+      { top: '76%', left: '84%' },   // 8 Bottom Right
     ];
   }, [maxSeats]);
 
@@ -530,14 +530,12 @@ export default function PokerTable({
                       isDealer={isDealer}
                       isSB={isSB}
                       isBB={isBB}
-                      currentRoundBet={seatData?.current_round_bet || 0}
                       onSitDown={handleSitDown}
                       currentUserId={currentUser?.user_id}
                       actionTimeout={room?.config?.action_timeout || 15}
                       currentTurnDuration={table?.current_turn_duration || room?.config?.action_timeout || 15}
                       isUsingTimeBank={table?.is_using_time_bank || false}
                       payoutInfo={payout}
-                      betDirection={pos.betDirection}
                       street={table?.street || 'IDLE'}
                       turnCount={table?.turn_count || 0}
                       actionHistoryLength={table?.action_history?.length || 0}

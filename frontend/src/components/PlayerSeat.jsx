@@ -9,14 +9,12 @@ export default function PlayerSeat({
   isDealer,
   isSB,
   isBB,
-  currentRoundBet = 0,
   onSitDown,
   currentUserId,
   actionTimeout = 15,
   currentTurnDuration = 15,
   isUsingTimeBank = false,
   payoutInfo = null,
-  betDirection = 'top', // 'top', 'bottom', 'left', 'right'
   street = 'IDLE',
   turnCount = 0,
   actionHistoryLength = 0,
@@ -68,14 +66,6 @@ export default function PlayerSeat({
   const isFolded = seatData.is_folded;
   const isAllIn = seatData.is_all_in;
 
-  // Bet chips position classes based on direction relative to center table
-  const betPosClasses = {
-    top: 'bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2',
-    bottom: 'top-[calc(100%+54px)] left-1/2 -translate-x-1/2',
-    left: 'top-1/2 right-[calc(100%+14px)] -translate-y-1/2',
-    right: 'top-1/2 left-[calc(100%+14px)] -translate-y-1/2',
-  }[betDirection] || 'bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2';
-
   return (
     <div className={`relative flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
       {/* Anchor Container for Avatar Card & Floating Badges */}
@@ -83,7 +73,7 @@ export default function PlayerSeat({
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {isCurrentTurn ? (
           isUsingTimeBank ? (
-            <div className={`absolute -top-4 md:-top-4.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-3 py-0.5 md:py-1 rounded-full ${
+            <div className={`absolute -top-9 md:-top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-3 py-0.5 md:py-1 rounded-full ${
               timeLeft <= 5
                 ? 'bg-red-950/95 border-2 border-red-500 text-red-200 shadow-glow-red animate-bounce'
                 : 'bg-gradient-to-r from-purple-950 to-indigo-950 border-2 border-purple-400 text-purple-200 shadow-glow-cyan animate-pulse'
@@ -92,7 +82,7 @@ export default function PlayerSeat({
               <span>时间卡 +{Math.ceil(timeLeft)}s</span>
             </div>
           ) : (
-            <div className={`absolute -top-4 md:-top-4.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-3 py-0.5 md:py-1 rounded-full ${
+            <div className={`absolute -top-9 md:-top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-3 py-0.5 md:py-1 rounded-full ${
               timeLeft <= 5
                 ? 'bg-red-950/95 border-2 border-red-500 text-red-200 shadow-glow-red animate-bounce scale-105'
                 : 'bg-slate-950 border-2 border-amber-400 text-amber-300 shadow-glow-gold animate-pulse'
@@ -102,12 +92,12 @@ export default function PlayerSeat({
             </div>
           )
         ) : payoutInfo ? (
-          <div className="absolute -top-4 md:-top-5 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border-2 border-emerald-400 px-3.5 py-1 rounded-xl text-xs md:text-sm font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
+          <div className="absolute -top-9 md:-top-10 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border-2 border-emerald-400 px-3.5 py-1 rounded-xl text-xs md:text-sm font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
             +${payoutInfo.amount} ({payoutInfo.pot_name})
           </div>
         ) : seatData.last_action ? (
           <div
-            className={`absolute -top-4 md:-top-5 left-1/2 -translate-x-1/2 px-3.5 py-1 md:px-4 md:py-1 rounded-full text-xs md:text-sm font-black shadow-2xl z-30 whitespace-nowrap border-2 transition-all ${
+            className={`absolute -top-9 md:-top-10 left-1/2 -translate-x-1/2 px-3.5 py-1 md:px-4 md:py-1 rounded-full text-xs md:text-sm font-black shadow-2xl z-30 whitespace-nowrap border-2 transition-all ${
               seatData.last_action.startsWith('Raise') || seatData.last_action.startsWith('加注')
                 ? 'bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 text-slate-950 border-amber-200 shadow-glow-gold scale-105'
                 : seatData.last_action.startsWith('Bet') || seatData.last_action.startsWith('下注')
@@ -129,7 +119,7 @@ export default function PlayerSeat({
 
         {/* Winner Crown */}
         {isWinner && (
-          <div className="absolute -top-6.5 left-1/2 -translate-x-1/2 text-amber-400 z-30 animate-bounce">
+          <div className="absolute -top-12 md:-top-14 left-1/2 -translate-x-1/2 text-amber-400 z-30 animate-bounce">
             <Crown className="w-5 h-5 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
           </div>
         )}
@@ -145,9 +135,9 @@ export default function PlayerSeat({
           </div>
         )}
 
-        {/* === BOTTOM-LEFT CORNER: Time Bank Cards Badge (时间卡数量) === */}
+        {/* === BOTTOM-RIGHT CORNER: Time Bank Cards Badge (时间卡数量) === */}
         <div
-          className="absolute -bottom-2.5 -left-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
+          className="absolute -bottom-2.5 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
           title={`时间卡: 剩余 ${seatData.time_bank_cards ?? 3} 张 (每张+30秒)`}
         >
           <span>x{seatData.time_bank_cards ?? 3}</span>
@@ -324,17 +314,6 @@ export default function PlayerSeat({
         return null;
       })()}
 
-      {/* Current Round Bet Chip Stack on Table (Large, High Contrast) */}
-      {currentRoundBet > 0 && (
-        <div
-          className={`absolute ${betPosClasses} flex items-center gap-1.5 bg-gradient-to-r from-slate-950 via-amber-950 to-slate-950 px-3.5 py-1.5 md:px-4 md:py-1.5 rounded-full border-2 border-amber-400 text-amber-300 text-sm md:text-base font-black shadow-2xl animate-chip-slide z-40 whitespace-nowrap`}
-        >
-          <div className="w-5 h-5 rounded-full bg-amber-400 border border-black shadow-inner flex-shrink-0 flex items-center justify-center text-xs text-slate-950 font-black">
-            $
-          </div>
-          <span>${currentRoundBet.toLocaleString()}</span>
-        </div>
-      )}
     </div>
   );
 }
