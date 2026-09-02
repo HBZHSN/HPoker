@@ -15,6 +15,8 @@ import shutil
 import sys
 from typing import Iterable, Optional, TextIO
 
+from cli.text_utils import clip_display
+
 try:  # termios is unavailable on Windows; text mode remains the fallback.
     import termios
     import tty
@@ -272,7 +274,7 @@ class TerminalTui:
 
     @staticmethod
     def _clip(value: str, width: int) -> str:
-        return value[: max(1, width)]
+        return clip_display(value, max(1, width))
 
     def _restore_terminal(self) -> None:
         if self._input_fd is not None and self._saved_terminal is not None:

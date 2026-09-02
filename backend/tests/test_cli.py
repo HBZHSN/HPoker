@@ -11,6 +11,7 @@ from cli.ws_client import PokerWsClient
 from cli.ui_renderer import PokerUiRenderer, Colors
 from cli.controller import PokerCliController
 from cli.tui import TerminalTui
+from cli.text_utils import display_width
 from cli.commands import (
     BetSizingContext,
     CommandParseError,
@@ -212,6 +213,7 @@ class TestPokerUiRenderer:
         assert "[A♣] [A♦]" in output
         assert "[c]过牌 (Check)" in output
         assert "[r/b <额度>]下注(10~980)" in output
+        assert all(display_width(line) == 98 for line in output.splitlines())
 
     def test_render_settlement_report(self):
         renderer = PokerUiRenderer(enable_color=False, mode="dashboard")

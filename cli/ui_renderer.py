@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from typing import Any, Dict, Iterable, List, Optional
 
+from cli.text_utils import clip_display, display_width, pad_display
+
 
 class Colors:
     """Low-profile ANSI colors."""
@@ -41,6 +43,8 @@ class Colors:
 class PokerUiRenderer:
     """Renders poker game components in a clean, discreet terminal style."""
 
+    TABLE_INNER_WIDTH = 96
+
     def __init__(self, enable_color: Optional[bool] = None, mode: str = "dashboard"):
         if enable_color is None:
             self.enable_color = sys.stdout.isatty()
@@ -73,6 +77,40 @@ class PokerUiRenderer:
         if negative:
             return self.c(text, Colors.BRIGHT_RED + Colors.BOLD)
         return text
+
+    @staticmethod
+    def _display_width(text: str) -> int:
+        """Measure visible columns, excluding ANSI color escape sequences."""
+
+        return display_width(text)
+
+    @staticmethod
+    def _pad_display(text: Any, width: int) -> str:
+        """Pad by terminal columns instead of Python code-point count."""
+
+        return pad_display(str(text), width)
+
+    @classmethod
+    def _columns(cls, values: Iterable[Any], widths: Iterable[int]) -> str:
+        return " ".join(cls._pad_display(value, width) for value, width in zip(values, widths))
+
+    @classmethod
+    def _table_line(cls, content: Any = "") -> str:
+        content_width = cls.TABLE_INNER_WIDTH - 2
+        return f"│ {pad_display(str(content), content_width)} │"
+
+    @classmethod
+    def _table_separator(cls) -> str:
+        return f"├{'─' * cls.TABLE_INNER_WIDTH}┤"
+
+    @classmethod
+    def _table_top(cls, content: str) -> str:
+        clipped = clip_display(content, cls.TABLE_INNER_WIDTH)
+        return f"┌{clipped}{'─' * max(0, cls.TABLE_INNER_WIDTH - display_width(clipped))}┐"
+
+    @classmethod
+    def _table_bottom(cls) -> str:
+        return f"└{'─' * cls.TABLE_INNER_WIDTH}┘"
 
     def clear_screen(self):
         """Clear terminal screen without excessive flicker."""
@@ -237,12 +275,11 @@ class PokerUiRenderer:
         current_turn_duration = self._int(table.get("current_turn_duration", timeout_sec), timeout_sec)
         is_using_time_bank = bool(table.get("is_using_time_bank", False))
 
-        # Header bar
-        header_title = f" HPoker 现金桌: {r_name} (ID: {r_id}) "
+        # Header bar.  Every line uses the same visible width; Chinese text,
+        # suit symbols and emoji are measured in terminal columns below.
+        header_title = f"HPoker 现金桌: {r_name} (ID: {r_id})"
         blinds_info = f"盲注: {sb}/{bb} | 超时: {timeout_sec}s"
-        sep_top = f"┌─ {header_title}─ {blinds_info} "
-        sep_top += "─" * max(2, 76 - len(sep_top)) + "┐"
-        lines.append(self.c(sep_top, Colors.CYAN))
+        lines.append(self.c(self._table_top(f"─ {header_title} ─ {blinds_info} "), Colors.CYAN))
 
         # Room / Street status
         street_desc = self.format_street_name(street)
@@ -251,24 +288,27 @@ class PokerUiRenderer:
             pots_breakdown = ", ".join(f"池#{i+1}:{p.get('amount', 0)}" for i, p in enumerate(pots))
             pot_info += f" ({pots_breakdown})"
 
-        status_line = f"│ 局号: #{hand_num:<3} | 阶段: {street_desc:<22} | {pot_info}"
-        lines.append(status_line)
+        status_line = f"局号: #{hand_num:<3} | 阶段: {street_desc} | {pot_info}"
+        lines.append(self._table_line(status_line))
 
         # Board cards
         board_str = self.format_cards(board_cards)
         if rit_enabled and board_cards_2:
             board_str_2 = self.format_cards(board_cards_2)
-            lines.append(f"│ 公共牌 [板1]: {board_str}")
-            lines.append(f"│ 公共牌 [板2]: {board_str_2}")
+            lines.append(self._table_line(f"公共牌 [板1]: {board_str}"))
+            lines.append(self._table_line(f"公共牌 [板2]: {board_str_2}"))
         else:
-            lines.append(f"│ 公共牌: {board_str}")
+            lines.append(self._table_line(f"公共牌: {board_str}"))
 
-        lines.append(self.c("├" + "─" * 74 + "┤", Colors.CYAN))
+        lines.append(self.c(self._table_separator(), Colors.CYAN))
 
         # Seats table header
-        seat_hdr = f"│ {'座号':<4} {'玩家':<16} {'筹码(买入)':<13} {'本轮下注':<10} {'位置':<6} {'手牌/状态':<20}│"
-        lines.append(self.c(seat_hdr, Colors.BOLD))
-        lines.append(self.c("│ " + "-" * 72 + " │", Colors.DIM))
+        seat_hdr = self._columns(
+            ("座号", "玩家", "筹码(买入)", "本轮下注", "位置", "手牌/状态"),
+            (6, 18, 18, 10, 8, 29),
+        )
+        lines.append(self.c(self._table_line(seat_hdr), Colors.BOLD))
+        lines.append(self.c(self._table_line("-" * (self.TABLE_INNER_WIDTH - 2)), Colors.DIM))
 
         # Render seats
         self_is_my_turn = False
@@ -276,8 +316,11 @@ class PokerUiRenderer:
 
         for idx, s in enumerate(seats):
             if not s:
-                empty_row = f"│ [{idx}]  {'(空座)':<16} {'-':<13} {'-':<10} {'':<6} {'-':<20}│"
-                lines.append(self.c(empty_row, Colors.DIM))
+                empty_row = self._columns(
+                    (f"[{idx}]", "(空座)", "-", "-", "", "-"),
+                    (6, 18, 18, 10, 8, 29),
+                )
+                lines.append(self.c(self._table_line(empty_row), Colors.DIM))
                 continue
 
             p_id = s.get("player_id", "")
@@ -310,8 +353,8 @@ class PokerUiRenderer:
                 name_disp += " (你)"
             if p_id == host_id:
                 name_disp += "👑"
-            if len(name_disp) > 15:
-                name_disp = name_disp[:13] + ".."
+            if self._display_width(name_disp) > 16:
+                name_disp = f"{clip_display(name_disp, 14)}.."
 
             # Chips & buyins
             total_buyin = self._int(s.get("total_buyin_chips", 0))
@@ -353,16 +396,18 @@ class PokerUiRenderer:
                 tb_note = "+30s卡" if is_using_time_bank else f"{current_turn_duration}s"
                 status_desc += f" {self.c('⏱️' + tb_note, Colors.BRIGHT_YELLOW)}"
 
-            row_str = f"│ {seat_label:<4} {name_disp:<16} {chips_disp:<13} {p_cur_bet:<10} {pos_str:<6} {status_desc}"
-            # Pad right border visually
-            lines.append(row_str)
+            row_str = self._columns(
+                (seat_label, name_disp, chips_disp, p_cur_bet, pos_str, status_desc),
+                (6, 18, 18, 10, 8, 29),
+            )
+            lines.append(self._table_line(row_str))
 
-        lines.append(self.c("├" + "─" * 74 + "┤", Colors.CYAN))
+        lines.append(self.c(self._table_separator(), Colors.CYAN))
 
         # Recent action history
-        lines.append("│ 最近动态:")
+        lines.append(self._table_line("最近动态:"))
         if not action_history:
-            lines.append("│   (暂无操作记录)")
+            lines.append(self._table_line("  (暂无操作记录)"))
         else:
             for item in action_history[-4:]:
                 p_name = item.get("player_name") or next(
@@ -377,12 +422,12 @@ class PokerUiRenderer:
                 amt = item.get("amount", 0)
                 st = item.get("street", "")
                 amt_str = f" {amt}" if amt > 0 else ""
-                lines.append(f"│   • {p_name}: {act}{amt_str} [{st}]")
+                lines.append(self._table_line(f"  • {p_name}: {act}{amt_str} [{st}]"))
 
         # Hand Results (if hand ended)
         if street in ("HAND_END", "SHOWDOWN") and hand_results:
-            lines.append(self.c("├" + "─" * 74 + "┤", Colors.CYAN))
-            lines.append(self.c("│ 🏆 本手结算详情:", Colors.BOLD + Colors.BRIGHT_YELLOW))
+            lines.append(self.c(self._table_separator(), Colors.CYAN))
+            lines.append(self.c(self._table_line("🏆 本手结算详情:"), Colors.BOLD + Colors.BRIGHT_YELLOW))
             for res in hand_results:
                 name = res.get("name", "")
                 payout = res.get("payout_amount", 0)
@@ -397,15 +442,15 @@ class PokerUiRenderer:
                 shown_str = self.format_cards(shown) if shown else ""
 
                 rit_extra = f" | 板2: {h_desc_2}" if h_desc_2 else ""
-                lines.append(f"│   {win_tag}{name}: 收益 {net_str} ({h_desc}{rit_extra}) {shown_str}")
+                lines.append(self._table_line(f"  {win_tag}{name}: 收益 {net_str} ({h_desc}{rit_extra}) {shown_str}"))
 
         # Legal actions bar
-        lines.append(self.c("├" + "─" * 74 + "┤", Colors.CYAN))
+        lines.append(self.c(self._table_separator(), Colors.CYAN))
 
         if is_ended:
-            lines.append(self.c("│ 牌局已由房主结束并生成结算账单。输入 [bill] 或 [report] 查看账单。", Colors.BRIGHT_YELLOW))
+            lines.append(self.c(self._table_line("牌局已由房主结束并生成结算账单。输入 [bill] 或 [report] 查看账单。"), Colors.BRIGHT_YELLOW))
         elif street == "RIT_DECISION":
-            lines.append(self.c("│ 🎲 全下多次发牌(RIT)协商中: 输入 [rit 1] 发1次牌 / [rit 2] 发2次牌", Colors.BRIGHT_MAGENTA + Colors.BOLD))
+            lines.append(self.c(self._table_line("🎲 全下多次发牌(RIT)协商中: 输入 [rit 1] 发1次牌 / [rit 2] 发2次牌"), Colors.BRIGHT_MAGENTA + Colors.BOLD))
         elif street == "IDLE":
             is_host = (current_user_id == host_id)
             is_ready = current_user_id in ready_player_ids
@@ -414,7 +459,7 @@ class PokerUiRenderer:
             rebuy_hint = " | [rebuy/rb]重买补码"
             leave_hint = " | [leave]离开房间"
             end_hint = " | [end]结束房间结算" if is_host else ""
-            lines.append(f"│ 准备阶段: {self.c(ready_hint, Colors.BRIGHT_GREEN)}{host_hint}{rebuy_hint}{leave_hint}{end_hint}")
+            lines.append(self._table_line(f"准备阶段: {self.c(ready_hint, Colors.BRIGHT_GREEN)}{host_hint}{rebuy_hint}{leave_hint}{end_hint}"))
         elif street in ("HAND_END", "SHOWDOWN"):
             is_host = (current_user_id == host_id)
             ready_hint = "[ready]准备下一手"
@@ -422,7 +467,7 @@ class PokerUiRenderer:
             show_hint = " | 秀牌: [show 1] [show 2] [show all] [muck]"
             rebuy_hint = " | [rebuy]重买"
             end_hint = " | [end]结束结算" if is_host else ""
-            lines.append(f"│ 结算秀牌: {self.c(ready_hint, Colors.BRIGHT_GREEN)}{host_hint}{show_hint}{rebuy_hint}{end_hint}")
+            lines.append(self._table_line(f"结算秀牌: {self.c(ready_hint, Colors.BRIGHT_GREEN)}{host_hint}{show_hint}{rebuy_hint}{end_hint}"))
         elif self_is_my_turn:
             action_tips = []
             if legal_actions.get("can_check"):
@@ -452,20 +497,19 @@ class PokerUiRenderer:
             if my_tc > 0:
                 action_tips.append(self.c(f"[tc]时间卡({my_tc}张)", Colors.CYAN))
 
-            lines.append("│ ▶ " + self.c("轮到你行动:", Colors.BOLD + Colors.BRIGHT_WHITE) + " " + " | ".join(action_tips))
+            lines.append(self._table_line("▶ " + self.c("轮到你行动:", Colors.BOLD + Colors.BRIGHT_WHITE) + " " + " | ".join(action_tips)))
 
             # Pot bet shortcuts
             if legal_actions.get("can_bet") or legal_actions.get("can_raise"):
                 p_half = int(total_pot * 0.5)
                 p_two_thirds = int(total_pot * 0.67)
                 p_pot = total_pot
-                p_hint = f"│ 快捷尺度: [bet/raise 1/3p] | [1/2p]={p_half} | [2/3p]={p_two_thirds} | [p]={p_pot} | [1.5p] [2p] [3p] [allin]"
-                lines.append(self.c(p_hint, Colors.DIM))
+                p_hint = f"快捷尺度: [bet/raise 1/3p] | [1/2p]={p_half} | [2/3p]={p_two_thirds} | [p]={p_pot} | [1.5p] [2p] [3p] [allin]"
+                lines.append(self.c(self._table_line(p_hint), Colors.DIM))
         else:
-            lines.append("│ 等待其他玩家行动... (输入 [h] 查看帮助, [rebuy] 补码, [leave] 离开)")
+            lines.append(self._table_line("等待其他玩家行动... (输入 [h] 查看帮助, [rebuy] 补码, [leave] 离开)"))
 
-        sep_bot = "└" + "─" * 74 + "┘"
-        lines.append(self.c(sep_bot, Colors.CYAN))
+        lines.append(self.c(self._table_bottom(), Colors.CYAN))
 
         return "\n".join(lines)
 
