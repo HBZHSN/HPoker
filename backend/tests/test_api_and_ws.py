@@ -1,9 +1,11 @@
 import pytest
+import httpx
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.app.services.user_manager import user_manager, DEFAULT_PRESET_USERS
 from backend.app.services.room_manager import room_manager
 from backend.app.websocket.protocol import EventType
+from backend.app.models.room import RoomConfig
 
 
 @pytest.fixture(autouse=True)
@@ -64,6 +66,35 @@ def test_rest_api_users_and_rooms():
     resp = client.get(f"/api/rooms/{room_id}")
     assert resp.status_code == 200
     assert resp.json()["room_id"] == room_id
+
+
+@pytest.mark.asyncio
+async def test_room_blind_defaults_and_derived_big_blind():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        default_resp = await client.post("/api/rooms", json={"host_player_id": "u_fwd"})
+        assert default_resp.status_code == 200
+        default_config = default_resp.json()["config"]
+        assert default_config["buyin_chips"] == 1000
+        assert default_config["cash_value"] == 100.0
+        assert default_config["small_blind"] == 10
+        assert default_config["big_blind"] == 20
+
+        # A legacy/forged BB value must not override the room's derived BB.
+        custom_resp = await client.post(
+            "/api/rooms",
+            json={"host_player_id": "u_fwd", "small_blind": 15, "big_blind": 999},
+        )
+        assert custom_resp.status_code == 200
+        custom_config = custom_resp.json()["config"]
+        assert custom_config["small_blind"] == 15
+        assert custom_config["big_blind"] == 30
+
+    config = RoomConfig()
+    assert config.buyin_chips == 1000
+    assert config.cash_value == 100.0
+    assert config.small_blind == 10
+    assert config.big_blind == 20
 
 
 def test_websocket_room_interaction():
@@ -439,4 +470,3 @@ async def test_auto_delete_room_when_empty():
 
     # Room must be automatically deleted
     assert room_manager.get_room(room_id) is None
-

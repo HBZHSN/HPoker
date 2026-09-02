@@ -144,8 +144,8 @@ class PokerUiRenderer:
                 r_id = r.get("room_id", "")
                 r_name = r.get("room_name") or r.get("config", {}).get("room_name", "德州现金桌")
                 cfg = r.get("config", {})
-                sb = cfg.get("small_blind", 5)
-                bb = cfg.get("big_blind", 10)
+                sb = cfg.get("small_blind", 10)
+                bb = sb * 2
                 buyin = cfg.get("buyin_chips", 1000)
                 max_s = cfg.get("max_seats", 6)
                 seats_count = r.get("seated_players_count", 0)
@@ -183,8 +183,8 @@ class PokerUiRenderer:
         r_id = room.get("room_id", "")
         cfg = room.get("config", {})
         r_name = cfg.get("room_name", "德州扑克")
-        sb = cfg.get("small_blind", 5)
-        bb = cfg.get("big_blind", 10)
+        sb = cfg.get("small_blind", 10)
+        bb = sb * 2
         timeout_sec = cfg.get("action_timeout", 15)
         host_id = room.get("host_player_id", "")
         is_ended = room.get("is_ended", False)

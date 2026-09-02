@@ -174,8 +174,7 @@ class CreateRoomRequest(BaseModel):
     room_name: str = "HPoker 现金桌"
     buyin_chips: int = Field(default=1000, ge=10)
     cash_value: float = Field(default=100.0, ge=1.0)
-    small_blind: int = Field(default=5, ge=1)
-    big_blind: int = Field(default=10, ge=2)
+    small_blind: int = Field(default=10, ge=1)
     action_timeout: int = Field(default=15, ge=5, le=60)
     max_seats: int = Field(default=6, ge=2, le=9)
 
@@ -192,7 +191,6 @@ async def create_room(req: CreateRoomRequest):
         buyin_chips=req.buyin_chips,
         cash_value=req.cash_value,
         small_blind=req.small_blind,
-        big_blind=req.big_blind,
         action_timeout=req.action_timeout,
         max_seats=req.max_seats,
     )
@@ -251,4 +249,3 @@ async def delete_room(room_id: str, requester_id: str = Query(...)):
     room_manager.delete_room(room_id)
     await ws_manager.close_room_connections(room_id, reason="Room deleted by host")
     return {"success": True, "message": "房间已成功删除"}
-

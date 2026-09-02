@@ -49,8 +49,7 @@ class PokerApiClient:
         room_name: str = "HPoker 现金桌",
         buyin_chips: int = 1000,
         cash_value: float = 100.0,
-        small_blind: int = 5,
-        big_blind: int = 10,
+        small_blind: int = 10,
         action_timeout: int = 15,
         max_seats: int = 6,
     ) -> Dict[str, Any]:
@@ -61,7 +60,6 @@ class PokerApiClient:
             "buyin_chips": buyin_chips,
             "cash_value": cash_value,
             "small_blind": small_blind,
-            "big_blind": big_blind,
             "action_timeout": action_timeout,
             "max_seats": max_seats,
         }

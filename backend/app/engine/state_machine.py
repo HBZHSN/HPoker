@@ -538,6 +538,12 @@ class TableStateMachine:
                 added_chips = current_player.chips
                 target_bet = curr_round_bet + added_chips
 
+            # Room-created games use the small blind as the betting unit. An
+            # explicit ALL_IN action remains available for short stacks whose
+            # remaining chips are not an exact multiple.
+            if added_chips != current_player.chips and target_bet % self.small_blind != 0:
+                return False
+
             # Check min-raise rules
             raise_diff = target_bet - highest_bet
             if target_bet < curr_round_bet + current_player.chips:  # If not all-in

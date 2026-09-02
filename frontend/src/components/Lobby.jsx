@@ -18,8 +18,7 @@ export default function Lobby({
   const [roomName, setRoomName] = useState('新现金桌');
   const [buyinChips, setBuyinChips] = useState(1000);
   const [cashValue, setCashValue] = useState(100);
-  const [smallBlind, setSmallBlind] = useState(5);
-  const [bigBlind, setBigBlind] = useState(10);
+  const [smallBlind, setSmallBlind] = useState(10);
   const [actionTimeout, setActionTimeout] = useState(15);
   const [maxSeats, setMaxSeats] = useState(6);
 
@@ -31,7 +30,6 @@ export default function Lobby({
       buyin_chips: Number(buyinChips),
       cash_value: Number(cashValue),
       small_blind: Number(smallBlind),
-      big_blind: Number(bigBlind),
       action_timeout: Number(actionTimeout),
       max_seats: Number(maxSeats),
     });
@@ -265,15 +263,11 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">大盲 (BB)</label>
-                  <input
-                    type="number"
-                    value={bigBlind}
-                    onChange={(e) => setBigBlind(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
-                    min="2"
-                    required
-                  />
+                  <label className="text-slate-400 font-semibold block mb-1">大盲 (BB，自动)</label>
+                  <div className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-amber-300 font-black">
+                    {Number(smallBlind) > 0 ? Number(smallBlind) * 2 : '—'}
+                    <span className="ml-1 text-[10px] text-slate-500 font-medium">SB × 2</span>
+                  </div>
                 </div>
               </div>
 

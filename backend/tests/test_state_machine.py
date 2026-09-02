@@ -320,3 +320,18 @@ def test_raise_fallback_and_clamping():
     assert table.current_round_highest_bet == 6
     assert table.seats[0].chips == 94
 
+
+def test_bet_and_raise_amounts_use_small_blind_as_unit():
+    table = TableStateMachine(max_seats=6, small_blind=10, big_blind=20)
+    table.sit_down("p1", "Alice", seat_index=0, chips=100)
+    table.sit_down("p2", "Bob", seat_index=1, chips=100)
+
+    table.start_new_hand()
+    # 45 is a legal min-raise by chip amount, but not a multiple of SB 10.
+    assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=45) is False
+    assert table.current_round_highest_bet == 20
+    assert table.seats[0].chips == 90
+
+    # A multiple of the configured small blind is accepted.
+    assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=50) is True
+    assert table.current_round_highest_bet == 50

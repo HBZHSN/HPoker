@@ -156,11 +156,8 @@ class PokerCliController:
         except ValueError:
             cash = 100.0
 
-        sb_str = (await self._async_input("小盲注(SB) [5]: ")).strip()
-        sb = int(sb_str) if sb_str.isdigit() else 5
-
-        bb_str = (await self._async_input("大盲注(BB) [10]: ")).strip()
-        bb = int(bb_str) if bb_str.isdigit() else 10
+        sb_str = (await self._async_input("小盲注(SB) [10]: ")).strip()
+        sb = int(sb_str) if sb_str.isdigit() else 10
 
         timeout_str = (await self._async_input("操作思考超时(秒) [15]: ")).strip()
         timeout = int(timeout_str) if timeout_str.isdigit() else 15
@@ -175,7 +172,6 @@ class PokerCliController:
                 buyin_chips=buyin,
                 cash_value=cash,
                 small_blind=sb,
-                big_blind=bb,
                 action_timeout=timeout,
                 max_seats=max_seats,
             )

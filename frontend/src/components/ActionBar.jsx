@@ -14,7 +14,7 @@ import {
 export default function ActionBar({
   legalActions,
   totalPot = 0,
-  bigBlind = 10,
+  smallBlind = 10,
   buyinChips = 1000,
   onAction,
   disabled = false,
@@ -31,8 +31,25 @@ export default function ActionBar({
   seats = [],
   turnCount = 0,
 }) {
+  const blindUnit = Math.max(1, Number(smallBlind) || 1);
+  const bigBlind = blindUnit * 2;
   const minVal = legalActions?.can_bet ? legalActions.min_bet : (legalActions?.min_raise_to || 0);
   const maxVal = legalActions?.can_bet ? legalActions.max_bet : (legalActions?.max_raise_to || 0);
+  const alignedMinVal = minVal > 0 ? Math.ceil(minVal / blindUnit) * blindUnit : 0;
+  const alignedMaxVal = maxVal > 0 ? Math.floor(maxVal / blindUnit) * blindUnit : 0;
+  const hasAlignedRange = alignedMinVal <= alignedMaxVal;
+  const sizingMin = hasAlignedRange ? alignedMinVal : minVal;
+  const sizingMax = hasAlignedRange ? alignedMaxVal : maxVal;
+
+  const alignAmount = (value) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return sizingMin || 0;
+    if (!hasAlignedRange) {
+      return Math.max(minVal, Math.min(maxVal, numericValue));
+    }
+    const snapped = Math.round(numericValue / blindUnit) * blindUnit;
+    return Math.max(alignedMinVal, Math.min(alignedMaxVal, snapped));
+  };
 
   const [raiseAmount, setRaiseAmount] = useState(minVal || 0);
   const effectiveTimeout = (isUsingTimeBank || (currentTurnPlayer && isUsingTimeBank))
@@ -44,10 +61,8 @@ export default function ActionBar({
   useEffect(() => {
     if (minVal > 0) {
       setRaiseAmount((prev) => {
-        if (!prev || prev < minVal || prev > maxVal) {
-          return minVal;
-        }
-        return prev;
+        const next = !prev || prev < minVal || prev > maxVal ? minVal : prev;
+        return alignAmount(next);
       });
     }
   }, [minVal, maxVal, legalActions?.can_bet, legalActions?.can_raise]);
@@ -73,7 +88,7 @@ export default function ActionBar({
     return () => clearInterval(interval);
   }, [currentTurnPlayer?.player_id, street, turnCount, actionHistory?.length, effectiveTimeout, isUsingTimeBank]);
 
-  const currentAmount = Math.max(minVal, Math.min(maxVal, raiseAmount || minVal));
+  const currentAmount = alignAmount(raiseAmount || minVal);
 
   const currentAmountRef = useRef(currentAmount);
   currentAmountRef.current = currentAmount;
@@ -110,10 +125,8 @@ export default function ActionBar({
 
   // Preset Bet Sizing helpers
   const calcPresetAmount = (ratio) => {
-    let target = Math.round(totalPot * ratio);
-    if (minVal > 0 && target < minVal) target = minVal;
-    if (maxVal > 0 && target > maxVal) target = maxVal;
-    return target;
+    const target = Math.round((totalPot * ratio) / blindUnit) * blindUnit;
+    return alignAmount(target);
   };
 
   const applyPresetRatio = (ratio) => {
@@ -122,10 +135,7 @@ export default function ActionBar({
   };
 
   const calcBBAmount = (mult) => {
-    let target = Math.round(mult * bigBlind);
-    if (minVal > 0 && target < minVal) target = minVal;
-    if (maxVal > 0 && target > maxVal) target = maxVal;
-    return target;
+    return alignAmount(Math.round(mult * bigBlind));
   };
 
   const applyBBMultiplier = (mult) => {
@@ -134,10 +144,7 @@ export default function ActionBar({
   };
 
   const adjustBB = (multiplier) => {
-    let next = currentAmount + multiplier * bigBlind;
-    if (next < minVal) next = minVal;
-    if (next > maxVal) next = maxVal;
-    setRaiseAmount(next);
+    setRaiseAmount(alignAmount(currentAmount + multiplier * bigBlind));
   };
 
   const potPresets = [
@@ -425,12 +432,12 @@ export default function ActionBar({
             <span className="text-amber-400 font-black text-sm">$</span>
             <input
               type="number"
-              min={minVal}
-              max={maxVal}
-              step={bigBlind}
+              min={sizingMin}
+              max={sizingMax}
+              step={blindUnit}
               value={currentAmount}
               disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-              onChange={(e) => setRaiseAmount(Number(e.target.value))}
+              onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
               className="w-16 bg-transparent text-right font-black text-amber-300 text-sm focus:outline-none"
             />
           </div>
@@ -513,12 +520,12 @@ export default function ActionBar({
 
           <input
             type="range"
-            min={minVal}
-            max={maxVal}
-            step={bigBlind}
+            min={sizingMin}
+            max={sizingMax}
+            step={blindUnit}
             value={currentAmount}
             disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            onChange={(e) => setRaiseAmount(Number(e.target.value))}
+            onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
             className="w-full h-2.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400 disabled:opacity-40"
           />
 

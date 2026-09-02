@@ -590,7 +590,7 @@ export default function PokerTable({
           <ActionBar
             legalActions={table?.legal_actions}
             totalPot={table?.total_pot || 0}
-            bigBlind={room?.config?.big_blind || 10}
+            smallBlind={room?.config?.small_blind || 10}
             buyinChips={room?.config?.buyin_chips || 1000}
             onAction={handlePlayerAction}
             selfSeat={selfSeat}

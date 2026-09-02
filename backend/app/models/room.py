@@ -15,14 +15,21 @@ class RoomConfig:
     room_name: str = "HPoker 现金桌"
     buyin_chips: int = 1000
     cash_value: float = 100.0        # e.g., 100 RMB for 1000 chips (0.1 RMB/chip)
-    small_blind: int = 5
-    big_blind: int = 10
+    small_blind: int = 10
+    # Kept as a compatibility input for older callers. The room rule is always
+    # derived from the configured small blind in __post_init__.
+    big_blind: Optional[int] = field(default=None, repr=False)
     action_timeout: int = 15          # Seconds to act
     max_seats: int = 6
     time_card_duration: int = 30      # Seconds added per time card
     initial_time_cards: int = 3      # Starting time cards per player
     max_time_cards: int = 5          # Maximum time cards per player
     time_card_replenish_interval: int = 900  # 15 minutes replenishment interval (in seconds)
+
+    def __post_init__(self) -> None:
+        if self.small_blind < 1:
+            raise ValueError("small_blind must be at least 1")
+        self.big_blind = self.small_blind * 2
 
     def to_dict(self) -> dict:
         return {
