@@ -163,6 +163,11 @@ class TableStateMachine:
         self.street: Street = Street.IDLE
         self.board_cards: List[Card] = []
         self.board_cards_2: List[Card] = []
+        # Cards that were not dealt before an uncontested hand ended.  They are
+        # kept server-side until a player explicitly reveals the final board.
+        self.final_board_cards: Optional[List[Card]] = None
+        self.final_board_cards_2: Optional[List[Card]] = None
+        self.board_cards_revealed: bool = False
         self.hand_number: int = 0
 
         self.current_round_highest_bet: int = 0
@@ -295,6 +300,9 @@ class TableStateMachine:
         self.hand_number += 1
         self.board_cards.clear()
         self.board_cards_2.clear()
+        self.final_board_cards = None
+        self.final_board_cards_2 = None
+        self.board_cards_revealed = False
         self.rit_enabled = False
         self.rit_status = None
         self.rit_votes.clear()
@@ -802,6 +810,11 @@ class TableStateMachine:
         self.current_turn_seat = None
         self.turn_started_at = None
 
+        # A showdown already has a complete public board. Keep a snapshot so
+        # the same reveal protocol also works for run-it-twice hands.
+        self.final_board_cards = list(self.board_cards)
+        self.final_board_cards_2 = list(self.board_cards_2)
+
         # Auto show hole cards in showdown
         for p in self.active_in_hand_players:
             p.shown_cards = list(p.hole_cards)
@@ -881,6 +894,7 @@ class TableStateMachine:
         self.street = Street.HAND_END
         self.current_turn_seat = None
         self.turn_started_at = None
+        self._prepare_final_board_cards()
 
         winner = self.active_in_hand_players[0] if self.active_in_hand_players else None
         if winner:
@@ -904,6 +918,36 @@ class TableStateMachine:
                     pot_name=pot.name,
                     hand_description="其他玩家弃牌获胜"
                 ))
+
+    def _prepare_final_board_cards(self) -> None:
+        """Reserve the remaining board cards for an ended uncontested hand.
+
+        The normal dealing order is preserved, including the burn card before
+        the flop, turn, and river.  The cards stay private until
+        :meth:`reveal_board_cards` is called.
+        """
+        if self.final_board_cards is not None:
+            return
+
+        final_board = list(self.board_cards)
+        while len(final_board) < 5:
+            self.deck.burn()
+            if len(final_board) == 0:
+                final_board.extend(self.deck.draw(3))
+            else:
+                final_board.append(self.deck.draw_one())
+
+        self.final_board_cards = final_board
+        self.final_board_cards_2 = list(self.board_cards_2)
+
+    def reveal_board_cards(self) -> bool:
+        """Reveal any undealt community cards after the hand has ended."""
+        if self.street != Street.HAND_END:
+            return False
+
+        self._prepare_final_board_cards()
+        self.board_cards_revealed = True
+        return True
 
     def set_player_ready(self, player_id: str, ready: bool = True) -> bool:
         """Mark a player as confirmed/ready for the next hand.
@@ -1024,6 +1068,17 @@ class TableStateMachine:
             "street": self.street.value,
             "board_cards": [c.to_dict() for c in self.board_cards],
             "board_cards_2": [c.to_dict() for c in self.board_cards_2],
+            "board_cards_full": (
+                [c.to_dict() for c in self.final_board_cards]
+                if self.board_cards_revealed and self.final_board_cards is not None
+                else []
+            ),
+            "board_cards_2_full": (
+                [c.to_dict() for c in self.final_board_cards_2]
+                if self.board_cards_revealed and self.final_board_cards_2 is not None
+                else []
+            ),
+            "board_cards_revealed": self.board_cards_revealed,
             "all_in_initial_board_count": self.all_in_initial_board_count,
             "rit_enabled": self.rit_enabled,
             "rit_status": self.rit_status,

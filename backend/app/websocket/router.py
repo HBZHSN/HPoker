@@ -336,6 +336,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 if ok:
                     await ws_manager.broadcast_room_state(room)
 
+            elif event == EventType.REVEAL_BOARD_CARDS:
+                if room.table.reveal_board_cards():
+                    await ws_manager.broadcast_sound(room_id, "deal")
+                    await ws_manager.broadcast_room_state(room)
+
             elif event == EventType.PLAYER_READY:
                 ready = payload.get("ready", True)
                 all_ready = room.table.set_player_ready(user_id, ready)
@@ -400,4 +405,3 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 active_r = room_manager.get_room(r_id)
                 if active_r and not active_r.is_ended:
                     await ws_manager.broadcast_room_state(active_r)
-

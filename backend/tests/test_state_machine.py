@@ -115,6 +115,29 @@ def test_uncontested_fold_win():
     assert table.payouts[0].player_id == "p1"
 
 
+def test_uncontested_hand_can_reveal_reserved_final_board():
+    table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
+    table.sit_down("p1", "Alice", seat_index=0, chips=100)
+    table.sit_down("p2", "Bob", seat_index=1, chips=100)
+
+    table.start_new_hand()
+    table.handle_action("p1", ActionType.RAISE, raise_total_amount=10)
+    table.handle_action("p2", ActionType.FOLD)
+
+    hidden_state = table.get_table_state(viewer_player_id="p1")
+    assert table.street == Street.HAND_END
+    assert hidden_state["board_cards"] == []
+    assert hidden_state["board_cards_full"] == []
+    assert hidden_state["board_cards_revealed"] is False
+
+    assert table.reveal_board_cards() is True
+    revealed_state = table.get_table_state(viewer_player_id="p1")
+    final_cards = revealed_state["board_cards_full"]
+    assert len(final_cards) == 5
+    assert revealed_state["board_cards_revealed"] is True
+    assert len({card["notation"] for card in final_cards}) == 5
+
+
 def test_allin_fast_forward():
     table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
     table.sit_down("p1", "Alice", seat_index=0, chips=50)
