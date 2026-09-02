@@ -1,6 +1,5 @@
 import React from 'react';
 import CardView from './CardView';
-import { Eye } from 'lucide-react';
 
 const BOARD_SIZE = 5;
 
@@ -17,13 +16,13 @@ function BoardRow({
   const slots = Array.from({ length: BOARD_SIZE }, (_, index) => cards[index] || null);
 
   return (
-    <div className={`flex items-center gap-1.5 md:gap-2 ${compact ? '' : 'max-w-full'}`}>
+    <div className="flex min-w-max items-center gap-1.5 md:gap-2">
       {label && (
         <span className={`text-[10px] md:text-[11px] font-black px-2 py-0.5 rounded border flex-shrink-0 ${accentClass}`}>
           {label}
         </span>
       )}
-      <div className="flex items-center gap-1.5 md:gap-2">
+      <div className="flex flex-shrink-0 items-center gap-1.5 md:gap-2">
         {slots.map((card, index) => {
           const isHidden = !card;
           const isClickable = isHidden && canReveal && !isRevealing;
@@ -35,7 +34,7 @@ function BoardRow({
               onClick={isClickable ? onReveal : undefined}
               disabled={!isClickable}
               aria-label={isHidden ? '点击翻开公共牌' : `公共牌第 ${index + 1} 张`}
-              className={`relative rounded-lg p-0 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
+              className={`relative flex-shrink-0 rounded-lg p-0 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
                 isClickable
                   ? 'cursor-pointer transition-transform hover:-translate-y-1 hover:scale-[1.03] active:scale-95'
                   : 'cursor-default'
@@ -69,7 +68,6 @@ export default function CommunityBoard({
   isRevealing = false,
   size = 'lg',
   compact = false,
-  showRevealButton = true,
 }) {
   const isHandEnd = street === 'HAND_END';
   const hasSecondBoard =
@@ -92,14 +90,9 @@ export default function CommunityBoard({
     firstBoard.length < BOARD_SIZE ||
     (hasSecondBoard && secondBoard.length < BOARD_SIZE);
   const canReveal = isHandEnd && !boardCardsRevealed && hasHiddenCards && typeof onReveal === 'function';
-  const revealedCount = hasSecondBoard
-    ? Math.max(firstBoard.length, secondBoard.length)
-    : firstBoard.length;
-
-  const revealLabel = isRevealing ? '正在翻开…' : `点击翻开未公开牌 (${BOARD_SIZE - revealedCount} 张)`;
   const rootClassName = compact
     ? 'flex flex-col items-center gap-1.5 bg-black/55 p-1.5 rounded-xl border border-slate-800/90 shadow-xl'
-    : 'flex flex-col items-center gap-2 bg-black/60 p-3 rounded-2xl border border-amber-500/25 backdrop-blur-md shadow-2xl';
+    : 'flex flex-col items-center gap-2 bg-black/60 p-3 rounded-2xl border border-amber-500/25 backdrop-blur-md shadow-2xl overflow-x-auto';
 
   return (
     <div className={rootClassName}>
@@ -138,17 +131,6 @@ export default function CommunityBoard({
         />
       )}
 
-      {showRevealButton && canReveal && (
-        <button
-          type="button"
-          onClick={onReveal}
-          disabled={isRevealing}
-          className="flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-950/60 px-3 py-1.5 text-[10px] font-black text-amber-200 shadow transition hover:bg-amber-900/70 active:scale-95 disabled:cursor-wait disabled:opacity-70"
-        >
-          <Eye className="w-3.5 h-3.5" />
-          {revealLabel}
-        </button>
-      )}
     </div>
   );
 }

@@ -19,11 +19,11 @@ export default function CardView({
 }) {
   const sizeClasses = {
     xs: 'w-8 h-12 rounded',
-    sm: 'w-10 h-14 md:w-12 md:h-17 rounded-md',
-    md: 'w-13 h-19 md:w-16 md:h-23 rounded-lg',
+    sm: 'w-10 h-14 md:w-12 md:h-[4.25rem] rounded-md',
+    md: 'w-[3.25rem] h-[4.75rem] md:w-16 md:h-[5.75rem] rounded-lg',
     lg: 'w-16 h-24 md:w-20 md:h-28 rounded-xl',
-    xl: 'w-20 h-30 md:w-24 md:h-36 rounded-xl',
-  }[size] || 'w-13 h-19 md:w-16 md:h-23 rounded-lg';
+    xl: 'w-20 h-[7.5rem] md:w-24 md:h-36 rounded-xl',
+  }[size] || 'w-[3.25rem] h-[4.75rem] md:w-16 md:h-[5.75rem] rounded-lg';
 
   const fontSizes = {
     xs: { rank: 'text-sm font-black', suit: 'text-xs' },
@@ -37,7 +37,7 @@ export default function CardView({
     return (
       <div
         style={style}
-        className={`relative flex flex-col items-center justify-center border-2 border-amber-600/50 bg-gradient-to-br from-red-950 via-red-900 to-slate-950 shadow-lg select-none ${sizeClasses} ${className}`}
+        className={`relative flex-shrink-0 flex flex-col items-center justify-center border-2 border-amber-600/50 bg-gradient-to-br from-red-950 via-red-900 to-slate-950 shadow-lg select-none ${sizeClasses} ${className}`}
       >
         <div className="w-full h-full p-1 flex items-center justify-center">
           <div className="w-full h-full border border-amber-500/40 rounded flex items-center justify-center bg-[radial-gradient(#d97706_1.5px,transparent_1.5px)] [background-size:6px_6px]">
@@ -55,7 +55,7 @@ export default function CardView({
   return (
     <div
       style={style}
-      className={`relative flex flex-col items-center justify-center p-1 bg-white border-2 select-none shadow-md transition-all duration-200 animate-card-flip ${sizeClasses} ${
+      className={`relative flex-shrink-0 flex flex-col items-center justify-center p-1 bg-white border-2 select-none shadow-md transition-all duration-200 animate-card-flip ${sizeClasses} ${
         isHighlighted
           ? 'ring-2 ring-amber-400 -translate-y-1.5 shadow-glow-gold border-amber-400'
           : 'border-slate-300'
@@ -63,7 +63,7 @@ export default function CardView({
     >
       <div className="flex flex-col items-center justify-center leading-none text-center">
         <span className={`${fontSizes.rank} tracking-tighter leading-none ${meta.color}`}>
-          {card.rank_symbol}
+          {card.rank === 10 || card.rank_symbol === 'T' ? '10' : card.rank_symbol}
         </span>
         <span className={`${fontSizes.suit} leading-none mt-1 ${meta.color} drop-shadow-sm`}>
           {meta.symbol}

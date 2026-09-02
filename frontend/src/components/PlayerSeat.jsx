@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CardView from './CardView';
+import { sortCardsLowToHigh } from '../utils/cards';
 import { Crown, RefreshCw, UserPlus, Clock } from 'lucide-react';
 
 export default function PlayerSeat({
@@ -237,8 +238,8 @@ export default function PlayerSeat({
 
       {/* Cards Display - displayed directly below the avatar */}
       {(() => {
-        const shownCards = seatData.shown_cards || [];
-        const holeCards = seatData.hole_cards || [];
+        const shownCards = sortCardsLowToHigh(seatData.shown_cards || []);
+        const holeCards = sortCardsLowToHigh(seatData.hole_cards || []);
 
         if (shownCards.length > 0) {
           if (isSelf && holeCards.length > 0) {

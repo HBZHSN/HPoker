@@ -1,5 +1,6 @@
 import React from 'react';
 import CardView from './CardView';
+import { sortCardsWithIndex } from '../utils/cards';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function ShowCardsModal({
@@ -8,6 +9,10 @@ export default function ShowCardsModal({
   onClose,
 }) {
   if (!holeCards || holeCards.length < 2) return null;
+
+  const orderedHoleCards = sortCardsWithIndex(holeCards);
+  const leftCard = orderedHoleCards[0];
+  const rightCard = orderedHoleCards[1];
 
   return (
     <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 border-2 border-amber-500/60 rounded-2xl p-4 shadow-2xl backdrop-blur-md flex flex-col items-center gap-3">
@@ -19,9 +24,9 @@ export default function ShowCardsModal({
       <div className="flex gap-4 items-center">
         {/* Card 1 */}
         <div className="flex flex-col items-center gap-2">
-          <CardView card={holeCards[0]} size="md" />
+          <CardView card={leftCard.card} size="md" />
           <button
-            onClick={() => onShowCard(0, false)}
+            onClick={() => onShowCard(leftCard.index, false)}
             className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg border border-slate-600 shadow transition active:scale-95"
           >
             亮左牌
@@ -30,9 +35,9 @@ export default function ShowCardsModal({
 
         {/* Card 2 */}
         <div className="flex flex-col items-center gap-2">
-          <CardView card={holeCards[1]} size="md" />
+          <CardView card={rightCard.card} size="md" />
           <button
-            onClick={() => onShowCard(1, false)}
+            onClick={() => onShowCard(rightCard.index, false)}
             className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg border border-slate-600 shadow transition active:scale-95"
           >
             亮右牌

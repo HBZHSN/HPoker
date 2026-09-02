@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import CardView from './CardView';
+import { sortCardsLowToHigh } from '../utils/cards';
 import {
   ChevronUp,
   ChevronDown,
@@ -89,6 +90,7 @@ export default function ActionBar({
   }, [currentTurnPlayer?.player_id, street, turnCount, actionHistory?.length, effectiveTimeout, isUsingTimeBank]);
 
   const currentAmount = alignAmount(raiseAmount || minVal);
+  const orderedHoleCards = sortCardsLowToHigh(selfSeat?.hole_cards || []);
 
   const currentAmountRef = useRef(currentAmount);
   currentAmountRef.current = currentAmount;
@@ -341,8 +343,8 @@ export default function ActionBar({
 
           {/* My Hole Cards Preview */}
           <div className="flex -space-x-3">
-            {selfSeat.hole_cards && selfSeat.hole_cards.length === 2 ? (
-              selfSeat.hole_cards.map((c, i) => (
+            {orderedHoleCards.length === 2 ? (
+              orderedHoleCards.map((c, i) => (
                 <CardView key={i} card={c} size="md" className="shadow-xl" />
               ))
             ) : (

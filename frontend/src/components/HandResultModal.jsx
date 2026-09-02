@@ -1,6 +1,7 @@
 import React from 'react';
 import CardView from './CardView';
 import CommunityBoard from './CommunityBoard';
+import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
 import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers } from 'lucide-react';
 
 export default function HandResultModal({
@@ -54,6 +55,7 @@ export default function HandResultModal({
   };
 
   const hasTwoBoards = ritEnabled || boardCards2.length > 0 || boardCards2Full.length > 0;
+  const orderedSelfHoleCards = sortCardsWithIndex(selfSeat?.hole_cards || []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
@@ -186,8 +188,8 @@ export default function HandResultModal({
                   <div className="flex items-center gap-4 mt-2 sm:mt-0 w-full sm:w-auto justify-between sm:justify-end">
                     <div className="flex -space-x-3 items-center">
                       {(() => {
-                        const shownCards = res.shown_cards || [];
-                        const holeCards = res.hole_cards || [];
+                        const shownCards = sortCardsLowToHigh(res.shown_cards || []);
+                        const holeCards = sortCardsLowToHigh(res.hole_cards || []);
                         const isSameCard = (a, b) =>
                           a && b && ((a.rank === b.rank && a.suit === b.suit) || (a.notation && a.notation === b.notation));
 
@@ -309,7 +311,7 @@ export default function HandResultModal({
 
               {/* Two Clickable Cards */}
               <div className="flex items-center gap-3">
-                {selfSeat.hole_cards.map((card, idx) => {
+                {orderedSelfHoleCards.map(({ card, index }) => {
                   const isCardShown = selfSeat.shown_cards?.some(
                     (sc) =>
                       (sc.rank === card.rank && sc.suit === card.suit) ||
@@ -318,8 +320,8 @@ export default function HandResultModal({
 
                   return (
                     <button
-                      key={idx}
-                      onClick={() => handleToggleCard(idx)}
+                      key={index}
+                      onClick={() => handleToggleCard(index)}
                       className={`relative group cursor-pointer transition-transform active:scale-95 ${
                         isCardShown ? 'ring-4 ring-amber-400 rounded-lg scale-105' : 'opacity-80 hover:opacity-100'
                       }`}
