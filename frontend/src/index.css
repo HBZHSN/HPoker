@@ -36,6 +36,7 @@ html,
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 
   .poker-table-main {
@@ -75,6 +76,132 @@ html,
   }
 }
 
+/* Keep the board and the player's hand available while the mobile action
+   console scrolls past the table. The summary lives inside the action area,
+   so it only appears once the user reaches the controls and never duplicates
+   the board in the initial table viewport. */
+.poker-mobile-sticky-info {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .poker-mobile-sticky-info {
+    position: sticky;
+    top: 0;
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: -8px -8px 8px;
+    padding: 6px 8px 7px;
+    background: rgba(2, 6, 23, 0.96);
+    border-bottom: 1px solid rgba(71, 85, 105, 0.8);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(12px);
+  }
+
+  .poker-mobile-sticky-info__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #cbd5e1;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .poker-mobile-sticky-info__header span:last-child {
+    color: #fcd34d;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .poker-mobile-sticky-info__content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .poker-mobile-sticky-info .poker-community-board {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    overflow-x: auto;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .poker-mobile-sticky-info .poker-board-row {
+    min-width: max-content;
+    gap: 4px;
+  }
+
+  .poker-mobile-sticky-info .poker-board-cards {
+    gap: 4px;
+  }
+
+  .poker-mobile-sticky-info .poker-community-board .poker-card[data-card-size='xs'] {
+    width: clamp(1.75rem, 8.5vw, 2rem);
+    height: clamp(2.625rem, 12.5vw, 3rem);
+  }
+
+  .poker-mobile-sticky-info .poker-community-board .poker-card[data-card-size='xs'] .poker-card-rank {
+    font-size: 0.75rem;
+  }
+
+  .poker-mobile-sticky-info .poker-community-board .poker-card[data-card-size='xs'] .poker-card-suit {
+    margin-top: 0.125rem;
+    font-size: 0.625rem;
+  }
+
+  .poker-mobile-sticky-hand {
+    flex: 0 0 auto;
+    min-width: 58px;
+    padding-left: 6px;
+    border-left: 1px solid rgba(71, 85, 105, 0.8);
+  }
+
+  .poker-mobile-sticky-hand__label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    margin-bottom: 3px;
+    color: #cbd5e1;
+    font-size: 9px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .poker-mobile-sticky-hand__label span:last-child {
+    color: #fcd34d;
+    font-size: 10px;
+  }
+
+  .poker-mobile-sticky-hand .poker-card[data-card-size='xs'] {
+    width: 1.75rem;
+    height: 2.625rem;
+  }
+
+  .poker-mobile-sticky-hand .poker-card[data-card-size='xs'] .poker-card-rank {
+    font-size: 0.75rem;
+  }
+
+  .poker-mobile-sticky-hand .poker-card[data-card-size='xs'] .poker-card-suit {
+    margin-top: 0.125rem;
+    font-size: 0.625rem;
+  }
+
+  .poker-action-turn-progress,
+  .poker-action-self-overview,
+  .poker-action-history {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .poker-table-header {
     padding: 6px 8px;
@@ -94,45 +221,165 @@ html,
 
   .poker-table-header > :last-child {
     flex-shrink: 0;
+    max-width: 58vw;
+    gap: 3px;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  /* Keep the hero's cards inside the visible table area on short portrait
-     screens. The avatar remains at the bottom while the cards sit just above it. */
-  .poker-table-seat-anchor[data-screen-position='0'] {
-    top: 84% !important;
+  .poker-table-header > :last-child::-webkit-scrollbar {
+    display: none;
   }
 
-  .poker-player-seat-self .poker-player-cards {
-    top: auto;
-    bottom: calc(100% + 4px);
-    z-index: 25;
+  .poker-table-header button {
+    padding: 4px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    line-height: 1.1;
   }
 
-  /* Five full-size cards otherwise exceed a narrow phone's felt width. */
+  .poker-table-header button svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .poker-table-main {
+    flex: 0 0 clamp(340px, 54dvh, 460px);
+    height: clamp(340px, 54dvh, 460px);
+    padding: 6px 6px 12px;
+  }
+
+  .poker-table-shell {
+    padding: 6px;
+    border-width: 3px;
+    border-radius: clamp(80px, 24vw, 140px);
+  }
+
+  .poker-table-shell > .absolute {
+    inset: 10px;
+    border-radius: clamp(70px, 21vw, 130px);
+  }
+
+  .poker-table-center {
+    gap: 4px;
+  }
+
+  .poker-table-pot-badge {
+    gap: 8px;
+    padding: 4px 9px;
+    border-width: 1px;
+  }
+
+  .poker-table-pot-badge > span:first-child {
+    font-size: 11px;
+  }
+
+  .poker-table-pot-badge > span:last-child {
+    font-size: 14px;
+  }
+
+  .poker-table-side-pots {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 3px;
+    max-width: 92%;
+  }
+
+  .poker-table-side-pots span {
+    padding: 1px 5px;
+    font-size: 9px;
+  }
+
+  .poker-table-lobby-actions > button {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+
+  .poker-table-lobby-actions > button svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .poker-table-center .poker-board-row,
+  .poker-table-center .poker-board-cards {
+    gap: 4px;
+  }
+
   .poker-table-center .poker-card[data-card-size='lg'] {
-    width: clamp(2.75rem, 15vw, 3.5rem);
-    height: clamp(4.125rem, 22.5vw, 5.25rem);
+    width: clamp(2.35rem, 11.8vw, 3.1rem);
+    height: clamp(3.5rem, 18vw, 4.65rem);
+    border-width: 1px;
   }
 
   .poker-table-center .poker-card[data-card-size='md'] {
-    width: clamp(2.25rem, 12vw, 2.75rem);
-    height: clamp(3.375rem, 18vw, 4.125rem);
+    width: clamp(2rem, 10vw, 2.5rem);
+    height: clamp(3rem, 15vw, 3.75rem);
+    border-width: 1px;
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] .poker-card-rank {
-    font-size: clamp(1.5rem, 7vw, 1.875rem);
+    font-size: clamp(1.35rem, 6vw, 1.75rem);
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] .poker-card-suit {
-    font-size: clamp(1.25rem, 5.5vw, 1.5rem);
+    margin-top: 0.125rem;
+    font-size: clamp(1.05rem, 4.5vw, 1.4rem);
   }
 
   .poker-table-center .poker-card[data-card-size='md'] .poker-card-rank {
-    font-size: clamp(1.25rem, 6vw, 1.5rem);
+    font-size: clamp(1.1rem, 5vw, 1.4rem);
   }
 
   .poker-table-center .poker-card[data-card-size='md'] .poker-card-suit {
-    font-size: clamp(1rem, 4.5vw, 1.25rem);
+    margin-top: 0.125rem;
+    font-size: clamp(0.9rem, 4vw, 1.15rem);
+  }
+
+  /* The hero's cards stay below the avatar; moving the hero upward reserves
+     enough room for them without covering the centered community board. */
+  .poker-table-seat-anchor[data-screen-position='0'] {
+    top: 68% !important;
+  }
+
+  .poker-player-seat-self .poker-player-cards {
+    top: calc(100% + 3px);
+    bottom: auto;
+    z-index: 25;
+  }
+
+  .poker-player-cards .poker-card[data-card-size='md'] {
+    width: clamp(2rem, 9vw, 2.35rem);
+    height: clamp(3rem, 13.5vw, 3.75rem);
+    border-width: 1px;
+  }
+
+  .poker-player-cards .poker-card[data-card-size='sm'] {
+    width: clamp(1.8rem, 8vw, 2.2rem);
+    height: clamp(2.7rem, 12vw, 3.35rem);
+    border-width: 1px;
+  }
+
+  .poker-player-cards .poker-card[data-card-size='md'] .poker-card-rank {
+    font-size: clamp(1rem, 4.8vw, 1.25rem);
+  }
+
+  .poker-player-cards .poker-card[data-card-size='md'] .poker-card-suit {
+    margin-top: 0.125rem;
+    font-size: clamp(0.8rem, 3.8vw, 1rem);
+  }
+
+  .poker-player-cards .poker-card[data-card-size='sm'] .poker-card-rank {
+    font-size: clamp(0.85rem, 4vw, 1.1rem);
+  }
+
+  .poker-player-cards .poker-card[data-card-size='sm'] .poker-card-suit {
+    margin-top: 0.125rem;
+    font-size: clamp(0.7rem, 3.2vw, 0.9rem);
+  }
+
+  /* The avatar progress rim remains the single mobile timer indicator. */
+  .poker-player-avatar-card .absolute.inset-x-0.bottom-0 {
+    height: 3px;
   }
 }
 

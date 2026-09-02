@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import PlayerSeat from './PlayerSeat';
 import CommunityBoard from './CommunityBoard';
 import ActionBar from './ActionBar';
+import CardView from './CardView';
 import HandResultModal from './HandResultModal';
 import SettlementModal from './SettlementModal';
+import { sortCardsLowToHigh } from '../utils/cards';
 import { soundEngine } from '../sound/SoundEngine';
 import {
   Volume2,
@@ -17,6 +19,16 @@ import {
   Trash2,
   Bot,
 } from 'lucide-react';
+
+const STREET_LABELS = {
+  PREFLOP: '翻牌前',
+  FLOP: '翻牌圈',
+  TURN: '转牌圈',
+  RIVER: '河牌圈',
+  RIT_DECISION: '发牌次数',
+  SHOWDOWN: '摊牌',
+  HAND_END: '牌局结束',
+};
 
 export default function PokerTable({
   room,
@@ -59,6 +71,10 @@ export default function PokerTable({
   }, [table?.seats, currentUser?.user_id]);
 
   const selfSeat = selfSeatIndex >= 0 ? table.seats[selfSeatIndex] : null;
+  const orderedHoleCards = useMemo(
+    () => sortCardsLowToHigh(selfSeat?.hole_cards || []),
+    [selfSeat?.hole_cards]
+  );
   const botCount = (table?.seats || []).filter((seat) => seat?.is_bot).length;
   const canAddTestBot =
     isHost &&
@@ -355,23 +371,9 @@ export default function PokerTable({
               <div className="poker-table-center absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
                 {/* Street & Total Pot Badge */}
                 <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
-                  <div className="flex items-center gap-3 bg-slate-950/85 px-4 py-1.5 rounded-full border-2 border-amber-500/40 backdrop-blur-md shadow-2xl">
+                  <div className="poker-table-pot-badge flex items-center gap-3 bg-slate-950/85 px-4 py-1.5 rounded-full border-2 border-amber-500/40 backdrop-blur-md shadow-2xl">
                     <span className="text-xs md:text-sm font-bold text-slate-300">
-                      {table?.street === 'PREFLOP'
-                        ? '翻牌前'
-                        : table?.street === 'FLOP'
-                        ? '翻牌圈'
-                        : table?.street === 'TURN'
-                        ? '转牌圈'
-                        : table?.street === 'RIVER'
-                        ? '河牌圈'
-                        : table?.street === 'RIT_DECISION'
-                        ? '发牌次数'
-                        : table?.street === 'SHOWDOWN'
-                        ? '摊牌'
-                        : table?.street === 'HAND_END'
-                        ? '牌局结束'
-                        : '等待开局'}
+                      {STREET_LABELS[table?.street] || '等待开局'}
                     </span>
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     <span className="text-base md:text-xl font-black text-amber-300 tracking-wide">
@@ -381,7 +383,7 @@ export default function PokerTable({
 
                   {/* Side Pots display if multiple pots exist */}
                   {table?.pots && table.pots.length > 1 && (
-                    <div className="flex items-center gap-2">
+                    <div className="poker-table-side-pots flex items-center gap-2">
                       {table.pots.map((p, i) => (
                         <span
                           key={i}
@@ -411,7 +413,7 @@ export default function PokerTable({
 
                 {/* Start Hand / Ready / Rebuy Prompt */}
                 {table?.street in { IDLE: 1, HAND_END: 1 } && (
-                  <div className="flex flex-col sm:flex-row items-center gap-2 mt-1 pointer-events-auto">
+                  <div className="poker-table-lobby-actions flex flex-col sm:flex-row items-center gap-2 mt-1 pointer-events-auto">
                     {table?.street === 'HAND_END' && handResultDismissed && (
                       <button
                         onClick={() => setHandResultDismissed(false)}
@@ -577,6 +579,49 @@ export default function PokerTable({
 
         {/* Right Side: Action & Betting Console Sidebar */}
         <aside className="poker-table-actions w-full lg:w-96 xl:w-[410px] h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20">
+          {/* On mobile this becomes the sticky summary while the action console scrolls. */}
+          <div className="poker-mobile-sticky-info" aria-label="牌局重要信息">
+            <div className="poker-mobile-sticky-info__header">
+              <span>{STREET_LABELS[table?.street] || '等待开局'}</span>
+              <span>底池 ${table?.total_pot || 0}</span>
+            </div>
+
+            <div className="poker-mobile-sticky-info__content">
+              <CommunityBoard
+                boardCards={table?.board_cards || []}
+                boardCards2={table?.board_cards_2 || []}
+                boardCardsFull={table?.board_cards_full || []}
+                boardCards2Full={table?.board_cards_2_full || []}
+                allInInitialBoardCount={table?.all_in_initial_board_count || 0}
+                ritEnabled={table?.rit_enabled || false}
+                street={table?.street || 'IDLE'}
+                boardCardsRevealed={table?.board_cards_revealed || false}
+                onReveal={handleRevealBoard}
+                isRevealing={isRevealingBoard}
+                size="xs"
+                compact
+              />
+
+              {selfSeat && (
+                <div className="poker-mobile-sticky-hand">
+                  <div className="poker-mobile-sticky-hand__label">
+                    <span>我的牌</span>
+                    <span>${selfSeat.chips}</span>
+                  </div>
+                  <div className="flex -space-x-2">
+                    {orderedHoleCards.length > 0 ? (
+                      orderedHoleCards.map((card, index) => (
+                        <CardView key={index} card={card} size="xs" className="shadow-lg" />
+                      ))
+                    ) : (
+                      <span className="text-[10px] text-slate-500">暂无手牌</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <ActionBar
             legalActions={table?.legal_actions}
             totalPot={table?.total_pot || 0}
