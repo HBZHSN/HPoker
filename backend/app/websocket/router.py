@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Optional
 
@@ -136,6 +137,7 @@ async def trigger_room_turn_timer(room_id: str):
             target_player.use_time_bank_card()
             r.table.is_using_time_bank = True
             r.table.current_turn_duration = 30
+            r.table.turn_started_at = time.time()
             r.table.turn_count += 1
             target_player.last_action = "⏱️ 使用时间卡 +30s"
             await ws_manager.broadcast_sound(r_id, "time_card", {"player_id": target_player.player_id})
@@ -398,5 +400,4 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 active_r = room_manager.get_room(r_id)
                 if active_r and not active_r.is_ended:
                     await ws_manager.broadcast_room_state(active_r)
-
 

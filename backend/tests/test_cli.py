@@ -1,5 +1,6 @@
 """Comprehensive Unit Tests for Poker CLI Client."""
 
+import asyncio
 import io
 import pytest
 import pytest_asyncio
@@ -101,6 +102,24 @@ def test_controller_routes_tui_feedback_to_fixed_footer():
     assert controller._tui_panel == "帮助第一行\n帮助第二行"
 
 
+@pytest.mark.asyncio
+async def test_controller_tui_timer_refreshes_room_dashboard_locally():
+    controller = PokerCliController(enable_color=False)
+    controller.tui.active = True
+    controller._in_room = True
+    controller._tui_view = "room"
+    controller.active_room_data = {"table": {"street": "FLOP", "current_turn_seat": 0}}
+    controller._refresh_tui = MagicMock()
+
+    timer_task = asyncio.create_task(controller._tui_timer_loop())
+    await asyncio.sleep(0.25)
+    controller._in_room = False
+    await asyncio.wait_for(timer_task, timeout=1)
+
+    assert controller._refresh_tui.call_count >= 1
+    assert all(call.kwargs.get("now") is not None for call in controller._refresh_tui.call_args_list)
+
+
 class TestPokerUiRenderer:
     """Tests for terminal UI rendering."""
 
@@ -159,6 +178,8 @@ class TestPokerUiRenderer:
                     {"rank_symbol": "Q", "suit_symbol": "♦"},
                 ],
                 "current_turn_seat": 0,
+                "current_turn_duration": 20,
+                "turn_started_at": 100.0,
                 "dealer_seat": 1,
                 "sb_seat": 0,
                 "bb_seat": 1,
@@ -205,7 +226,7 @@ class TestPokerUiRenderer:
                 ],
             }
         }
-        output = renderer.render_table_dashboard(room_data, "u_admin")
+        output = renderer.render_table_dashboard(room_data, "u_admin", now=105.0)
         assert "HPoker 现金桌: 经典德州现金桌" in output
         assert "翻牌圈 (Flop)" in output
         assert "[A♠] [K♥] [Q♦]" in output
@@ -213,6 +234,10 @@ class TestPokerUiRenderer:
         assert "[A♣] [A♦]" in output
         assert "[c]过牌 (Check)" in output
         assert "[r/b <额度>]下注(10~980)" in output
+        assert "⏱ 玩家倒计时" in output
+        assert "15s" in output
+        assert "轮到你" in output
+        assert "[████" in output
         assert all(display_width(line) == 98 for line in output.splitlines())
 
     def test_render_settlement_report(self):

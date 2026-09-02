@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import quote, urlsplit
@@ -73,6 +74,7 @@ class PokerCliController:
         self._tui_notice = ""
         self._tui_panel: Optional[str] = None
         self._tui_prompt = ""
+        self._tui_timer_task: Optional[asyncio.Task] = None
 
     # ------------------ Fixed-screen TUI ------------------
 
@@ -88,17 +90,60 @@ class PokerCliController:
             self._tui_panel = None
             self.tui.clear_input()
         self._tui_view = view
+        if view == "room":
+            self._start_tui_timer()
+        elif self._tui_timer_task:
+            self._tui_timer_task.cancel()
+            self._tui_timer_task = None
         self._refresh_tui()
         return self.tui.active
 
     def _end_tui(self) -> None:
+        if self._tui_timer_task:
+            self._tui_timer_task.cancel()
+            self._tui_timer_task = None
         self.tui.exit()
         self._tui_view = None
         self._tui_notice = ""
         self._tui_panel = None
         self._tui_prompt = ""
 
-    def _refresh_tui(self) -> None:
+    def _start_tui_timer(self) -> None:
+        """Start local redraws so the countdown moves between WS updates."""
+
+        if not self.tui.active:
+            return
+        if self._tui_timer_task and not self._tui_timer_task.done():
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._tui_timer_task = loop.create_task(self._tui_timer_loop())
+
+    async def _tui_timer_loop(self) -> None:
+        """Refresh the room dashboard at a steady cadence from local time."""
+
+        current_task = asyncio.current_task()
+        try:
+            while (
+                self.tui.active
+                and self._in_room
+                and self._tui_view == "room"
+                and self.renderer.mode == "dashboard"
+            ):
+                if self.active_room_data:
+                    async with self._render_lock:
+                        if self.tui.active and self._tui_view == "room":
+                            self._refresh_tui(now=time.time())
+                await asyncio.sleep(0.2)
+        except asyncio.CancelledError:
+            raise
+        finally:
+            if self._tui_timer_task is current_task:
+                self._tui_timer_task = None
+
+    def _refresh_tui(self, now: Optional[float] = None) -> None:
         """Draw the current lobby/table frame and its fixed footer."""
 
         if not self.tui.active:
@@ -109,7 +154,11 @@ class PokerCliController:
         elif self._tui_view == "lobby" and self.current_user:
             frame = self.renderer.render_lobby(self.current_user, self.rooms, self.server_url)
         elif self._tui_view == "room" and self.active_room_data:
-            frame = self.renderer.render_table_dashboard(self.active_room_data, self._current_user_id())
+            frame = self.renderer.render_table_dashboard(
+                self.active_room_data,
+                self._current_user_id(),
+                now=now,
+            )
         elif self._tui_view == "room":
             frame = "HPoker 牌桌\n\n正在等待服务器发送房间状态……"
         else:
@@ -504,9 +553,7 @@ class PokerCliController:
             if tui_owner:
                 self._end_tui()
             elif self.tui.active:
-                self._tui_view = "lobby"
-                self._tui_panel = None
-                self._refresh_tui()
+                self._begin_tui("lobby")
 
     def _new_ws_client(self, room_id: str) -> PokerWsClient:
         parsed = urlsplit(self.server_url if "://" in self.server_url else f"http://{self.server_url}")

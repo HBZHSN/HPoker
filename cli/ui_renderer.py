@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import math
 import sys
+import time
 from typing import Any, Dict, Iterable, List, Optional
 
 from cli.text_utils import clip_display, display_width, pad_display
@@ -93,6 +95,60 @@ class PokerUiRenderer:
     @classmethod
     def _columns(cls, values: Iterable[Any], widths: Iterable[int]) -> str:
         return " ".join(cls._pad_display(value, width) for value, width in zip(values, widths))
+
+    @staticmethod
+    def _progress_bar(
+        remaining: float,
+        total: float,
+        width: int = 20,
+        *,
+        fill: str = "█",
+        empty: str = "░",
+    ) -> str:
+        """Build a fixed-width countdown bar using terminal-safe characters."""
+
+        bar_width = max(1, int(width))
+        try:
+            remaining_value = float(remaining)
+            total_value = float(total)
+        except (TypeError, ValueError):
+            remaining_value = 0.0
+            total_value = 0.0
+
+        if total_value <= 0:
+            ratio = 0.0
+        else:
+            ratio = max(0.0, min(1.0, remaining_value / total_value))
+        filled = int(ratio * bar_width)
+        return f"[{fill * filled}{empty * (bar_width - filled)}]"
+
+    @staticmethod
+    def _timer_color(remaining: float, total: float) -> str:
+        """Use progressively warmer colors as the active turn expires."""
+
+        try:
+            ratio = float(remaining) / float(total)
+        except (TypeError, ValueError, ZeroDivisionError):
+            ratio = 0.0
+        if ratio <= 0.2:
+            return Colors.BRIGHT_RED + Colors.BOLD
+        if ratio <= 0.5:
+            return Colors.BRIGHT_YELLOW + Colors.BOLD
+        return Colors.BRIGHT_GREEN + Colors.BOLD
+
+    @classmethod
+    def _remaining_turn_seconds(cls, table: Dict[str, Any], total: int, now: float) -> float:
+        """Calculate a local countdown from the server-provided turn start."""
+
+        try:
+            started_at = float(table.get("turn_started_at"))
+        except (TypeError, ValueError):
+            # Older servers do not include a timestamp.  Keeping the full
+            # duration is safer than showing a misleading expired timer.
+            return float(max(0, total))
+
+        elapsed = max(0.0, float(now) - started_at)
+        return max(0.0, min(float(max(0, total)), float(total) - elapsed))
 
     @classmethod
     def _table_line(cls, content: Any = "") -> str:
@@ -243,6 +299,7 @@ class PokerUiRenderer:
         self,
         room: Dict[str, Any],
         current_user_id: str,
+        now: Optional[float] = None,
     ) -> str:
         """Render complete poker table dashboard."""
         lines = []
@@ -272,8 +329,18 @@ class PokerUiRenderer:
         action_history = table.get("action_history", [])
         hand_results = table.get("hand_results", [])
         ready_player_ids = table.get("ready_player_ids", [])
-        current_turn_duration = self._int(table.get("current_turn_duration", timeout_sec), timeout_sec)
+        current_turn_duration = max(1, self._int(table.get("current_turn_duration", timeout_sec), timeout_sec))
         is_using_time_bank = bool(table.get("is_using_time_bank", False))
+        render_now = time.time() if now is None else float(now)
+        timer_active = (
+            current_turn_seat is not None
+            and street not in ("IDLE", "HAND_END", "SHOWDOWN", "RIT_DECISION")
+        )
+        turn_remaining = (
+            self._remaining_turn_seconds(table, current_turn_duration, render_now)
+            if timer_active
+            else 0.0
+        )
 
         # Header bar.  Every line uses the same visible width; Chinese text,
         # suit symbols and emoji are measured in terminal columns below.
@@ -393,7 +460,9 @@ class PokerUiRenderer:
                     status_desc = "等待行动"
 
             if is_turn:
-                tb_note = "+30s卡" if is_using_time_bank else f"{current_turn_duration}s"
+                tb_note = f"{math.ceil(turn_remaining)}s"
+                if is_using_time_bank:
+                    tb_note += "卡"
                 status_desc += f" {self.c('⏱️' + tb_note, Colors.BRIGHT_YELLOW)}"
 
             row_str = self._columns(
@@ -443,6 +512,47 @@ class PokerUiRenderer:
 
                 rit_extra = f" | 板2: {h_desc_2}" if h_desc_2 else ""
                 lines.append(self._table_line(f"  {win_tag}{name}: 收益 {net_str} ({h_desc}{rit_extra}) {shown_str}"))
+
+        # Countdown panel.  The server timestamp keeps all clients on the
+        # same turn while the controller redraws this section locally.
+        lines.append(self.c(self._table_separator(), Colors.CYAN))
+        lines.append(self.c(self._table_line("⏱ 玩家倒计时"), Colors.BOLD + Colors.BRIGHT_CYAN))
+        if timer_active:
+            timer_color = self._timer_color(turn_remaining, current_turn_duration)
+            current_player_name = "玩家"
+            if isinstance(current_turn_seat, int) and 0 <= current_turn_seat < len(seats):
+                current_player = seats[current_turn_seat]
+                if current_player:
+                    current_player_name = self._text(current_player.get("name"), "玩家")
+
+            for idx, seat in enumerate(seats):
+                if not seat:
+                    continue
+                player_name = self._text(seat.get("name"), seat.get("player_id", "玩家"))
+                if idx == current_turn_seat:
+                    bar = self.c(
+                        self._progress_bar(turn_remaining, current_turn_duration, 20),
+                        timer_color,
+                    )
+                    timer_text = f"{math.ceil(turn_remaining):02d}s"
+                    state_text = self.c("行动中", timer_color)
+                else:
+                    bar = self.c(self._progress_bar(0, 1, 20, fill="·", empty="·"), Colors.DIM)
+                    timer_text = "--s"
+                    state_text = self.c("等待", Colors.DIM)
+                lines.append(self._table_line(f"  [{idx}] {player_name}: {bar} {timer_text} · {state_text}"))
+
+            if my_seat_index == current_turn_seat:
+                large_bar = self.c(
+                    self._progress_bar(turn_remaining, current_turn_duration, 48),
+                    timer_color,
+                )
+                own_label = self.c("▶ 轮到你", timer_color)
+                lines.append(self._table_line(f"  {own_label}  {large_bar}  {math.ceil(turn_remaining):02d}秒"))
+            else:
+                lines.append(self._table_line(f"  当前行动: {current_player_name} · 你的回合将在其行动后开始"))
+        else:
+            lines.append(self._table_line("  当前没有进行中的行动倒计时"))
 
         # Legal actions bar
         lines.append(self.c(self._table_separator(), Colors.CYAN))

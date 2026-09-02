@@ -94,6 +94,7 @@ def test_manual_use_time_bank_card_on_table():
     state = table.get_table_state(current_p.player_id)
     assert state["is_using_time_bank"] is True
     assert state["current_turn_duration"] == 30
+    assert state["turn_started_at"] is not None
 
 
 @pytest.mark.asyncio
@@ -116,6 +117,7 @@ async def test_time_card_auto_consumption_sequence():
     turn_seat = room.table.current_turn_seat
     curr_player = room.table.seats[turn_seat]
     assert curr_player.time_bank_cards == 3
+    initial_turn_started_at = room.table.turn_started_at
 
     # Turn timer fires after 1s
     await trigger_room_turn_timer(room.room_id)
@@ -125,5 +127,6 @@ async def test_time_card_auto_consumption_sequence():
     assert curr_player.time_bank_cards == 2
     assert room.table.is_using_time_bank is True
     assert room.table.current_turn_seat == turn_seat
+    assert room.table.turn_started_at > initial_turn_started_at
 
     timeout_manager.cancel_all_timers(room.room_id)

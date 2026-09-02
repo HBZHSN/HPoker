@@ -11,6 +11,7 @@ Implements standard No-Limit Texas Hold'em game rules:
 from __future__ import annotations
 from enum import Enum, auto
 from dataclasses import dataclass, field
+import time
 from typing import List, Dict, Optional, Set, Tuple
 
 from backend.app.engine.card import Card
@@ -186,6 +187,9 @@ class TableStateMachine:
         self.turn_count: int = 0
         self.is_using_time_bank: bool = False
         self.current_turn_duration: int = action_timeout
+        # UNIX timestamp used by clients to render a synchronized local
+        # countdown between WebSocket state broadcasts.
+        self.turn_started_at: Optional[float] = None
 
     # ----------------- Seat & Player Management -----------------
 
@@ -221,6 +225,7 @@ class TableStateMachine:
         if player.use_time_bank_card():
             self.is_using_time_bank = True
             self.current_turn_duration = 30
+            self.turn_started_at = time.time()
             self.turn_count += 1
             player.last_action = "⏱️ 使用时间卡 +30s"
             return True
@@ -308,6 +313,7 @@ class TableStateMachine:
         self.deck.reset()
         self.is_using_time_bank = False
         self.current_turn_duration = self.action_timeout
+        self.turn_started_at = None
 
         # Reset player hand states
         for player in self.active_seated_players:
@@ -338,6 +344,7 @@ class TableStateMachine:
         else:
             utg_seat = self._find_next_action_seat(self.bb_seat)
             self.current_turn_seat = utg_seat
+            self.turn_started_at = time.time() if utg_seat is not None else None
             if self.current_turn_seat is not None:
                 self.turn_count += 1
         return True
@@ -628,6 +635,7 @@ class TableStateMachine:
             self.current_turn_seat = self._find_next_action_seat(after_seat)
             self.is_using_time_bank = False
             self.current_turn_duration = self.action_timeout
+            self.turn_started_at = time.time() if self.current_turn_seat is not None else None
             if self.current_turn_seat is not None:
                 self.turn_count += 1
 
@@ -667,6 +675,7 @@ class TableStateMachine:
         # Set first action player for post-flop streets (first active player after dealer button)
         first_seat = self._find_next_action_seat(self.dealer_seat)
         self.current_turn_seat = first_seat
+        self.turn_started_at = time.time() if first_seat is not None else None
         if self.current_turn_seat is not None:
             self.turn_count += 1
 
@@ -686,6 +695,7 @@ class TableStateMachine:
         self.is_all_in_runout = True
         self.all_in_initial_board_count = len(self.board_cards)
         self.current_turn_seat = None
+        self.turn_started_at = None
 
         if len(self.board_cards) < 5:
             # Prompt for RIT decision
@@ -790,6 +800,7 @@ class TableStateMachine:
         """Evaluate hands for all contenders and distribute pots (supporting 1 or 2 boards)."""
         self.street = Street.SHOWDOWN
         self.current_turn_seat = None
+        self.turn_started_at = None
 
         # Auto show hole cards in showdown
         for p in self.active_in_hand_players:
@@ -869,6 +880,7 @@ class TableStateMachine:
         """Single winner takes the pot without revealing hand."""
         self.street = Street.HAND_END
         self.current_turn_seat = None
+        self.turn_started_at = None
 
         winner = self.active_in_hand_players[0] if self.active_in_hand_players else None
         if winner:
@@ -1026,6 +1038,7 @@ class TableStateMachine:
             "turn_count": self.turn_count,
             "is_using_time_bank": self.is_using_time_bank,
             "current_turn_duration": self.current_turn_duration,
+            "turn_started_at": self.turn_started_at,
             "small_blind": self.small_blind,
             "big_blind": self.big_blind,
             "current_round_highest_bet": self.current_round_highest_bet,
