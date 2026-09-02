@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CardView from './CardView';
 import { sortCardsLowToHigh } from '../utils/cards';
-import { Crown, RefreshCw, UserPlus, Clock } from 'lucide-react';
+import { Bot, Crown, RefreshCw, UserPlus, Clock } from 'lucide-react';
 
 export default function PlayerSeat({
   seatIndex,
@@ -63,6 +63,7 @@ export default function PlayerSeat({
   }
 
   const isSelf = seatData.player_id === currentUserId;
+  const isBot = !!seatData.is_bot;
   const isWinner = !!payoutInfo;
   const isFolded = seatData.is_folded;
   const isAllIn = seatData.is_all_in;
@@ -133,6 +134,16 @@ export default function PlayerSeat({
           >
             <RefreshCw className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />
             <span>x{seatData.rebuy_count}</span>
+          </div>
+        )}
+
+        {isBot && (
+          <div
+            className="absolute -top-2.5 -left-2.5 z-20 flex items-center gap-0.5 bg-indigo-950/95 text-indigo-200 px-1.5 py-0.5 rounded-full border border-indigo-400/70 text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
+            title="测试机器人：随机 Call / Fold / Raise"
+          >
+            <Bot className="w-2.5 h-2.5" />
+            <span>BOT</span>
           </div>
         )}
 
