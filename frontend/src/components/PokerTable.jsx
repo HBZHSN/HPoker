@@ -460,7 +460,7 @@ export default function PokerTable({
               </div>
 
               {/* Interactive Center RIT Decision Overlay */}
-              {(table?.street === 'RIT_DECISION' || table?.rit_status === 'VOTING') && (
+              {table?.street === 'RIT_DECISION' && table?.rit_status === 'VOTING' && (
                 <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
                   <div className="max-w-md w-full bg-gradient-to-b from-slate-900 via-slate-950 to-purple-950 border-2 border-purple-500/80 rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 text-center">
                     <div className="flex items-center justify-center gap-2 text-amber-400 font-black text-base md:text-lg">

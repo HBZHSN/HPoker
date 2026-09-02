@@ -774,7 +774,11 @@ class TableStateMachine:
         Returns:
             (status, is_run_twice): status in ("FINALIZED", "WAITING", "IGNORED")
         """
-        if self.street != Street.RIT_DECISION or player_id not in self.rit_voters:
+        if (
+            self.street != Street.RIT_DECISION
+            or self.rit_status != "VOTING"
+            or player_id not in self.rit_voters
+        ):
             return ("IGNORED", False)
         if choice not in (1, 2):
             return ("IGNORED", False)

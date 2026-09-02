@@ -65,6 +65,13 @@ def test_rit_unanimous_rule():
     assert table.rit_enabled is True
     assert table.rit_status == "AGREED_TWICE"
 
+    # Once all voters have decided, a late duplicate click cannot change the
+    # selected runout while the dealing task is starting.
+    status3, is_tw_late = table.vote_rit("p1", 1)
+    assert status3 == "IGNORED"
+    assert is_tw_late is False
+    assert table.rit_enabled is True
+
 
 def test_rit_does_not_timeout_before_all_votes():
     """Verify that an incomplete vote remains open without a timeout fallback."""
