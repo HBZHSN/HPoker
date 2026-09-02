@@ -105,9 +105,6 @@ export default function CommunityBoard({
     boardCardsRevealed && boardCards2Full.length > 0 ? boardCards2Full : secondBoardInProgress;
   const firstBoardUsesFinalCards = boardCardsRevealed && boardCardsFull.length > 0;
   const secondBoardUsesFinalCards = boardCardsRevealed && boardCards2Full.length > 0;
-  const hasPostHandReveals =
-    (firstBoardUsesFinalCards && firstBoard.length > boardCards.length) ||
-    (secondBoardUsesFinalCards && secondBoard.length > secondBoardInProgress.length);
 
   const hasHiddenCards =
     firstBoard.length < BOARD_SIZE ||
@@ -159,16 +156,6 @@ export default function CommunityBoard({
           accentClass=""
         />
       )}
-
-      {hasPostHandReveals && (
-        <div className="flex items-center gap-1.5 text-[9px] font-bold text-amber-300/85" aria-label="半牌背表示牌局结束后揭示">
-          <span className="relative h-3.5 w-2.5 overflow-hidden rounded-[3px] border border-amber-300/80 bg-white shadow-sm">
-            <span className="absolute inset-y-0 right-0 w-1/2 border-l border-amber-300/80 bg-red-950" />
-          </span>
-          <span>半牌背 = 牌局结束后揭示</span>
-        </div>
-      )}
-
     </div>
   );
 }

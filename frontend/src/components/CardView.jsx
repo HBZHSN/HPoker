@@ -55,9 +55,6 @@ export default function CardView({
 
   const meta = SUIT_META[card.suit] || SUIT_META.s;
   const cardRevealMode = isPartiallyRevealed ? 'post-hand' : 'normal';
-  const faceContainerClass = isPartiallyRevealed
-    ? 'relative z-10 flex h-full w-[54%] flex-col items-center justify-center p-0.5 leading-none text-center'
-    : 'flex h-full w-full flex-col items-center justify-center leading-none text-center';
 
   return (
     <div
@@ -65,16 +62,16 @@ export default function CardView({
       data-card-size={size}
       data-card-reveal={cardRevealMode}
       className={`poker-card relative flex-shrink-0 flex items-center justify-center ${
-        isPartiallyRevealed ? 'p-0' : 'p-1'
+        isPartiallyRevealed ? 'overflow-hidden p-1' : 'p-1'
       } bg-white border-2 select-none shadow-md transition-all duration-200 animate-card-flip ${sizeClasses} ${
         isHighlighted
           ? 'ring-2 ring-amber-400 -translate-y-1.5 shadow-glow-gold border-amber-400'
           : isPartiallyRevealed
-          ? 'overflow-hidden border-amber-400/90 shadow-[0_0_0_1px_rgba(251,191,36,0.35),0_8px_18px_rgba(0,0,0,0.35)]'
+          ? 'border-amber-400/90 shadow-[0_0_0_1px_rgba(251,191,36,0.35),0_8px_18px_rgba(0,0,0,0.35)]'
           : 'border-slate-300'
       } ${className}`}
     >
-      <div className={faceContainerClass}>
+      <div className="flex h-full w-full flex-col items-center justify-center leading-none text-center">
         <span className={`poker-card-rank ${fontSizes.rank} tracking-tighter leading-none ${meta.color}`}>
           {card.rank === 10 || card.rank_symbol === 'T' ? '10' : card.rank_symbol}
         </span>
@@ -86,13 +83,9 @@ export default function CardView({
       {isPartiallyRevealed && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 z-20 w-[46%] overflow-hidden border-l-2 border-amber-300/90 bg-gradient-to-br from-red-950 via-red-900 to-slate-950"
+          className="poker-card-post-hand-corner pointer-events-none"
         >
-          <div className="absolute inset-1 flex items-center justify-center rounded border border-amber-500/45 bg-[radial-gradient(#d97706_1.25px,transparent_1.25px)] [background-size:5px_5px]">
-            <span className="text-[8px] font-black tracking-tighter text-amber-300/90 drop-shadow md:text-[10px]">
-              H
-            </span>
-          </div>
+          <span>H</span>
         </div>
       )}
     </div>
