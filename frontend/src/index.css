@@ -84,6 +84,10 @@ html,
   display: none;
 }
 
+.poker-table-center-board {
+  display: block;
+}
+
 @media (max-width: 767px) {
   .poker-mobile-sticky-info {
     position: sticky;
@@ -198,6 +202,13 @@ html,
   .poker-action-turn-progress,
   .poker-action-self-overview,
   .poker-action-history {
+    display: none;
+  }
+
+  /* During our turn the hand summary is immediately followed by actions;
+     the avatar's rim remains the only timer indicator on the table. */
+  .poker-action-turn-status-self,
+  .poker-table-center-board {
     display: none;
   }
 }

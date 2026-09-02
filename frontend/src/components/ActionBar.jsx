@@ -206,7 +206,7 @@ export default function ActionBar({
     <div className="poker-action-bar flex flex-col gap-2 lg:gap-3 w-full h-full text-slate-100 select-none">
       {/* 1. Turn Status & Countdown Banner */}
       <div
-        className={`poker-action-turn-status p-2 lg:p-3 rounded-xl lg:rounded-2xl border transition-all duration-300 ${
+        className={`poker-action-turn-status ${isMyTurn ? 'poker-action-turn-status-self' : ''} p-2 lg:p-3 rounded-xl lg:rounded-2xl border transition-all duration-300 ${
           isMyTurn && isUsingTimeBank
             ? 'bg-gradient-to-r from-purple-950/90 via-slate-900 to-indigo-950 border-purple-400 shadow-glow-cyan'
             : isMyTurn

@@ -396,20 +396,23 @@ export default function PokerTable({
                   )}
                 </div>
 
-                {/* Community Board Cards: five slots are present from preflop onward. */}
-                <CommunityBoard
-                  boardCards={table?.board_cards || []}
-                  boardCards2={table?.board_cards_2 || []}
-                  boardCardsFull={table?.board_cards_full || []}
-                  boardCards2Full={table?.board_cards_2_full || []}
-                  allInInitialBoardCount={table?.all_in_initial_board_count || 0}
-                  ritEnabled={table?.rit_enabled || false}
-                  street={table?.street || 'IDLE'}
-                  boardCardsRevealed={table?.board_cards_revealed || false}
-                  onReveal={handleRevealBoard}
-                  isRevealing={isRevealingBoard}
-                  size="lg"
-                />
+                {/* On phones the board stays in the sticky summary instead of
+                    taking space in the middle of the felt. */}
+                <div className="poker-table-center-board">
+                  <CommunityBoard
+                    boardCards={table?.board_cards || []}
+                    boardCards2={table?.board_cards_2 || []}
+                    boardCardsFull={table?.board_cards_full || []}
+                    boardCards2Full={table?.board_cards_2_full || []}
+                    allInInitialBoardCount={table?.all_in_initial_board_count || 0}
+                    ritEnabled={table?.rit_enabled || false}
+                    street={table?.street || 'IDLE'}
+                    boardCardsRevealed={table?.board_cards_revealed || false}
+                    onReveal={handleRevealBoard}
+                    isRevealing={isRevealingBoard}
+                    size="lg"
+                  />
+                </div>
 
                 {/* Start Hand / Ready / Rebuy Prompt */}
                 {table?.street in { IDLE: 1, HAND_END: 1 } && (
