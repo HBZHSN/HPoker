@@ -205,29 +205,8 @@ class TimeoutManager:
         timeout_seconds: int,
         on_timeout_callback: Callable[[str], Awaitable[None]]
     ) -> None:
-        """Start a countdown timer for Run-It-Twice voting."""
+        """Deprecated no-op; RIT waits for every contender to vote."""
         self.cancel_rit_timer(room_id)
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            async def _rit_worker():
-                current_task = asyncio.current_task()
-                try:
-                    await asyncio.sleep(timeout_seconds)
-                    await on_timeout_callback(room_id)
-                except asyncio.CancelledError:
-                    pass
-                except Exception as e:
-                    logger.exception(f"Error in RIT timeout worker for room {room_id}: {e}")
-                finally:
-                    if self._rit_tasks.get(room_id) is current_task:
-                        self._rit_tasks.pop(room_id, None)
-
-            self._rit_tasks[room_id] = loop.create_task(_rit_worker())
 
     def start_deal_task(
         self,

@@ -183,26 +183,23 @@ export default function PokerTable({
     return !!(selfSeat && table?.current_turn_seat === selfSeat.seat_index);
   }, [selfSeat, table?.current_turn_seat]);
 
-  // Turn Countdown Audio Effect (5 seconds remaining warning)
+  // Turn Countdown Audio Effect (5 seconds remaining warning). RIT voting
+  // intentionally has no countdown; it waits for every contender's choice.
   const lastPlayedSecondRef = useRef(null);
 
   useEffect(() => {
-    // Only active during ongoing betting rounds or RIT voting
+    // Only active during an ongoing betting round.
     const isOngoingTurn =
       table?.street &&
-      !['IDLE', 'SHOWDOWN', 'HAND_END'].includes(table.street) &&
+      !['IDLE', 'RIT_DECISION', 'SHOWDOWN', 'HAND_END'].includes(table.street) &&
       (table.current_turn_seat !== null && table.current_turn_seat !== undefined);
 
-    const isRIT = table?.street === 'RIT_DECISION' || table?.rit_status === 'VOTING';
-
-    if (!isOngoingTurn && !isRIT) {
+    if (!isOngoingTurn) {
       lastPlayedSecondRef.current = null;
       return;
     }
 
-    const duration = isRIT
-      ? 8
-      : table?.is_using_time_bank
+    const duration = table?.is_using_time_bank
       ? (table?.current_turn_duration || 30)
       : (table?.current_turn_duration || room?.config?.action_timeout || 15);
 
@@ -218,12 +215,9 @@ export default function PokerTable({
       if (secondsCeil <= 5 && secondsCeil >= 1) {
         if (lastPlayedSecondRef.current !== secondsCeil) {
           lastPlayedSecondRef.current = secondsCeil;
-          const isUserTurn = isRIT
-            ? (table?.rit_voters?.includes(currentUser?.user_id) && table?.rit_votes?.[currentUser?.user_id] === undefined)
-            : isMyTurn;
           soundEngine.play('countdown', {
             secondsLeft: secondsCeil,
-            isMyTurn: isUserTurn,
+            isMyTurn,
           });
         }
       }
@@ -242,8 +236,6 @@ export default function PokerTable({
     table?.current_turn_duration,
     room?.config?.action_timeout,
     isMyTurn,
-    currentUser?.user_id,
-    table?.rit_status,
   ]);
 
   return (
@@ -475,7 +467,7 @@ export default function PokerTable({
                       全下后发牌次数
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                      双方均选 <strong className="text-purple-300">2 次</strong> 时平分底池；有一人选 <strong className="text-amber-300">1 次</strong> 则发 1 次。
+                      所有玩家均选 <strong className="text-purple-300">2 次</strong> 才平分底池；任一玩家选 <strong className="text-amber-300">1 次</strong> 则发 1 次。
                     </p>
 
                     {/* Contender Votes Progress */}
@@ -531,8 +523,14 @@ export default function PokerTable({
                       </div>
                     ) : (
                       <div className="text-xs text-slate-400 font-bold py-1 flex items-center justify-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                        等待选择
+                        <Clock className="w-3.5 h-3.5 text-purple-400" />
+                        等待其他玩家决定
+                      </div>
+                    )}
+                    {selfSeat && table?.rit_voters?.includes(selfSeat.player_id) && table?.rit_votes?.[selfSeat.player_id] !== undefined && (
+                      <div className="text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        已选择，等待其他玩家决定
                       </div>
                     )}
                   </div>

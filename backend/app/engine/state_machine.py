@@ -731,42 +731,31 @@ class TableStateMachine:
 
     def vote_rit(self, player_id: str, choice: int) -> Tuple[str, bool]:
         """Record player's Run-It-Twice choice (1 or 2).
-        
-        Rule: If ANY player chooses 1, Run It Once (1 run).
-              If ALL players choose 2, Run It Twice (2 runs).
+
+        Every contender must submit a choice before the runout starts. If
+        every choice is 2, Run It Twice is enabled; otherwise the completed
+        vote falls back to Run It Once.
         
         Returns:
             (status, is_run_twice): status in ("FINALIZED", "WAITING", "IGNORED")
         """
         if self.street != Street.RIT_DECISION or player_id not in self.rit_voters:
             return ("IGNORED", False)
+        if choice not in (1, 2):
+            return ("IGNORED", False)
 
         self.rit_votes[player_id] = choice
 
-        if choice == 1:
-            # Any single vote of 1 forces Run It Once
-            self.rit_enabled = False
-            self.rit_status = "AGREED_ONCE"
-            return ("FINALIZED", False)
-        elif choice == 2:
-            # Check if all voters have chosen 2
-            if len(self.rit_votes) == len(self.rit_voters) and all(v == 2 for v in self.rit_votes.values()):
-                self.rit_enabled = True
-                self.rit_status = "AGREED_TWICE"
-                return ("FINALIZED", True)
+        if len(self.rit_votes) < len(self.rit_voters):
+            self.rit_status = "VOTING"
             return ("WAITING", False)
-        return ("IGNORED", False)
+
+        self.rit_enabled = all(vote == 2 for vote in self.rit_votes.values())
+        self.rit_status = "AGREED_TWICE" if self.rit_enabled else "AGREED_ONCE"
+        return ("FINALIZED", self.rit_enabled)
 
     def timeout_rit(self) -> bool:
-        """Fallback when RIT voting timer expires: defaults to Run It Once unless unanimous 2."""
-        if self.street == Street.RIT_DECISION or self.rit_status == "VOTING":
-            if len(self.rit_votes) == len(self.rit_voters) and all(v == 2 for v in self.rit_votes.values()):
-                self.rit_enabled = True
-                self.rit_status = "AGREED_TWICE"
-            else:
-                self.rit_enabled = False
-                self.rit_status = "AGREED_ONCE"
-            return True
+        """Compatibility hook; RIT voting intentionally has no timeout."""
         return False
 
     def deal_all_in_next_step(self) -> Optional[str]:

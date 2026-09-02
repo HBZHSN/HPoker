@@ -560,7 +560,7 @@ class PokerUiRenderer:
         if is_ended:
             lines.append(self.c(self._table_line("牌局已由房主结束并生成结算账单。输入 [bill] 或 [report] 查看账单。"), Colors.BRIGHT_YELLOW))
         elif street == "RIT_DECISION":
-            lines.append(self.c(self._table_line("🎲 全下多次发牌(RIT)协商中: 输入 [rit 1] 发1次牌 / [rit 2] 发2次牌"), Colors.BRIGHT_MAGENTA + Colors.BOLD))
+            lines.append(self.c(self._table_line("🎲 全下多次发牌(RIT)协商中，等待所有玩家决定: 输入 [rit 1] 发1次牌 / [rit 2] 发2次牌"), Colors.BRIGHT_MAGENTA + Colors.BOLD))
         elif street == "IDLE":
             is_host = (current_user_id == host_id)
             is_ready = current_user_id in ready_player_ids

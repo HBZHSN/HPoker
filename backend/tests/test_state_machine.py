@@ -157,11 +157,16 @@ def test_allin_fast_forward():
     assert len(table.seats[0].shown_cards) == 2
     assert len(table.seats[1].shown_cards) == 2
 
-    # P1 votes Run It Once -> finalized
+    # One vote cannot start the runout while the other contender is undecided.
     status, is_tw = table.vote_rit("p1", 1)
-    assert status == "FINALIZED"
+    assert status == "WAITING"
     assert is_tw is False
     assert table.rit_enabled is False
+    assert table.street == Street.RIT_DECISION
+
+    status, is_tw = table.vote_rit("p2", 1)
+    assert status == "FINALIZED"
+    assert is_tw is False
 
     # Deal step by step
     step1 = table.deal_all_in_next_step()

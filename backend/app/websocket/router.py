@@ -64,18 +64,11 @@ async def trigger_room_after_action(room_id: str):
 
     if room.table.street == Street.RIT_DECISION:
         timeout_manager.cancel_turn_timer(room_id)
+        # RIT is deliberately not timed. Cancel any legacy task that may
+        # still exist after a server-side reload, then wait for every voter.
+        timeout_manager.cancel_rit_timer(room_id)
         await ws_manager.broadcast_sound(room_id, "allin")
         await ws_manager.broadcast_room_state(room)
-
-        async def _on_rit_timeout(r_id: str):
-            r = room_manager.get_room(r_id)
-            if not r or r.is_ended or r.table.street != Street.RIT_DECISION:
-                return
-            r.table.timeout_rit()
-            await ws_manager.broadcast_room_state(r)
-            await start_all_in_slow_dealing(r_id)
-
-        timeout_manager.start_rit_timer(room_id, 8, _on_rit_timeout)
 
         if any(
             seat and seat.is_bot and seat.player_id in room.table.rit_voters
@@ -86,6 +79,7 @@ async def trigger_room_after_action(room_id: str):
                 if not r or r.is_ended or r.table.street != Street.RIT_DECISION:
                     return
 
+                finalized = False
                 for seat in r.table.active_in_hand_players:
                     if (
                         seat.is_bot
@@ -94,12 +88,15 @@ async def trigger_room_after_action(room_id: str):
                     ):
                         result, _ = r.table.vote_rit(seat.player_id, 1)
                         if result == "FINALIZED":
-                            timeout_manager.cancel_rit_timer(r_id)
-                            await ws_manager.broadcast_room_state(r)
-                            await start_all_in_slow_dealing(r_id)
-                        else:
-                            await ws_manager.broadcast_room_state(r)
-                        return
+                            finalized = True
+                            break
+
+                if finalized:
+                    timeout_manager.cancel_bot_action(r_id)
+                    await ws_manager.broadcast_room_state(r)
+                    await start_all_in_slow_dealing(r_id)
+                else:
+                    await ws_manager.broadcast_room_state(r)
 
             timeout_manager.start_bot_action_task(
                 room_id,
