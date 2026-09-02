@@ -8,6 +8,8 @@ function BoardRow({
   cards,
   size,
   compact,
+  normalCardCount = 0,
+  marksPostHandReveal = false,
   canReveal,
   isRevealing,
   onReveal,
@@ -25,6 +27,9 @@ function BoardRow({
       <div className="poker-board-cards flex flex-shrink-0 items-center gap-1.5 md:gap-2">
         {slots.map((card, index) => {
           const isHidden = !card;
+          const isPostHandRevealed = Boolean(
+            card && marksPostHandReveal && index >= normalCardCount
+          );
           const isClickable = isHidden && canReveal && !isRevealing;
 
           return (
@@ -33,7 +38,13 @@ function BoardRow({
               type="button"
               onClick={isClickable ? onReveal : undefined}
               disabled={!isClickable}
-              aria-label={isHidden ? '点击翻开公共牌' : `公共牌第 ${index + 1} 张`}
+              aria-label={
+                isHidden
+                  ? '点击翻开公共牌'
+                  : isPostHandRevealed
+                  ? `公共牌第 ${index + 1} 张（牌局结束后揭示）`
+                  : `公共牌第 ${index + 1} 张`
+              }
               className={`relative flex-shrink-0 rounded-lg p-0 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
                 isClickable
                   ? 'cursor-pointer transition-transform hover:-translate-y-1 hover:scale-[1.03] active:scale-95'
@@ -43,8 +54,15 @@ function BoardRow({
               <CardView
                 card={card}
                 isBack={isHidden}
+                isPartiallyRevealed={isPostHandRevealed}
                 size={size}
-                className={`shadow-lg ${isHidden && isClickable ? 'ring-1 ring-amber-400/40' : ''}`}
+                className={`shadow-lg ${
+                  isHidden && isClickable
+                    ? 'ring-1 ring-amber-400/40'
+                    : isPostHandRevealed
+                    ? 'ring-1 ring-amber-300/70'
+                    : ''
+                }`}
                 style={card ? undefined : { animationDelay: `${index * 70}ms` }}
               />
             </button>
@@ -85,6 +103,11 @@ export default function CommunityBoard({
       : [...sharedCards, ...boardCards2.slice(sharedCount)];
   const secondBoard =
     boardCardsRevealed && boardCards2Full.length > 0 ? boardCards2Full : secondBoardInProgress;
+  const firstBoardUsesFinalCards = boardCardsRevealed && boardCardsFull.length > 0;
+  const secondBoardUsesFinalCards = boardCardsRevealed && boardCards2Full.length > 0;
+  const hasPostHandReveals =
+    (firstBoardUsesFinalCards && firstBoard.length > boardCards.length) ||
+    (secondBoardUsesFinalCards && secondBoard.length > secondBoardInProgress.length);
 
   const hasHiddenCards =
     firstBoard.length < BOARD_SIZE ||
@@ -103,6 +126,8 @@ export default function CommunityBoard({
             cards={firstBoard}
             size={compact ? 'xs' : 'md'}
             compact={compact}
+            normalCardCount={boardCards.length}
+            marksPostHandReveal={firstBoardUsesFinalCards}
             canReveal={canReveal}
             isRevealing={isRevealing}
             onReveal={onReveal}
@@ -113,6 +138,8 @@ export default function CommunityBoard({
             cards={secondBoard}
             size={compact ? 'xs' : 'md'}
             compact={compact}
+            normalCardCount={secondBoardInProgress.length}
+            marksPostHandReveal={secondBoardUsesFinalCards}
             canReveal={canReveal}
             isRevealing={isRevealing}
             onReveal={onReveal}
@@ -124,11 +151,22 @@ export default function CommunityBoard({
           cards={firstBoard}
           size={size}
           compact={compact}
+          normalCardCount={boardCards.length}
+          marksPostHandReveal={firstBoardUsesFinalCards}
           canReveal={canReveal}
           isRevealing={isRevealing}
           onReveal={onReveal}
           accentClass=""
         />
+      )}
+
+      {hasPostHandReveals && (
+        <div className="flex items-center gap-1.5 text-[9px] font-bold text-amber-300/85" aria-label="半牌背表示牌局结束后揭示">
+          <span className="relative h-3.5 w-2.5 overflow-hidden rounded-[3px] border border-amber-300/80 bg-white shadow-sm">
+            <span className="absolute inset-y-0 right-0 w-1/2 border-l border-amber-300/80 bg-red-950" />
+          </span>
+          <span>半牌背 = 牌局结束后揭示</span>
+        </div>
       )}
 
     </div>

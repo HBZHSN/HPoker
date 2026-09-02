@@ -195,3 +195,56 @@ html,
 .animate-card-flip {
   animation: card-flip 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+
+/* A card revealed after an uncontested hand keeps a visible slice of the
+   card back. This distinguishes it from cards that were dealt face-up during
+   the normal hand flow, including on the compact hand-result board. */
+.poker-card[data-card-reveal='post-hand'] .poker-card-rank {
+  font-size: clamp(0.8rem, 2.8vw, 1.35rem);
+}
+
+.poker-card[data-card-reveal='post-hand'] .poker-card-suit {
+  font-size: clamp(0.65rem, 2.2vw, 1rem);
+}
+
+@media (min-width: 768px) {
+  .poker-card[data-card-size='xs'][data-card-reveal='post-hand'] .poker-card-rank {
+    font-size: 0.7rem;
+  }
+
+  .poker-card[data-card-size='sm'][data-card-reveal='post-hand'] .poker-card-rank {
+    font-size: 0.95rem;
+  }
+
+  .poker-card[data-card-size='md'][data-card-reveal='post-hand'] .poker-card-rank {
+    font-size: 1.15rem;
+  }
+
+  .poker-card[data-card-size='lg'][data-card-reveal='post-hand'] .poker-card-rank {
+    font-size: 1.4rem;
+  }
+
+  .poker-card[data-card-size='xl'][data-card-reveal='post-hand'] .poker-card-rank {
+    font-size: 1.7rem;
+  }
+
+  .poker-card[data-card-size='xs'][data-card-reveal='post-hand'] .poker-card-suit {
+    font-size: 0.55rem;
+  }
+
+  .poker-card[data-card-size='sm'][data-card-reveal='post-hand'] .poker-card-suit {
+    font-size: 0.75rem;
+  }
+
+  .poker-card[data-card-size='md'][data-card-reveal='post-hand'] .poker-card-suit {
+    font-size: 0.9rem;
+  }
+
+  .poker-card[data-card-size='lg'][data-card-reveal='post-hand'] .poker-card-suit {
+    font-size: 1.1rem;
+  }
+
+  .poker-card[data-card-size='xl'][data-card-reveal='post-hand'] .poker-card-suit {
+    font-size: 1.35rem;
+  }
+}
