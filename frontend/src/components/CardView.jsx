@@ -15,6 +15,7 @@ export default function CardView({
   size = 'md', // 'xs', 'sm', 'md', 'lg', 'xl'
   isHighlighted = false,
   className = '',
+  style,
 }) {
   const sizeClasses = {
     xs: 'w-8 h-12 rounded',
@@ -35,6 +36,7 @@ export default function CardView({
   if (isBack || !card) {
     return (
       <div
+        style={style}
         className={`relative flex flex-col items-center justify-center border-2 border-amber-600/50 bg-gradient-to-br from-red-950 via-red-900 to-slate-950 shadow-lg select-none ${sizeClasses} ${className}`}
       >
         <div className="w-full h-full p-1 flex items-center justify-center">
@@ -52,6 +54,7 @@ export default function CardView({
 
   return (
     <div
+      style={style}
       className={`relative flex flex-col items-center justify-center p-1 bg-white border-2 select-none shadow-md transition-all duration-200 animate-card-flip ${sizeClasses} ${
         isHighlighted
           ? 'ring-2 ring-amber-400 -translate-y-1.5 shadow-glow-gold border-amber-400'

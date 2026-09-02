@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import PlayerSeat from './PlayerSeat';
-import CardView from './CardView';
+import CommunityBoard from './CommunityBoard';
 import ActionBar from './ActionBar';
 import HandResultModal from './HandResultModal';
 import SettlementModal from './SettlementModal';
@@ -26,6 +26,7 @@ export default function PokerTable({
   const [isMuted, setIsMuted] = useState(false);
   const [settlementOpen, setSettlementOpen] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
+  const [isRevealingBoard, setIsRevealingBoard] = useState(false);
 
   const table = room?.table;
   const isHost = room?.host_player_id === currentUser?.user_id;
@@ -36,6 +37,12 @@ export default function PokerTable({
       setHandResultDismissed(false);
     }
   }, [table?.street, table?.hand_number]);
+
+  useEffect(() => {
+    if (table?.street !== 'HAND_END' || table?.board_cards_revealed) {
+      setIsRevealingBoard(false);
+    }
+  }, [table?.street, table?.hand_number, table?.board_cards_revealed]);
 
   // Toggle Mute
   const toggleMute = () => {
@@ -112,6 +119,14 @@ export default function PokerTable({
 
   const handleStartGame = () => {
     onSendWsEvent('START_GAME', {});
+  };
+
+  const handleRevealBoard = () => {
+    if (table?.street !== 'HAND_END' || table?.board_cards_revealed || isRevealingBoard) {
+      return;
+    }
+    setIsRevealingBoard(true);
+    onSendWsEvent('REVEAL_BOARD_CARDS', {});
   };
 
   const handleEndRoom = () => {
@@ -352,71 +367,20 @@ export default function PokerTable({
                   )}
                 </div>
 
-                {/* Community Board Cards */}
-                {table?.rit_enabled || (table?.board_cards_2 && table.board_cards_2.length > 0) ? (
-                  <div className="flex flex-col gap-2 bg-black/60 p-3 rounded-2xl border border-purple-500/40 backdrop-blur-md shadow-2xl">
-                    {/* Board 1 */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-black text-purple-300 px-2 py-0.5 bg-purple-950/90 rounded border border-purple-500/30 flex-shrink-0">
-                        第 1 次:
-                      </span>
-                      <div className="flex items-center gap-1.5 md:gap-2">
-                        {table.board_cards.map((card, i) => (
-                          <CardView key={i} card={card} size="md" className="shadow-lg" />
-                        ))}
-                        {Array.from({ length: Math.max(0, 5 - (table.board_cards?.length || 0)) }).map((_, i) => (
-                          <div key={i} className="w-12 h-16 md:w-14 md:h-20 border border-dashed border-slate-700 rounded-lg flex items-center justify-center text-[10px] text-slate-600 font-bold">
-                            ?
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Board 2 (Only display remaining cards that were newly dealt for run 2, skipping shared cards) */}
-                    {(() => {
-                      const initialCount = table?.all_in_initial_board_count || 0;
-                      const run2Cards = (table.board_cards_2 || []).slice(initialCount);
-                      const expectedRun2Total = 5 - initialCount;
-
-                      return (
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-black text-indigo-300 px-2 py-0.5 bg-indigo-950/90 rounded border border-indigo-500/30 flex-shrink-0">
-                            {initialCount === 0 ? '第 2 次:' : initialCount === 3 ? '第 2 次 (转/河):' : '第 2 次 (河牌):'}
-                          </span>
-                          <div className="flex items-center gap-1.5 md:gap-2">
-                            {run2Cards.map((card, i) => (
-                              <CardView key={i} card={card} size="md" className="shadow-lg" />
-                            ))}
-                            {Array.from({ length: Math.max(0, expectedRun2Total - run2Cards.length) }).map((_, i) => (
-                              <div key={i} className="w-12 h-16 md:w-14 md:h-20 border border-dashed border-slate-700 rounded-lg flex items-center justify-center text-[10px] text-slate-600 font-bold">
-                                ?
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 md:gap-3 min-h-[85px] px-4 py-2.5 bg-black/40 rounded-2xl border border-white/10 backdrop-blur-sm shadow-2xl">
-                    {table?.board_cards && table.board_cards.length > 0 ? (
-                      table.board_cards.map((card, i) => (
-                        <CardView key={i} card={card} size="lg" className="shadow-xl" />
-                      ))
-                    ) : (
-                      <div className="flex gap-2 md:gap-3 opacity-30">
-                        {[1, 2, 3, 4, 5].map((_, i) => (
-                          <div
-                            key={i}
-                            className="w-16 h-24 md:w-20 md:h-28 border-2 border-dashed border-slate-600 rounded-xl flex items-center justify-center text-xs md:text-sm text-slate-400 font-bold"
-                          >
-                            {i < 3 ? 'FLOP' : i === 3 ? 'TURN' : 'RIVER'}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Community Board Cards: five slots are present from preflop onward. */}
+                <CommunityBoard
+                  boardCards={table?.board_cards || []}
+                  boardCards2={table?.board_cards_2 || []}
+                  boardCardsFull={table?.board_cards_full || []}
+                  boardCards2Full={table?.board_cards_2_full || []}
+                  allInInitialBoardCount={table?.all_in_initial_board_count || 0}
+                  ritEnabled={table?.rit_enabled || false}
+                  street={table?.street || 'IDLE'}
+                  boardCardsRevealed={table?.board_cards_revealed || false}
+                  onReveal={handleRevealBoard}
+                  isRevealing={isRevealingBoard}
+                  size="lg"
+                />
 
                 {/* Start Hand / Ready / Rebuy Prompt */}
                 {table?.street in { IDLE: 1, HAND_END: 1 } && (
@@ -616,8 +580,11 @@ export default function PokerTable({
           handNumber={table.hand_number}
           boardCards={table.board_cards}
           boardCards2={table.board_cards_2}
+          boardCardsFull={table.board_cards_full}
+          boardCards2Full={table.board_cards_2_full}
           allInInitialBoardCount={table.all_in_initial_board_count || 0}
           ritEnabled={table.rit_enabled}
+          boardCardsRevealed={table.board_cards_revealed || false}
           handResults={table.hand_results}
           totalPot={table.total_pot}
           selfSeat={selfSeat}
@@ -625,6 +592,8 @@ export default function PokerTable({
           buyinChips={room?.config?.buyin_chips || 1000}
           readyPlayerIds={table.ready_player_ids || []}
           onShowCard={(payload) => onSendWsEvent('SHOW_CARD', payload)}
+          onRevealBoard={handleRevealBoard}
+          isRevealingBoard={isRevealingBoard}
           onToggleReady={() => {
             const isReady = table.ready_player_ids?.includes(selfSeat?.player_id);
             onSendWsEvent('PLAYER_READY', { ready: !isReady });

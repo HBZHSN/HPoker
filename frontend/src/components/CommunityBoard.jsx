@@ -1,0 +1,166 @@
+import React from 'react';
+import CardView from './CardView';
+import { Eye, Sparkles } from 'lucide-react';
+
+const BOARD_SIZE = 5;
+
+function BoardRow({
+  label,
+  cards,
+  size,
+  compact,
+  canReveal,
+  isRevealing,
+  onReveal,
+  accentClass,
+}) {
+  const slots = Array.from({ length: BOARD_SIZE }, (_, index) => cards[index] || null);
+
+  return (
+    <div className={`flex items-center gap-1.5 md:gap-2 ${compact ? '' : 'max-w-full'}`}>
+      {label && (
+        <span className={`text-[10px] md:text-[11px] font-black px-2 py-0.5 rounded border flex-shrink-0 ${accentClass}`}>
+          {label}
+        </span>
+      )}
+      <div className="flex items-center gap-1.5 md:gap-2">
+        {slots.map((card, index) => {
+          const isHidden = !card;
+          const isClickable = isHidden && canReveal && !isRevealing;
+
+          return (
+            <button
+              key={index}
+              type="button"
+              onClick={isClickable ? onReveal : undefined}
+              disabled={!isClickable}
+              aria-label={isHidden ? '点击翻开公共牌' : `公共牌第 ${index + 1} 张`}
+              className={`relative rounded-lg p-0 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
+                isClickable
+                  ? 'cursor-pointer transition-transform hover:-translate-y-1 hover:scale-[1.03] active:scale-95'
+                  : 'cursor-default'
+              }`}
+            >
+              <CardView
+                card={card}
+                isBack={isHidden}
+                size={size}
+                className={`shadow-lg ${isHidden && isClickable ? 'ring-1 ring-amber-400/40' : ''}`}
+                style={card ? undefined : { animationDelay: `${index * 70}ms` }}
+              />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function CommunityBoard({
+  boardCards = [],
+  boardCards2 = [],
+  boardCardsFull = [],
+  boardCards2Full = [],
+  allInInitialBoardCount = 0,
+  ritEnabled = false,
+  street = 'IDLE',
+  boardCardsRevealed = false,
+  onReveal,
+  isRevealing = false,
+  size = 'lg',
+  compact = false,
+  showRevealButton = true,
+}) {
+  const isHandEnd = street === 'HAND_END';
+  const hasSecondBoard =
+    ritEnabled ||
+    street === 'RIT_DECISION' ||
+    boardCards2.length > 0 ||
+    boardCards2Full.length > 0;
+  const sharedCount = Math.max(0, Math.min(BOARD_SIZE, allInInitialBoardCount || 0));
+
+  const firstBoard = boardCardsRevealed && boardCardsFull.length > 0 ? boardCardsFull : boardCards;
+  const sharedCards = boardCards.slice(0, sharedCount);
+  const secondBoardInProgress =
+    boardCards2.length >= sharedCount
+      ? boardCards2
+      : [...sharedCards, ...boardCards2.slice(sharedCount)];
+  const secondBoard =
+    boardCardsRevealed && boardCards2Full.length > 0 ? boardCards2Full : secondBoardInProgress;
+
+  const hasHiddenCards =
+    firstBoard.length < BOARD_SIZE ||
+    (hasSecondBoard && secondBoard.length < BOARD_SIZE);
+  const canReveal = isHandEnd && !boardCardsRevealed && hasHiddenCards && typeof onReveal === 'function';
+  const revealedCount = hasSecondBoard
+    ? Math.max(firstBoard.length, secondBoard.length)
+    : firstBoard.length;
+
+  const revealLabel = isRevealing ? '正在翻开…' : `点击翻开未公开牌 (${BOARD_SIZE - revealedCount} 张)`;
+  const rootClassName = compact
+    ? 'flex flex-col items-center gap-1.5 bg-black/55 p-1.5 rounded-xl border border-slate-800/90 shadow-xl'
+    : 'flex flex-col items-center gap-2 bg-black/60 p-3 rounded-2xl border border-amber-500/25 backdrop-blur-md shadow-2xl';
+
+  return (
+    <div className={rootClassName}>
+      {!compact && (
+        <div className="flex items-center justify-center gap-1.5 text-[10px] md:text-[11px] font-black text-amber-300/90 uppercase tracking-wider">
+          <Sparkles className="w-3 h-3" />
+          <span>公共牌</span>
+          <span className="text-slate-500 font-bold normal-case">{revealedCount}/5 已翻开</span>
+        </div>
+      )}
+
+      {hasSecondBoard ? (
+        <div className="flex flex-col gap-1.5">
+          <BoardRow
+            label="第 1 次"
+            cards={firstBoard}
+            size={compact ? 'xs' : 'md'}
+            compact={compact}
+            canReveal={canReveal}
+            isRevealing={isRevealing}
+            onReveal={onReveal}
+            accentClass="text-purple-300 bg-purple-950/90 border-purple-500/30"
+          />
+          <BoardRow
+            label={sharedCount === 0 ? '第 2 次' : sharedCount === 3 ? '第 2 次 (转/河)' : '第 2 次 (河)'}
+            cards={secondBoard}
+            size={compact ? 'xs' : 'md'}
+            compact={compact}
+            canReveal={canReveal}
+            isRevealing={isRevealing}
+            onReveal={onReveal}
+            accentClass="text-indigo-300 bg-indigo-950/90 border-indigo-500/30"
+          />
+        </div>
+      ) : (
+        <BoardRow
+          cards={firstBoard}
+          size={size}
+          compact={compact}
+          canReveal={canReveal}
+          isRevealing={isRevealing}
+          onReveal={onReveal}
+          accentClass=""
+        />
+      )}
+
+      {showRevealButton && canReveal && (
+        <button
+          type="button"
+          onClick={onReveal}
+          disabled={isRevealing}
+          className="flex items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-950/60 px-3 py-1.5 text-[10px] font-black text-amber-200 shadow transition hover:bg-amber-900/70 active:scale-95 disabled:cursor-wait disabled:opacity-70"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          {revealLabel}
+        </button>
+      )}
+
+      {!compact && !isHandEnd && hasHiddenCards && (
+        <span className="text-[10px] font-bold text-slate-500">未发出的牌会在对应街道翻开</span>
+      )}
+    </div>
+  );
+}

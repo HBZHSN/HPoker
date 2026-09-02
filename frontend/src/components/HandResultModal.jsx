@@ -1,5 +1,6 @@
 import React from 'react';
 import CardView from './CardView';
+import CommunityBoard from './CommunityBoard';
 import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers } from 'lucide-react';
 
 export default function HandResultModal({
@@ -7,8 +8,11 @@ export default function HandResultModal({
   handNumber = 1,
   boardCards = [],
   boardCards2 = [],
+  boardCardsFull = [],
+  boardCards2Full = [],
   allInInitialBoardCount = 0,
   ritEnabled = false,
+  boardCardsRevealed = false,
   handResults = [],
   totalPot = 0,
   selfSeat = null,
@@ -16,6 +20,8 @@ export default function HandResultModal({
   buyinChips = 1000,
   readyPlayerIds = [],
   onShowCard,
+  onRevealBoard,
+  isRevealingBoard = false,
   onToggleReady,
   onRebuy,
   onStartNextHand,
@@ -47,9 +53,7 @@ export default function HandResultModal({
     }
   };
 
-  const hasTwoBoards = (ritEnabled || (boardCards2 && boardCards2.length > 0));
-  const initialCount = allInInitialBoardCount || 0;
-  const run2Cards = (boardCards2 || []).slice(initialCount);
+  const hasTwoBoards = ritEnabled || boardCards2.length > 0 || boardCards2Full.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
@@ -80,29 +84,20 @@ export default function HandResultModal({
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
             {/* Board Community Cards */}
-            {!hasTwoBoards ? (
-              <div className="flex items-center gap-1.5 bg-black/50 p-1.5 sm:p-2 rounded-xl border border-slate-800">
-                <span className="text-[11px] font-bold text-slate-400 mr-1 hidden sm:inline">公共牌:</span>
-                {boardCards && boardCards.length > 0 ? (
-                  boardCards.map((c, i) => <CardView key={i} card={c} size="xs" />)
-                ) : (
-                  <span className="text-xs text-slate-500 italic">无公共牌</span>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1 bg-black/60 p-1.5 rounded-xl border border-purple-500/30 text-xs">
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-purple-300 font-bold w-12">第1次:</span>
-                  {boardCards.map((c, i) => <CardView key={i} card={c} size="xs" />)}
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-indigo-300 font-bold w-12">
-                    {initialCount === 0 ? '第2次:' : initialCount === 3 ? '第2次(转/河):' : '第2次(河):'}
-                  </span>
-                  {run2Cards.map((c, i) => <CardView key={i} card={c} size="xs" />)}
-                </div>
-              </div>
-            )}
+            <CommunityBoard
+              boardCards={boardCards}
+              boardCards2={boardCards2}
+              boardCardsFull={boardCardsFull}
+              boardCards2Full={boardCards2Full}
+              allInInitialBoardCount={allInInitialBoardCount}
+              ritEnabled={ritEnabled}
+              street="HAND_END"
+              boardCardsRevealed={boardCardsRevealed}
+              onReveal={onRevealBoard}
+              isRevealing={isRevealingBoard}
+              size="xs"
+              compact
+            />
 
             {/* Close Button */}
             {onClose && (
