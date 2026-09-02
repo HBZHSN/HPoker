@@ -141,9 +141,14 @@ class TerminalTui:
         lines.append(prompt_line)
 
         output_lines = []
-        for line in lines[:height]:
-            output_lines.append(f"\033[2K{self._clip(line, width)}")
-        output = "\033[H" + "\n".join(output_lines) + "\033[J"
+        for row, line in enumerate(lines[:height], start=1):
+            # A bare LF moves down but may keep the current column.  That is
+            # why the old implementation rendered every row diagonally in
+            # terminals whose ONLCR behavior differed.  Address each row by
+            # absolute position so every redraw starts at column one.
+            output_lines.append(f"\033[{row};1H\033[2K{self._clip(line, width)}")
+        clear_from = min(len(lines), height) + 1
+        output = "\033[H" + "".join(output_lines) + f"\033[{clear_from};1H\033[J"
         try:
             self.output_stream.write(output)
             self.output_stream.flush()

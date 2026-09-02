@@ -80,6 +80,8 @@ def test_terminal_tui_replaces_frame_instead_of_appending_lines():
 
     rendered = output.getvalue()
     assert rendered.count("\033[H") == 2
+    assert "\033[1;1H" in rendered
+    assert "\033[2;1H" in rendered
     assert "新画面" in rendered
     assert "牌桌> " in rendered
     assert tui._fit_frame(["1", "2", "3", "4", "5"], 3) == ["1", "2", "3"]
