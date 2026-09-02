@@ -288,7 +288,7 @@ class PokerCliController:
                 command = await self._read_command("大厅> ")
                 if command is None:
                     break
-                if not command:
+                if not command.raw:
                     continue
                 self.command_history.append(command.raw)
 
@@ -578,7 +578,7 @@ class PokerCliController:
             command = await self._read_command(prompt)
             if command is None:
                 break
-            if not command:
+            if not command.raw:
                 continue
             self.command_history.append(command.raw)
             try:
@@ -992,11 +992,15 @@ class PokerCliController:
         line = await self._async_input(prompt)
         if self._stdin_closed:
             return None
+        # ``None`` is reserved for EOF.  An empty Enter is a valid no-op and
+        # must return to the command prompt instead of closing the loop.
+        if not line.strip():
+            return CliCommand(name="", raw="")
         try:
-            return parse_command(line)
+            return parse_command(line) or CliCommand(name="", raw="")
         except CommandParseError as exc:
             self._output(self.renderer.c(str(exc), Colors.BRIGHT_RED))
-            return None
+            return CliCommand(name="", raw="")
 
     async def _prompt_text(self, prompt: str, default: str) -> Optional[str]:
         value = await self._async_input(prompt)
@@ -1049,6 +1053,8 @@ class PokerCliController:
                 line = await self.tui.read_line(prompt, self.command_history)
             finally:
                 self.tui.clear_input()
+            if getattr(self.tui, "eof_requested", False):
+                self._stdin_closed = True
             self._tui_panel = None
             self._refresh_tui()
             return line

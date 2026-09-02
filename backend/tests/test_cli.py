@@ -89,6 +89,35 @@ def test_terminal_tui_replaces_frame_instead_of_appending_lines():
     assert tui._fit_frame(["1", "2", "3", "4", "5"], 3) == ["1", "2", "3"]
 
 
+@pytest.mark.asyncio
+async def test_tui_empty_enter_is_not_eof_but_ctrl_d_is():
+    tui = TerminalTui(input_stream=io.StringIO(), output_stream=io.StringIO())
+    tui.active = True
+    loop = asyncio.get_running_loop()
+
+    tui._read_future = loop.create_future()
+    tui._handle_character("\n")
+    assert tui._read_future.result() == ""
+    assert tui.eof_requested is False
+
+    tui._input_text = ""
+    tui._read_future = loop.create_future()
+    tui._handle_character("\x04")
+    assert tui._read_future.result() == ""
+    assert tui.eof_requested is True
+
+
+@pytest.mark.asyncio
+async def test_controller_empty_command_returns_to_prompt():
+    controller = PokerCliController(enable_color=False)
+    controller._async_input = AsyncMock(return_value="")
+
+    command = await controller._read_command("牌桌> ")
+
+    assert command is not None
+    assert command.raw == ""
+
+
 def test_controller_routes_tui_feedback_to_fixed_footer():
     controller = PokerCliController(enable_color=False)
     controller.tui.active = True

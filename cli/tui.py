@@ -36,6 +36,7 @@ class TerminalTui:
         self._saved_terminal: Optional[list] = None
         self._input_fd: Optional[int] = None
         self._read_future: Optional[asyncio.Future[str]] = None
+        self._eof_requested = False
         self._prompt = ""
         self._input_text = ""
         self._history: list[str] = []
@@ -111,6 +112,12 @@ class TerminalTui:
     def input_text(self) -> str:
         return self._input_text
 
+    @property
+    def eof_requested(self) -> bool:
+        """Whether the last read ended because the user sent Ctrl-D/EOF."""
+
+        return self._eof_requested
+
     def clear_input(self) -> None:
         self._input_text = ""
 
@@ -164,6 +171,7 @@ class TerminalTui:
             raise RuntimeError("TUI is not active")
 
         loop = asyncio.get_running_loop()
+        self._eof_requested = False
         future: asyncio.Future[str] = loop.create_future()
         self._read_future = future
         self._prompt = prompt
@@ -189,6 +197,7 @@ class TerminalTui:
             self._read_future.set_exception(exc)
             return
         if not raw:
+            self._eof_requested = True
             self._read_future.set_result("")
             return
 
@@ -223,6 +232,7 @@ class TerminalTui:
                 self._input_text = self._input_text[:-1]
                 self._draw_current()
             elif self._read_future and not self._read_future.done():
+                self._eof_requested = True
                 self._read_future.set_result("")
         elif char in {"\x08", "\x7f"}:
             if self._input_text:
