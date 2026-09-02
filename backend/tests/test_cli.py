@@ -8,9 +8,41 @@ from cli.api_client import PokerApiClient
 from cli.ws_client import PokerWsClient
 from cli.ui_renderer import PokerUiRenderer, Colors
 from cli.controller import PokerCliController
+from cli.commands import (
+    BetSizingContext,
+    CommandParseError,
+    parse_command,
+    resolve_bet_amount,
+)
 from backend.app.services.user_manager import user_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.models.room import RoomConfig
+
+
+def test_cli_command_parser_and_bet_sizing():
+    command = parse_command('create "Friday cash game" --buyin 2000')
+    assert command is not None
+    assert command.name == "create"
+    assert command.args == ("Friday cash game", "--buyin", "2000")
+
+    with pytest.raises(CommandParseError):
+        parse_command('create "unfinished')
+
+    context = BetSizingContext(
+        pot=200,
+        minimum=40,
+        maximum=1000,
+        small_blind=10,
+        current_round_bet=0,
+        current_highest_bet=40,
+    )
+    assert resolve_bet_amount("1/3p", context) == 70
+    assert resolve_bet_amount("2/3p", context) == 130
+    assert resolve_bet_amount("3bb", context) == 60
+    assert resolve_bet_amount("+1bb", context) == 60
+    assert resolve_bet_amount("all-in", context) == 1000
+    assert resolve_bet_amount(None, context) == 40
+    assert resolve_bet_amount("not-an-amount", context) is None
 
 
 class TestPokerUiRenderer:
@@ -380,4 +412,3 @@ class TestPokerCliController:
                 assert rep is not None
                 assert "player_records" in rep
                 assert len(rep["player_records"]) == 2
-
