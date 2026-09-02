@@ -33,8 +33,9 @@ def choose_bot_action(
     """Choose a random legal Fold, Call, or Bet/Raise action.
 
     A poker ``Call`` is represented by ``Check`` when there is no amount to
-    call.  A post-flop opening bet is represented by ``BET`` because that is
-    the table engine's action type for a raise with no existing bet.
+    call.  A post-flop opening bet is still sent as ``RAISE`` in the bot
+    protocol; the table engine accepts it as its opening-bet branch when no
+    bet exists.
 
     ``chooser`` is injectable so the decision rules can be tested without
     relying on a particular random result.
@@ -61,7 +62,7 @@ def choose_bot_action(
         options["call"] = BotDecision(ActionType.CHECK)
 
     if legal.can_bet:
-        options["raise"] = BotDecision(ActionType.BET, legal.min_bet)
+        options["raise"] = BotDecision(ActionType.RAISE, legal.min_bet)
     elif legal.can_raise:
         options["raise"] = BotDecision(ActionType.RAISE, legal.min_raise_to)
 
