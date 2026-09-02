@@ -1,5 +1,6 @@
 """Comprehensive Unit Tests for Poker CLI Client."""
 
+import io
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -9,6 +10,7 @@ from cli.main import parse_args
 from cli.ws_client import PokerWsClient
 from cli.ui_renderer import PokerUiRenderer, Colors
 from cli.controller import PokerCliController
+from cli.tui import TerminalTui
 from cli.commands import (
     BetSizingContext,
     CommandParseError,
@@ -66,6 +68,34 @@ def test_cli_entrypoint_options():
     assert args.no_color is True
     assert args.http_timeout == 3.5
     assert args.reconnect_attempts == 4
+
+
+def test_terminal_tui_replaces_frame_instead_of_appending_lines():
+    output = io.StringIO()
+    tui = TerminalTui(input_stream=io.StringIO(), output_stream=output)
+    tui.active = True
+
+    tui.draw("旧画面", prompt="牌桌> ", input_text="r 1/2p")
+    tui.draw("新画面", prompt="牌桌> ", input_text="")
+
+    rendered = output.getvalue()
+    assert rendered.count("\033[H") == 2
+    assert "新画面" in rendered
+    assert "牌桌> " in rendered
+    assert tui._fit_frame(["1", "2", "3", "4", "5"], 3) == ["1", "2", "3"]
+
+
+def test_controller_routes_tui_feedback_to_fixed_footer():
+    controller = PokerCliController(enable_color=False)
+    controller.tui.active = True
+    controller._refresh_tui = MagicMock()
+
+    controller._output("操作已发送")
+    assert controller._tui_notice == "操作已发送"
+    assert controller._tui_panel is None
+
+    controller._output("帮助第一行\n帮助第二行", panel=True)
+    assert controller._tui_panel == "帮助第一行\n帮助第二行"
 
 
 class TestPokerUiRenderer:

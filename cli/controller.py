@@ -24,6 +24,7 @@ from cli.commands import (
     resolve_bet_amount,
 )
 from cli.ui_renderer import Colors, PokerUiRenderer
+from cli.tui import TerminalTui
 from cli.ws_client import PokerWsClient
 
 
@@ -64,6 +65,86 @@ class PokerCliController:
         self._render_lock = asyncio.Lock()
         self.command_history: List[str] = []
 
+        # Dashboard mode uses a single alternate-screen frame when a real
+        # terminal is available.  Stream mode and redirected output keep the
+        # traditional line-oriented behavior.
+        self.tui = TerminalTui()
+        self._tui_view: Optional[str] = None
+        self._tui_notice = ""
+        self._tui_panel: Optional[str] = None
+        self._tui_prompt = ""
+
+    # ------------------ Fixed-screen TUI ------------------
+
+    def _begin_tui(self, view: str) -> bool:
+        """Start the fixed dashboard screen when stdout/stdin are terminals."""
+
+        if self.renderer.mode != "dashboard":
+            return False
+        if not self.tui.active and not self.tui.enter():
+            return False
+        if self._tui_view != view:
+            self._tui_prompt = ""
+            self._tui_panel = None
+            self.tui.clear_input()
+        self._tui_view = view
+        self._refresh_tui()
+        return self.tui.active
+
+    def _end_tui(self) -> None:
+        self.tui.exit()
+        self._tui_view = None
+        self._tui_notice = ""
+        self._tui_panel = None
+        self._tui_prompt = ""
+
+    def _refresh_tui(self) -> None:
+        """Draw the current lobby/table frame and its fixed footer."""
+
+        if not self.tui.active:
+            return
+
+        if self._tui_panel is not None:
+            frame = self._tui_panel
+        elif self._tui_view == "lobby" and self.current_user:
+            frame = self.renderer.render_lobby(self.current_user, self.rooms, self.server_url)
+        elif self._tui_view == "room" and self.active_room_data:
+            frame = self.renderer.render_table_dashboard(self.active_room_data, self._current_user_id())
+        elif self._tui_view == "room":
+            frame = "HPoker 牌桌\n\n正在等待服务器发送房间状态……"
+        else:
+            frame = "HPoker\n\n正在加载……"
+
+        if self._tui_view == "room":
+            prompt = "断线> " if not self.ws_client or not self.ws_client.is_connected else "牌桌> "
+        else:
+            prompt = "大厅> "
+        if self._tui_prompt:
+            prompt = self._tui_prompt
+        footer = self._tui_notice
+        if self._tui_panel:
+            panel_hint = "输入命令后返回主画面；方向键 ↑/↓ 可浏览历史命令"
+            footer = f"{footer}\n{panel_hint}" if footer else panel_hint
+        self.tui.draw(
+            frame,
+            prompt=prompt,
+            input_text=self.tui.input_text,
+            footer=footer,
+        )
+
+    def _output(self, message: Any = "", *, panel: bool = False) -> None:
+        """Send user feedback to the footer instead of scrolling the TUI."""
+
+        if not self.tui.active:
+            print(message)
+            return
+        text = str(message)
+        if panel or "\n" in text.strip("\n"):
+            self._tui_panel = text.strip("\n")
+        else:
+            self._tui_notice = text
+        self._refresh_tui()
+
     # ------------------ Authentication Flow ------------------
 
     async def _try_login(self, username: str, password: str) -> bool:
@@ -75,7 +156,7 @@ class PokerCliController:
                 raise PokerApiError("服务器返回的登录信息不完整")
             self.auth_token = token
             self.current_user = user
-            print(
+            self._output(
                 self.renderer.c(
                     f"✓ 登录成功！欢迎回来，{user.get('nickname', user.get('username', username))}",
                     Colors.BRIGHT_GREEN + Colors.BOLD,
@@ -83,7 +164,7 @@ class PokerCliController:
             )
             return True
         except Exception as exc:
-            print(self.renderer.c(f"✗ 登录失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"✗ 登录失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
             return False
 
     async def login_flow(self) -> bool:
@@ -99,9 +180,9 @@ class PokerCliController:
             self.default_username = None
 
         while True:
-            print("\n" + self.renderer.c("=" * 60, Colors.CYAN))
-            print(self.renderer.c("  HPoker 终端客户端 - 用户登录", Colors.BOLD + Colors.BRIGHT_WHITE))
-            print(self.renderer.c("=" * 60, Colors.CYAN))
+            self._output("\n" + self.renderer.c("=" * 60, Colors.CYAN))
+            self._output(self.renderer.c("  HPoker 终端客户端 - 用户登录", Colors.BOLD + Colors.BRIGHT_WHITE))
+            self._output(self.renderer.c("=" * 60, Colors.CYAN))
 
             username = (await self._async_input("用户名（输入 users 查看账号，q 退出）: ")).strip()
             if self._stdin_closed:
@@ -119,14 +200,14 @@ class PokerCliController:
                 return False
             if await self._try_login(username, password):
                 return True
-            print("请重新输入；输入 users 可查看可用账号。")
+            self._output("请重新输入；输入 users 可查看可用账号。")
 
     async def _show_users(self) -> None:
         try:
             users = await self.api.list_users()
-            print(self.renderer.render_users(users))
+            self._output(self.renderer.render_users(users), panel=True)
         except Exception as exc:
-            print(self.renderer.c(f"获取用户列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"获取用户列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     # ------------------ Lobby Loop ------------------
 
@@ -136,32 +217,41 @@ class PokerCliController:
             self.rooms = rooms
             return rooms
         except Exception as exc:
-            print(self.renderer.c(f"获取房间列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"获取房间列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
             return self.rooms
 
     async def run_lobby_loop(self) -> None:
         """Run the lobby until logout or EOF/quit."""
 
-        while self.current_user:
-            rooms = await self._fetch_rooms()
-            if self.renderer.mode == "dashboard":
-                self.renderer.clear_screen()
-            print(self.renderer.render_lobby(self.current_user, rooms, self.server_url))
+        self._begin_tui("lobby")
+        try:
+            while self.current_user:
+                self._begin_tui("lobby")
+                rooms = await self._fetch_rooms()
+                if self.tui.active:
+                    self._tui_view = "lobby"
+                    self._refresh_tui()
+                else:
+                    if self.renderer.mode == "dashboard":
+                        self.renderer.clear_screen()
+                    self._output(self.renderer.render_lobby(self.current_user, rooms, self.server_url))
 
-            command = await self._read_command("大厅> ")
-            if command is None:
-                break
-            if not command:
-                continue
-            self.command_history.append(command.raw)
+                command = await self._read_command("大厅> ")
+                if command is None:
+                    break
+                if not command:
+                    continue
+                self.command_history.append(command.raw)
 
-            try:
-                should_continue = await self._dispatch_lobby_command(command, rooms)
-            except Exception as exc:
-                print(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
-                should_continue = True
-            if not should_continue:
-                break
+                try:
+                    should_continue = await self._dispatch_lobby_command(command, rooms)
+                except Exception as exc:
+                    self._output(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+                    should_continue = True
+                if not should_continue:
+                    break
+        finally:
+            self._end_tui()
 
     async def _dispatch_lobby_command(
         self,
@@ -172,12 +262,12 @@ class PokerCliController:
         args = command.args
 
         if name in {"q", "quit", "exit"}:
-            print("再见！祝游戏愉快！")
+            self._output("再见！祝游戏愉快！")
             return False
         if name in {"r", "refresh", "list", "rooms"}:
             return True
         if name in {"help", "h", "?"}:
-            print(self.renderer.render_help("lobby"))
+            self._output(self.renderer.render_help("lobby"), panel=True)
             return True
         if name in {"users", "userlist"}:
             await self._show_users()
@@ -189,13 +279,14 @@ class PokerCliController:
             self._set_color(args[0] if args else None)
             return True
         if name in {"user", "switch", "login", "logout"}:
+            self._end_tui()
             self.current_user = None
             self.auth_token = None
             self.default_username = None
             return await self.login_flow()
         if name in {"create", "new", "c"}:
             if args and args[0].lower() in {"help", "?"}:
-                print(self._render_create_help())
+                self._output(self._render_create_help(), panel=True)
             else:
                 await self.create_room_flow(args)
             return True
@@ -208,7 +299,7 @@ class PokerCliController:
             return True
         if name in {"info", "inspect", "show"}:
             if not args:
-                print("用法: info <房间序号或 room_id>")
+                self._output("用法: info <房间序号或 room_id>")
             else:
                 await self._show_room_info(self._resolve_room_ref(args[0], rooms))
             return True
@@ -217,10 +308,10 @@ class PokerCliController:
             if 1 <= index <= len(rooms):
                 await self.enter_room(str(rooms[index - 1].get("room_id", "")))
             else:
-                print("无效的房间序号。")
+                self._output("无效的房间序号。")
             return True
 
-        print(f"未知大厅命令: {command.raw}；输入 help 查看可用命令。")
+        self._output(f"未知大厅命令: {command.raw}；输入 help 查看可用命令。")
         return True
 
     def _resolve_room_ref(self, value: str, rooms: Sequence[Dict[str, Any]]) -> str:
@@ -233,9 +324,9 @@ class PokerCliController:
     async def _show_room_info(self, room_id: str) -> None:
         try:
             room = await self.api.get_room(room_id, self._current_user_id())
-            print(self.renderer.render_room_details(room))
+            self._output(self.renderer.render_room_details(room), panel=True)
         except Exception as exc:
-            print(self.renderer.c(f"获取房间详情失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"获取房间详情失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def create_room_flow(self, args: Optional[Sequence[str]] = None) -> None:
         """Create a room interactively or from ``create --option value``."""
@@ -257,11 +348,11 @@ class PokerCliController:
                 supplied = self._parse_create_options(options)
                 defaults.update(supplied)
             except ValueError as exc:
-                print(self.renderer.c(f"创建参数错误: {exc}", Colors.BRIGHT_RED))
-                print(self._render_create_help())
+                self._output(self.renderer.c(f"创建参数错误: {exc}", Colors.BRIGHT_RED))
+                self._output(self._render_create_help(), panel=True)
                 return
         else:
-            print("\n" + self.renderer.c("--- 创建德州扑克现金桌（回车使用默认值）---", Colors.BOLD + Colors.CYAN))
+            self._output("\n" + self.renderer.c("--- 创建德州扑克现金桌（回车使用默认值）---", Colors.BOLD + Colors.CYAN))
             name = await self._prompt_text(f"房间名称 [{defaults['name']}]: ", str(defaults["name"]))
             if name is None:
                 return
@@ -296,11 +387,11 @@ class PokerCliController:
                 max_seats=int(defaults["seats"]),
             )
             room_id = room_data.get("room_id", "")
-            print(self.renderer.c(f"✓ 房间创建成功！ID: {room_id}", Colors.BRIGHT_GREEN + Colors.BOLD))
+            self._output(self.renderer.c(f"✓ 房间创建成功！ID: {room_id}", Colors.BRIGHT_GREEN + Colors.BOLD))
             if room_id:
                 await self.enter_room(room_id)
         except Exception as exc:
-            print(self.renderer.c(f"✗ 创建房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"✗ 创建房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     @staticmethod
     def _parse_create_options(args: Sequence[str]) -> Dict[str, Any]:
@@ -379,9 +470,10 @@ class PokerCliController:
 
         room_id = room_id.strip()
         if not room_id or not self.current_user:
-            print("房间 ID 不能为空。")
+            self._output("房间 ID 不能为空。")
             return
 
+        had_tui = self.tui.active
         self.active_room_id = room_id
         self.active_room_data = None
         self._in_room = True
@@ -389,14 +481,17 @@ class PokerCliController:
         self._connection_lost = False
         self._room_deleted = False
         self.ws_client = self._new_ws_client(room_id)
+        if self.renderer.mode == "dashboard":
+            self._begin_tui("room")
 
-        print(f"正在连接房间 {room_id} ...")
+        tui_owner = not had_tui and self.tui.active
+        self._output(f"正在连接房间 {room_id} ...")
         try:
             await self.ws_client.connect(retries=self.reconnect_attempts, retry_delay=0.8)
-            print(self.renderer.c("✓ 已连接。输入 help 查看牌桌命令。", Colors.BRIGHT_GREEN))
+            self._output(self.renderer.c("✓ 已连接。输入 help 查看牌桌命令。", Colors.BRIGHT_GREEN))
             await self._in_room_input_loop()
         except Exception as exc:
-            print(self.renderer.c(f"✗ 无法连接到房间: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"✗ 无法连接到房间: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
         finally:
             self._in_room = False
             self._closing_room = True
@@ -406,6 +501,12 @@ class PokerCliController:
             self.active_room_id = None
             self.active_room_data = None
             self._closing_room = False
+            if tui_owner:
+                self._end_tui()
+            elif self.tui.active:
+                self._tui_view = "lobby"
+                self._tui_panel = None
+                self._refresh_tui()
 
     def _new_ws_client(self, room_id: str) -> PokerWsClient:
         parsed = urlsplit(self.server_url if "://" in self.server_url else f"http://{self.server_url}")
@@ -436,14 +537,14 @@ class PokerCliController:
             try:
                 await self._dispatch_room_command(command)
             except Exception as exc:
-                print(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+                self._output(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _dispatch_room_command(self, command: CliCommand) -> None:
         name = command.name
         args = command.args
 
         if name in {"leave", "back", "lobby", "exit"}:
-            print("正在离开房间...")
+            self._output("正在离开房间...")
             self._in_room = False
             return
         if name in {"help", "h", "?"}:
@@ -454,14 +555,14 @@ class PokerCliController:
             return
         if name in {"status", "info", "table"}:
             if self.active_room_data:
-                print(self.renderer.render_room_details(self.active_room_data))
+                self._output(self.renderer.render_room_details(self.active_room_data), panel=True)
             else:
-                print("尚未收到房间状态。")
+                self._output("尚未收到房间状态。")
             return
         if name in {"history", "log"}:
             limit = self._parse_positive_int(args[0], 10) if args else 10
             if self.active_room_data:
-                print(self.renderer.render_action_history(self.active_room_data, limit))
+                self._output(self.renderer.render_action_history(self.active_room_data, limit), panel=True)
             return
         if name in {"mode", "view"}:
             self._set_mode(args[0] if args else None)
@@ -488,18 +589,18 @@ class PokerCliController:
             return
         if name in {"sit", "seat"}:
             if not args:
-                print("用法: sit <座位号>（从 0 开始）")
+                self._output("用法: sit <座位号>（从 0 开始）")
                 return
             seat = self._parse_nonnegative_int(args[0])
             if seat is None:
-                print("座位号必须是非负整数。")
+                self._output("座位号必须是非负整数。")
                 return
             await self._send_ws("sit_down", seat)
             return
         if name in {"stand", "standup"}:
             seat = self._get_my_seat_index()
             if seat is None:
-                print("你当前未入座。")
+                self._output("你当前未入座。")
             else:
                 await self._send_ws("stand_up", seat)
             return
@@ -524,7 +625,7 @@ class PokerCliController:
         if name == "rit":
             choice = self._parse_positive_int(args[0], 0) if args else 0
             if choice not in (1, 2):
-                print("用法: rit 1（发一次）或 rit 2（发两次）")
+                self._output("用法: rit 1（发一次）或 rit 2（发两次）")
             else:
                 await self._send_ws("rit_choice", choice)
             return
@@ -544,50 +645,50 @@ class PokerCliController:
             await self._export_settlement(args[0] if args else None)
             return
 
-        print(f"未知牌桌命令: {command.raw}；输入 help 查看可用命令。")
+        self._output(f"未知牌桌命令: {command.raw}；输入 help 查看可用命令。")
 
     async def _reconnect_room(self) -> None:
         if not self.ws_client:
-            print("当前没有房间连接。")
+            self._output("当前没有房间连接。")
             return
         try:
-            print("正在重连...")
+            self._output("正在重连...")
             await self.ws_client.reconnect(retries=self.reconnect_attempts, retry_delay=0.8)
             self._connection_lost = False
-            print(self.renderer.c("✓ 重连成功，服务器会发送最新状态。", Colors.BRIGHT_GREEN))
+            self._output(self.renderer.c("✓ 重连成功，服务器会发送最新状态。", Colors.BRIGHT_GREEN))
         except Exception as exc:
             self._connection_lost = True
-            print(self.renderer.c(f"重连失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"重连失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _send_ws(self, method: str, *args: Any, **kwargs: Any) -> bool:
         if not self.ws_client or not self.ws_client.is_connected:
-            print("当前已断线，请输入 reconnect 重连。")
+            self._output("当前已断线，请输入 reconnect 重连。")
             return False
         try:
             await getattr(self.ws_client, method)(*args, **kwargs)
             return True
         except Exception as exc:
-            print(self.renderer.c(f"发送操作失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"发送操作失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
             return False
 
     async def _send_action(self, action: str, amount: int) -> bool:
         legal = self._get_legal_actions()
         if action == "FOLD" and not legal.get("can_fold", False):
-            print("当前不能弃牌。")
+            self._output("当前不能弃牌。")
             return False
         if action == "CHECK" and not legal.get("can_check", False):
-            print("当前不能过牌。")
+            self._output("当前不能过牌。")
             return False
         if action == "CALL" and not legal.get("can_call", False):
-            print("当前不能跟注。")
+            self._output("当前不能跟注。")
             return False
         if action == "ALL_IN" and not legal.get("can_all_in", False):
-            print("当前不能全下。")
+            self._output("当前不能全下。")
             return False
         if action in {"BET", "RAISE"} and not (
             legal.get("can_bet", False) or legal.get("can_raise", False)
         ):
-            print("当前不能下注或加注。")
+            self._output("当前不能下注或加注。")
             return False
         return await self._send_ws("player_action", action, int(amount))
 
@@ -598,7 +699,7 @@ class PokerCliController:
         elif legal.get("can_call"):
             await self._send_action("CALL", self._as_int(legal.get("call_amount")))
         else:
-            print("当前不可过牌或跟注（可能还没轮到你）。")
+            self._output("当前不可过牌或跟注（可能还没轮到你）。")
 
     async def _handle_all_in(self) -> None:
         legal = self._get_legal_actions()
@@ -613,7 +714,7 @@ class PokerCliController:
         can_bet = bool(legal.get("can_bet", False))
         can_raise = bool(legal.get("can_raise", False))
         if not can_bet and not can_raise:
-            print("当前不可下注或加注（可能还没轮到你）。")
+            self._output("当前不可下注或加注（可能还没轮到你）。")
             return
 
         action = "BET" if can_bet else "RAISE"
@@ -639,49 +740,49 @@ class PokerCliController:
         token = parts[1] if len(parts) > 1 else None
         target = resolve_bet_amount(token, context)
         if target is None:
-            print("无法识别下注额度；示例: r 100、r 1/2p、r 2.5bb、r +1bb、r allin")
+            self._output("无法识别下注额度；示例: r 100、r 1/2p、r 2.5bb、r +1bb、r allin")
             return
 
         raw_numeric = self._parse_raw_number(token)
         if raw_numeric is not None and raw_numeric < minimum:
-            print(f"下注金额小于最小值 {minimum}，已调整为 {target}。")
+            self._output(f"下注金额小于最小值 {minimum}，已调整为 {target}。")
         if raw_numeric is not None and raw_numeric > maximum:
-            print(f"下注金额超过最大值 {maximum}，已调整为全下额度 {target}。")
+            self._output(f"下注金额超过最大值 {maximum}，已调整为全下额度 {target}。")
         await self._send_action(action, target)
 
     async def _handle_show_command(self, name: str, args: List[str]) -> None:
         if not self.active_room_data or self.active_room_data.get("table", {}).get("street") != "HAND_END":
-            print("只有本手结束后才能亮牌。")
+            self._output("只有本手结束后才能亮牌。")
             return
 
         choice = name.lower()
         value = args[0].lower() if args else ""
         if choice == "s1" or value == "1":
             await self._send_ws("show_card", card_index=0)
-            print("✓ 已亮出第 1 张手牌。")
+            self._output("✓ 已亮出第 1 张手牌。")
         elif choice == "s2" or value == "2":
             await self._send_ws("show_card", card_index=1)
-            print("✓ 已亮出第 2 张手牌。")
+            self._output("✓ 已亮出第 2 张手牌。")
         elif choice in {"sa", "showall"} or value in {"all", "a"}:
             await self._send_ws("show_card", show_all=True)
-            print("✓ 已亮出全部手牌。")
+            self._output("✓ 已亮出全部手牌。")
         elif choice in {"muck", "hide"} or value in {"hide", "none", "muck"}:
             await self._send_ws("show_card", hide_all=True)
-            print("✓ 已盖牌。")
+            self._output("✓ 已盖牌。")
         elif value == "toggle" and len(args) > 1 and args[1] in {"1", "2"}:
             await self._send_ws("show_card", toggle_index=int(args[1]) - 1)
         else:
-            print("用法: show 1 | show 2 | show all | show toggle 1 | muck")
+            self._output("用法: show 1 | show 2 | show all | show toggle 1 | muck")
 
     # ------------------ Room Lifecycle / Settlement ------------------
 
     async def _end_room(self) -> None:
         if not self._is_host():
-            print("只有房主可以结束房间。")
+            self._output("只有房主可以结束房间。")
             return
         confirmed = (await self._async_input("确定结束房间并生成结算清单吗？(y/n): ")).strip().lower()
         if self._stdin_closed or confirmed not in {"y", "yes"}:
-            print("已取消。")
+            self._output("已取消。")
             return
         if self.ws_client and self.ws_client.is_connected:
             await self._send_ws("end_room")
@@ -689,58 +790,58 @@ class PokerCliController:
         try:
             report = await self.api.end_room(self.active_room_id or "", self._current_user_id())
             self._merge_settlement_report(report)
-            print(self.renderer.render_settlement_report(report))
+            self._output(self.renderer.render_settlement_report(report), panel=True)
         except Exception as exc:
-            print(self.renderer.c(f"结束房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"结束房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _delete_room(self) -> None:
         if not self._is_host() and not bool(self.current_user and self.current_user.get("is_admin")):
-            print("只有房主或管理员可以解散房间。")
+            self._output("只有房主或管理员可以解散房间。")
             return
         confirmed = (await self._async_input("确定解散房间并让所有玩家退出吗？(y/n): ")).strip().lower()
         if self._stdin_closed or confirmed not in {"y", "yes"}:
-            print("已取消。")
+            self._output("已取消。")
             return
         if self.ws_client and self.ws_client.is_connected:
             await self._send_ws("delete_room")
             return
         try:
             await self.api.delete_room(self.active_room_id or "", self._current_user_id())
-            print("房间已解散。")
+            self._output("房间已解散。")
             self._in_room = False
         except Exception as exc:
-            print(self.renderer.c(f"解散房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"解散房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _show_settlement(self) -> None:
         report = self.active_room_data.get("settlement_report") if self.active_room_data else None
         if report:
-            print(self.renderer.render_settlement_report(report))
+            self._output(self.renderer.render_settlement_report(report), panel=True)
             return
         if not self.active_room_id:
-            print("当前没有房间结算清单。")
+            self._output("当前没有房间结算清单。")
             return
         try:
             room = await self.api.get_room(self.active_room_id, self._current_user_id())
             report = room.get("settlement_report")
             if report:
                 self.active_room_data = room
-                print(self.renderer.render_settlement_report(report))
+                self._output(self.renderer.render_settlement_report(report), panel=True)
             else:
-                print("当前房间尚未结束；房主输入 end 后才会生成结算清单。")
+                self._output("当前房间尚未结束；房主输入 end 后才会生成结算清单。")
         except Exception as exc:
-            print(self.renderer.c(f"获取结算清单失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"获取结算清单失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _export_settlement(self, requested_path: Optional[str]) -> None:
         report = self.active_room_data.get("settlement_report") if self.active_room_data else None
         if not report:
-            print("当前没有可导出的结算清单。")
+            self._output("当前没有可导出的结算清单。")
             return
         target = Path(requested_path or f"settlement-{self.active_room_id or 'room'}.txt")
         try:
             target.write_text(self.renderer.render_settlement_report(report) + "\n", encoding="utf-8")
-            print(f"✓ 结算清单已保存到: {target}")
+            self._output(f"✓ 结算清单已保存到: {target}")
         except OSError as exc:
-            print(self.renderer.c(f"保存失败: {exc}", Colors.BRIGHT_RED))
+            self._output(self.renderer.c(f"保存失败: {exc}", Colors.BRIGHT_RED))
 
     def _merge_settlement_report(self, report: Dict[str, Any]) -> None:
         if self.active_room_data is None:
@@ -754,26 +855,27 @@ class PokerCliController:
     async def _on_ws_room_state(self, data: Dict[str, Any]) -> None:
         self.active_room_data = data
         async with self._render_lock:
-            if self.renderer.mode == "dashboard":
+            if self.tui.active:
+                self._tui_panel = None
+                self._refresh_tui()
+            elif self.renderer.mode == "dashboard":
                 self.renderer.clear_screen()
-                print(self.renderer.render_table_dashboard(data, self._current_user_id()))
+                self._output(self.renderer.render_table_dashboard(data, self._current_user_id()))
             else:
                 stream_log = self.renderer.render_stream_event("ROOM_STATE", data, self._current_user_id())
                 if stream_log:
-                    print("\n" + stream_log)
-            if self._in_room and not self._closing_room:
+                    self._output("\n" + stream_log)
+            if self._in_room and not self._closing_room and not self.tui.active:
                 self._write_prompt("牌桌> ")
 
     async def _on_ws_action_event(self, data: Dict[str, Any]) -> None:
         if self.renderer.mode == "stream":
             line = self.renderer.render_stream_event("ACTION_EVENT", data, self._current_user_id())
             if line:
-                print("\n" + line)
+                self._output("\n" + line)
                 self._write_prompt("牌桌> ")
 
     async def _on_ws_sound_effect(self, sound: str, extra: Dict[str, Any]) -> None:
-        if self.renderer.mode != "stream":
-            return
         sound_map = {
             "deal": "🃏 发牌",
             "check": "👌 过牌",
@@ -789,25 +891,32 @@ class PokerCliController:
         }
         player_id = extra.get("player_id") if isinstance(extra, dict) else None
         note = f" · {player_id}" if player_id else ""
-        print(f"\n[HPoker] {sound_map.get(sound, sound)}{note}")
-        self._write_prompt("牌桌> ")
+        line = f"[HPoker] {sound_map.get(sound, sound)}{note}"
+        if self.renderer.mode == "stream":
+            self._output("\n" + line)
+            self._write_prompt("牌桌> ")
+        elif self.tui.active:
+            self._output(line)
 
     async def _on_ws_settlement_report(self, data: Dict[str, Any]) -> None:
         report = data.get("report") if isinstance(data, dict) and isinstance(data.get("report"), dict) else data
         if isinstance(report, dict):
             self._merge_settlement_report(report)
             if self.renderer.mode == "stream":
-                print("\n" + self.renderer.render_settlement_report(report))
+                self._output("\n" + self.renderer.render_settlement_report(report), panel=True)
                 self._write_prompt("牌桌> ")
+            elif self.tui.active:
+                self._output("结算报表已更新，输入 bill 查看完整清单。")
 
     async def _on_ws_room_deleted(self, data: Dict[str, Any]) -> None:
         message = data.get("message", "房间已被解散") if isinstance(data, dict) else "房间已被解散"
-        print(self.renderer.c(f"\n[房间已关闭] {message}", Colors.BRIGHT_YELLOW))
+        self._output(self.renderer.c(f"[房间已关闭] {message}", Colors.BRIGHT_YELLOW))
         self._room_deleted = True
         self._in_room = False
+        self.tui.cancel_read("")
 
     async def _on_ws_error(self, msg: str) -> None:
-        print(self.renderer.c(f"\n[服务器提示] {msg}", Colors.BRIGHT_RED))
+        self._output(self.renderer.c(f"[服务器提示] {msg}", Colors.BRIGHT_RED))
         if self._in_room:
             self._write_prompt("牌桌> ")
 
@@ -815,18 +924,22 @@ class PokerCliController:
         if self._closing_room or self._room_deleted:
             return
         self._connection_lost = True
-        print(self.renderer.c("\n[连接已断开] 输入 reconnect 重连，或 leave 返回大厅。", Colors.BRIGHT_YELLOW))
+        self._output(self.renderer.c("[连接已断开] 输入 reconnect 重连，或 leave 返回大厅。", Colors.BRIGHT_YELLOW))
         self._write_prompt("断线> ")
 
     # ------------------ State / Input Helpers ------------------
 
     async def _redraw_room(self) -> None:
         if not self.active_room_data:
-            print("尚未收到房间状态。")
+            self._output("尚未收到房间状态。")
+            return
+        if self.tui.active:
+            self._tui_panel = None
+            self._refresh_tui()
             return
         if self.renderer.mode == "dashboard":
             self.renderer.clear_screen()
-        print(self.renderer.render_table_dashboard(self.active_room_data, self._current_user_id()))
+        self._output(self.renderer.render_table_dashboard(self.active_room_data, self._current_user_id()))
 
     async def _read_command(self, prompt: str) -> Optional[CliCommand]:
         line = await self._async_input(prompt)
@@ -835,7 +948,7 @@ class PokerCliController:
         try:
             return parse_command(line)
         except CommandParseError as exc:
-            print(self.renderer.c(str(exc), Colors.BRIGHT_RED))
+            self._output(self.renderer.c(str(exc), Colors.BRIGHT_RED))
             return None
 
     async def _prompt_text(self, prompt: str, default: str) -> Optional[str]:
@@ -866,10 +979,15 @@ class PokerCliController:
                 return parsed
             except ValueError:
                 range_text = f"{minimum}~{maximum}" if maximum is not None else f">={minimum}"
-                print(f"请输入有效数字（{range_text}）。")
+                self._output(f"请输入有效数字（{range_text}）。")
 
     def _write_prompt(self, prompt: str) -> None:
         if self._closing_room or self._stdin_closed:
+            return
+        if self.tui.active:
+            self._tui_prompt = prompt
+            self._refresh_tui()
+            self._prompt_displayed = True
             return
         sys.stdout.write(prompt)
         sys.stdout.flush()
@@ -877,6 +995,16 @@ class PokerCliController:
 
     async def _async_input(self, prompt: str = "") -> str:
         """Read stdin without blocking the event loop, with EOF detection."""
+
+        if self.tui.active:
+            self._tui_prompt = prompt
+            try:
+                line = await self.tui.read_line(prompt, self.command_history)
+            finally:
+                self.tui.clear_input()
+            self._tui_panel = None
+            self._refresh_tui()
+            return line
 
         if prompt and not self._prompt_displayed:
             sys.stdout.write(prompt)
@@ -902,10 +1030,14 @@ class PokerCliController:
             mode = "stream" if self.renderer.mode == "dashboard" else "dashboard"
         mode = mode.lower()
         if mode not in {"dashboard", "stream"}:
-            print("模式只能是 dashboard 或 stream。")
+            self._output("模式只能是 dashboard 或 stream。")
             return
         self.renderer.mode = mode
-        print(f"已切换为 {mode} 模式。")
+        if mode == "dashboard":
+            self._begin_tui("room" if self._in_room else "lobby")
+        elif self.tui.active:
+            self._end_tui()
+        self._output(f"已切换为 {mode} 模式。")
 
     def _set_color(self, value: Optional[str]) -> None:
         if value:
@@ -915,11 +1047,11 @@ class PokerCliController:
             elif value in {"off", "no", "false", "0"}:
                 self.renderer.enable_color = False
             else:
-                print("color 用法: color on 或 color off")
+                self._output("color 用法: color on 或 color off")
                 return
         else:
             self.renderer.enable_color = not self.renderer.enable_color
-        print(f"终端颜色已{'开启' if self.renderer.enable_color else '关闭'}。")
+        self._output(f"终端颜色已{'开启' if self.renderer.enable_color else '关闭'}。")
 
     def _get_legal_actions(self) -> Dict[str, Any]:
         if not self.active_room_data:
@@ -1005,4 +1137,4 @@ class PokerCliController:
         return str(exc) or exc.__class__.__name__
 
     def _print_in_game_help(self) -> None:
-        print("\n" + self.renderer.render_help("room"))
+        self._output(self.renderer.render_help("room"), panel=True)
