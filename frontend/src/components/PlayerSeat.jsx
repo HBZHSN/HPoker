@@ -68,7 +68,7 @@ export default function PlayerSeat({
   const isAllIn = seatData.is_all_in;
 
   return (
-    <div className={`relative flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
+    <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
       {/* Anchor Container for Avatar Card & Floating Badges */}
       <div className="relative w-full h-full flex flex-col items-center justify-center">
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
@@ -245,7 +245,7 @@ export default function PlayerSeat({
           if (isSelf && holeCards.length > 0) {
             // For self: show all hole cards, with revealed cards highlighted
             return (
-              <div className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3.5 z-10">
+              <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3.5 z-10">
                 {holeCards.map((c, i) => {
                   const isShown = shownCards.some(
                     (sc) =>
@@ -276,7 +276,7 @@ export default function PlayerSeat({
           } else {
             // For opponents: show ONLY revealed cards (+ 1 card back if only 1 of 2 was revealed)
             return (
-              <div className="absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3 z-10">
+              <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3 z-10">
                 {shownCards.map((c, i) => (
                   <CardView key={i} card={c} size="sm" className="shadow-xl ring-2 ring-amber-400" />
                 ))}
@@ -290,7 +290,7 @@ export default function PlayerSeat({
 
         if (holeCards.length > 0) {
           return (
-            <div className={`absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
+            <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
               {holeCards.map((c, i) => (
                 <CardView
                   key={i}
@@ -305,7 +305,7 @@ export default function PlayerSeat({
 
         if (seatData.has_cards && !isFolded) {
           return (
-            <div className={`absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
+            <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
               <CardView isBack size={isSelf ? 'md' : 'sm'} className="-rotate-6 shadow-md" />
               <CardView isBack size={isSelf ? 'md' : 'sm'} className="rotate-6 shadow-md" />
             </div>

@@ -14,6 +14,128 @@ body {
   -webkit-user-select: none;
 }
 
+html,
+#root {
+  min-height: 100%;
+}
+
+/* The desktop table is a two-column app. On a phone the action console moves
+   below a guaranteed-visible table viewport instead of collapsing the table. */
+.poker-table-root {
+  height: 100vh;
+  max-height: none;
+}
+
+@media (max-width: 1023px) {
+  .poker-table-root {
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .poker-table-body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .poker-table-main {
+    flex: 0 0 clamp(420px, 68dvh, 620px);
+    height: clamp(420px, 68dvh, 620px);
+    padding: 8px 8px 24px;
+  }
+
+  .poker-table-shell {
+    height: 100%;
+    max-height: none;
+    padding: 8px;
+    border-radius: clamp(100px, 27vw, 170px);
+  }
+
+  .poker-table-center {
+    gap: 6px;
+  }
+
+  .poker-table-center .poker-community-board {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: thin;
+  }
+
+  .poker-table-actions {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 8px;
+  }
+
+  .poker-table-actions > .poker-action-bar {
+    height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .poker-table-header {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .poker-table-header > :first-child {
+    min-width: 0;
+  }
+
+  .poker-table-header h1 {
+    max-width: 24vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .poker-table-header > :last-child {
+    flex-shrink: 0;
+  }
+
+  /* Keep the hero's cards inside the visible table area on short portrait
+     screens. The avatar remains at the bottom while the cards sit just above it. */
+  .poker-table-seat-anchor[data-screen-position='0'] {
+    top: 84% !important;
+  }
+
+  .poker-player-seat-self .poker-player-cards {
+    top: auto;
+    bottom: calc(100% + 4px);
+    z-index: 25;
+  }
+
+  /* Five full-size cards otherwise exceed a narrow phone's felt width. */
+  .poker-table-center .poker-card[data-card-size='lg'] {
+    width: clamp(2.75rem, 15vw, 3.5rem);
+    height: clamp(4.125rem, 22.5vw, 5.25rem);
+  }
+
+  .poker-table-center .poker-card[data-card-size='md'] {
+    width: clamp(2.25rem, 12vw, 2.75rem);
+    height: clamp(3.375rem, 18vw, 4.125rem);
+  }
+
+  .poker-table-center .poker-card[data-card-size='lg'] .poker-card-rank {
+    font-size: clamp(1.5rem, 7vw, 1.875rem);
+  }
+
+  .poker-table-center .poker-card[data-card-size='lg'] .poker-card-suit {
+    font-size: clamp(1.25rem, 5.5vw, 1.5rem);
+  }
+
+  .poker-table-center .poker-card[data-card-size='md'] .poker-card-rank {
+    font-size: clamp(1.25rem, 6vw, 1.5rem);
+  }
+
+  .poker-table-center .poker-card[data-card-size='md'] .poker-card-suit {
+    font-size: clamp(1rem, 4.5vw, 1.25rem);
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

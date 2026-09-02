@@ -218,9 +218,9 @@ export default function PokerTable({
   ]);
 
   return (
-    <div className="relative w-full h-screen max-h-screen overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
+    <div className="poker-table-root relative w-full h-screen max-h-screen overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
       {/* Top Navigation Bar */}
-      <header className="flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
+      <header className="poker-table-header flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={onLeaveRoom}
@@ -304,11 +304,11 @@ export default function PokerTable({
       </header>
 
       {/* Main Body: Left Poker Table Felt + Right Action Console Sidebar */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
+      <div className="poker-table-body flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
         {/* Left Side: Main Poker Table Felt Area */}
-        <main className="relative flex-1 w-full h-full flex items-center justify-center p-3 pb-8 md:p-6 md:pb-12 select-none min-h-0 min-w-0 overflow-visible">
+        <main className="poker-table-main relative flex-1 w-full h-full flex items-center justify-center p-3 pb-8 md:p-6 md:pb-12 select-none min-h-0 min-w-0 overflow-visible">
           {/* Table Exterior Border Ring (Leather & Wood Armrest) */}
-          <div className="relative w-full h-[88%] md:h-[90%] max-h-[660px] rounded-[170px] md:rounded-[230px] bg-gradient-to-b from-[#2e2018] via-[#1a130e] to-[#0c0806] p-3 md:p-4 shadow-table border-[4px] border-[#3f2e24] overflow-visible">
+          <div className="poker-table-shell relative w-full h-[88%] md:h-[90%] max-h-[660px] rounded-[170px] md:rounded-[230px] bg-gradient-to-b from-[#2e2018] via-[#1a130e] to-[#0c0806] p-3 md:p-4 shadow-table border-[4px] border-[#3f2e24] overflow-visible">
             {/* Table Felt Background & Texture (clipped cleanly inside the inner oval) */}
             <div className="absolute inset-3 md:inset-4 rounded-[155px] md:rounded-[215px] border-2 border-amber-600/35 bg-gradient-to-b from-[#0a2318] via-[#061810] to-[#030e09] shadow-inner overflow-hidden pointer-events-none">
               {/* Felt Texture Pattern */}
@@ -323,9 +323,9 @@ export default function PokerTable({
             </div>
 
             {/* Inner Content Area (Overlay, Seats, Center Area - NOT clipped, allowing overflow) */}
-            <div className="relative w-full h-full">
+            <div className="poker-table-inner relative w-full h-full">
               {/* Center Table Area: Board Cards, Pots & Next Hand Countdown */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
+              <div className="poker-table-center absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
                 {/* Street & Total Pot Badge */}
                 <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
                   <div className="flex items-center gap-3 bg-slate-950/85 px-4 py-1.5 rounded-full border-2 border-amber-500/40 backdrop-blur-md shadow-2xl">
@@ -520,7 +520,8 @@ export default function PokerTable({
                 return (
                   <div
                     key={screenIdx}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
+                    className="poker-table-seat-anchor absolute -translate-x-1/2 -translate-y-1/2 z-20"
+                    data-screen-position={screenIdx}
                     style={{ top: pos.top, left: pos.left }}
                   >
                     <PlayerSeat
@@ -548,7 +549,7 @@ export default function PokerTable({
         </main>
 
         {/* Right Side: Action & Betting Console Sidebar */}
-        <aside className="w-full lg:w-96 xl:w-[410px] h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20">
+        <aside className="poker-table-actions w-full lg:w-96 xl:w-[410px] h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20">
           <ActionBar
             legalActions={table?.legal_actions}
             totalPot={table?.total_pot || 0}

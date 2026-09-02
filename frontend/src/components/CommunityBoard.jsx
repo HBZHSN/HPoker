@@ -16,13 +16,13 @@ function BoardRow({
   const slots = Array.from({ length: BOARD_SIZE }, (_, index) => cards[index] || null);
 
   return (
-    <div className="flex min-w-max items-center gap-1.5 md:gap-2">
+    <div className="poker-board-row flex min-w-max items-center gap-1.5 md:gap-2">
       {label && (
         <span className={`text-[10px] md:text-[11px] font-black px-2 py-0.5 rounded border flex-shrink-0 ${accentClass}`}>
           {label}
         </span>
       )}
-      <div className="flex flex-shrink-0 items-center gap-1.5 md:gap-2">
+      <div className="poker-board-cards flex flex-shrink-0 items-center gap-1.5 md:gap-2">
         {slots.map((card, index) => {
           const isHidden = !card;
           const isClickable = isHidden && canReveal && !isRevealing;
@@ -95,7 +95,7 @@ export default function CommunityBoard({
     : 'pointer-events-auto flex flex-col items-center gap-2 bg-black/60 p-3 rounded-2xl border border-amber-500/25 backdrop-blur-md shadow-2xl overflow-x-auto';
 
   return (
-    <div className={rootClassName}>
+    <div className={`poker-community-board ${rootClassName}`}>
       {hasSecondBoard ? (
         <div className="flex flex-col gap-1.5">
           <BoardRow

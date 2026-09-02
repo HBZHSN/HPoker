@@ -203,7 +203,7 @@ export default function ActionBar({
   };
 
   return (
-    <div className="flex flex-col gap-3 w-full h-full text-slate-100 select-none">
+    <div className="poker-action-bar flex flex-col gap-3 w-full h-full text-slate-100 select-none">
       {/* 1. Turn Status & Countdown Banner */}
       <div
         className={`p-3 rounded-2xl border transition-all duration-300 ${

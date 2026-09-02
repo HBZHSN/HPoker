@@ -37,7 +37,8 @@ export default function CardView({
     return (
       <div
         style={style}
-        className={`relative flex-shrink-0 flex flex-col items-center justify-center border-2 border-amber-600/50 bg-gradient-to-br from-red-950 via-red-900 to-slate-950 shadow-lg select-none ${sizeClasses} ${className}`}
+        data-card-size={size}
+        className={`poker-card relative flex-shrink-0 flex flex-col items-center justify-center border-2 border-amber-600/50 bg-gradient-to-br from-red-950 via-red-900 to-slate-950 shadow-lg select-none ${sizeClasses} ${className}`}
       >
         <div className="w-full h-full p-1 flex items-center justify-center">
           <div className="w-full h-full border border-amber-500/40 rounded flex items-center justify-center bg-[radial-gradient(#d97706_1.5px,transparent_1.5px)] [background-size:6px_6px]">
@@ -55,17 +56,18 @@ export default function CardView({
   return (
     <div
       style={style}
-      className={`relative flex-shrink-0 flex flex-col items-center justify-center p-1 bg-white border-2 select-none shadow-md transition-all duration-200 animate-card-flip ${sizeClasses} ${
+      data-card-size={size}
+      className={`poker-card relative flex-shrink-0 flex flex-col items-center justify-center p-1 bg-white border-2 select-none shadow-md transition-all duration-200 animate-card-flip ${sizeClasses} ${
         isHighlighted
           ? 'ring-2 ring-amber-400 -translate-y-1.5 shadow-glow-gold border-amber-400'
           : 'border-slate-300'
       } ${className}`}
     >
       <div className="flex flex-col items-center justify-center leading-none text-center">
-        <span className={`${fontSizes.rank} tracking-tighter leading-none ${meta.color}`}>
+        <span className={`poker-card-rank ${fontSizes.rank} tracking-tighter leading-none ${meta.color}`}>
           {card.rank === 10 || card.rank_symbol === 'T' ? '10' : card.rank_symbol}
         </span>
-        <span className={`${fontSizes.suit} leading-none mt-1 ${meta.color} drop-shadow-sm`}>
+        <span className={`poker-card-suit ${fontSizes.suit} leading-none mt-1 ${meta.color} drop-shadow-sm`}>
           {meta.symbol}
         </span>
       </div>
