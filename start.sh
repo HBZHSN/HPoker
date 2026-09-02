@@ -89,15 +89,18 @@ check_and_init_env() {
         echo -e "${GREEN}  [✓] 后端依赖安装完成。${NC}"
     fi
 
-    # 3. 检查前端 node_modules
-    if [ ! -d "$PROJECT_ROOT/frontend/node_modules" ]; then
-        echo -e "${YELLOW}  [!] 未检测到前端依赖，正在自动执行 npm install ...${NC}"
-        if ! command -v npm >/dev/null 2>&1; then
-            echo -e "${RED}  [✗] 错误: 未安装 Node.js/npm，请先安装 Node.js 18+ 后重试。${NC}"
-            exit 1
+    # 3. 仅在开发/生产前端流程检查 node_modules。CLI、测试和纯后端
+    # 启动不应因为前端依赖缺失而额外等待 npm install。
+    if [ "${POKER_SKIP_FRONTEND_CHECK:-0}" != "1" ]; then
+        if [ ! -d "$PROJECT_ROOT/frontend/node_modules" ]; then
+            echo -e "${YELLOW}  [!] 未检测到前端依赖，正在自动执行 npm install ...${NC}"
+            if ! command -v npm >/dev/null 2>&1; then
+                echo -e "${RED}  [✗] 错误: 未安装 Node.js/npm，请先安装 Node.js 18+ 后重试。${NC}"
+                exit 1
+            fi
+            (cd "$PROJECT_ROOT/frontend" && npm install)
+            echo -e "${GREEN}  [✓] 前端依赖安装完成。${NC}"
         fi
-        (cd "$PROJECT_ROOT/frontend" && npm install)
-        echo -e "${GREEN}  [✓] 前端依赖安装完成。${NC}"
     fi
 
     echo -e "${GREEN}${BOLD}  [✓] 环境检查完毕，所有依赖已就绪！${NC}\n"
@@ -210,7 +213,7 @@ start_frontend_only() {
 
 # 启动轻量 CLI 客户端
 start_cli() {
-    check_and_init_env
+    POKER_SKIP_FRONTEND_CHECK=1 check_and_init_env
     shift 1 2>/dev/null || true
     "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/poker_cli.py" "$@"
 }
@@ -218,7 +221,7 @@ start_cli() {
 # 运行自动化测试套件
 run_tests() {
     print_banner
-    check_and_init_env
+    POKER_SKIP_FRONTEND_CHECK=1 check_and_init_env
     echo -e "${BOLD}${PURPLE}🧪 正在运行后端单元测试套件 (Pytest)...${NC}\n"
     "$PROJECT_ROOT/.venv/bin/pytest" backend/tests/ "$@"
 }

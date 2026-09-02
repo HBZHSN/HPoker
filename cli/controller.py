@@ -1,525 +1,1008 @@
-"""CLI Controller managing user session, game loop, and user commands."""
+"""Interactive controller for the HPoker terminal client.
+
+The controller intentionally owns the user-facing state machine while the
+REST and WebSocket classes stay transport-only.  That keeps command handling
+testable and, more importantly, prevents an incoming room update from being
+mistaken for a user command.
+"""
 
 from __future__ import annotations
+
 import asyncio
 import re
 import sys
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence
+from urllib.parse import quote, urlsplit
 
-from cli.api_client import PokerApiClient
+from cli.api_client import PokerApiClient, PokerApiError
+from cli.commands import (
+    BetSizingContext,
+    CommandParseError,
+    CliCommand,
+    parse_command,
+    resolve_bet_amount,
+)
+from cli.ui_renderer import Colors, PokerUiRenderer
 from cli.ws_client import PokerWsClient
-from cli.ui_renderer import PokerUiRenderer, Colors
 
 
 class PokerCliController:
-    """Coordinates API interactions, WebSocket events, and terminal user commands."""
+    """Coordinate authentication, lobby navigation, and room gameplay."""
 
     def __init__(
         self,
         server_url: str = "http://127.0.0.1:8000",
         username: Optional[str] = None,
-        password: str = "123",
+        password: Optional[str] = "123",
         mode: str = "dashboard",
         enable_color: bool = True,
+        http_timeout: float = 10.0,
+        reconnect_attempts: int = 2,
     ):
         self.server_url = server_url.rstrip("/")
         self.default_username = username
         self.default_password = password
-        self.api = PokerApiClient(base_url=self.server_url)
+        self.reconnect_attempts = max(0, int(reconnect_attempts))
+        self.api = PokerApiClient(base_url=self.server_url, timeout=http_timeout)
         self.renderer = PokerUiRenderer(enable_color=enable_color, mode=mode)
 
         self.current_user: Optional[Dict[str, Any]] = None
         self.auth_token: Optional[str] = None
+        self.rooms: List[Dict[str, Any]] = []
 
         self.active_room_id: Optional[str] = None
         self.active_room_data: Optional[Dict[str, Any]] = None
         self.ws_client: Optional[PokerWsClient] = None
 
         self._in_room = False
-        self._need_render = False
+        self._closing_room = False
+        self._connection_lost = False
+        self._room_deleted = False
+        self._stdin_closed = False
+        self._prompt_displayed = False
         self._render_lock = asyncio.Lock()
-        self._last_rendered_hand_state = None
+        self.command_history: List[str] = []
 
     # ------------------ Authentication Flow ------------------
 
-    async def login_flow(self) -> bool:
-        """Manual username and password login."""
-        # 1. If username was provided via CLI argument
-        if self.default_username:
-            pwd = self.default_password or "123"
-            try:
-                res = await self.api.login(self.default_username, pwd)
-                self.auth_token = res["token"]
-                self.current_user = res["user"]
-                print(f"✓ 登录成功: {self.current_user['nickname']} ({self.current_user['username']})")
-                return True
-            except Exception as e:
-                print(f"✗ 指定用户 {self.default_username} 登录失败: {e}")
+    async def _try_login(self, username: str, password: str) -> bool:
+        try:
+            result = await self.api.login(username.strip(), password)
+            user = result.get("user") if isinstance(result, dict) else None
+            token = result.get("token") if isinstance(result, dict) else None
+            if not user or not token:
+                raise PokerApiError("服务器返回的登录信息不完整")
+            self.auth_token = token
+            self.current_user = user
+            print(
+                self.renderer.c(
+                    f"✓ 登录成功！欢迎回来，{user.get('nickname', user.get('username', username))}",
+                    Colors.BRIGHT_GREEN + Colors.BOLD,
+                )
+            )
+            return True
+        except Exception as exc:
+            print(self.renderer.c(f"✗ 登录失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            return False
 
-        # 2. Interactive manual username and password input
+    async def login_flow(self) -> bool:
+        """Login via command-line credentials or a resilient interactive flow."""
+
+        if self.default_username:
+            username = self.default_username
+            password = self.default_password if self.default_password is not None else "123"
+            if await self._try_login(username, password):
+                return True
+            # Do not keep retrying the same failed command-line credentials
+            # when the user later invokes ``user``/``logout``.
+            self.default_username = None
+
         while True:
             print("\n" + self.renderer.c("=" * 60, Colors.CYAN))
             print(self.renderer.c("  HPoker 终端客户端 - 用户登录", Colors.BOLD + Colors.BRIGHT_WHITE))
             print(self.renderer.c("=" * 60, Colors.CYAN))
 
-            uname = (await self._async_input("请输入用户名 (输入 q 退出): ")).strip()
-            if not uname:
+            username = (await self._async_input("用户名（输入 users 查看账号，q 退出）: ")).strip()
+            if self._stdin_closed:
+                return False
+            if not username:
+                continue
+            if username.lower() in {"q", "quit", "exit"}:
+                return False
+            if username.lower() in {"users", "list"}:
+                await self._show_users()
                 continue
 
-            if uname.lower() in ("q", "quit", "exit"):
+            password = await self._async_password_input("密码: ")
+            if self._stdin_closed:
                 return False
-
-            pwd = await self._async_password_input("请输入密码: ")
-
-            try:
-                res = await self.api.login(uname, pwd)
-                self.auth_token = res["token"]
-                self.current_user = res["user"]
-                print(self.renderer.c(f"✓ 登录成功！欢迎回来，{self.current_user['nickname']}", Colors.BRIGHT_GREEN + Colors.BOLD))
-                await asyncio.sleep(0.5)
+            if await self._try_login(username, password):
                 return True
-            except Exception as err:
-                print(self.renderer.c(f"✗ 登录失败: 用户名或密码错误 ({err})", Colors.BRIGHT_RED))
-                print("请重新输入。")
+            print("请重新输入；输入 users 可查看可用账号。")
+
+    async def _show_users(self) -> None:
+        try:
+            users = await self.api.list_users()
+            print(self.renderer.render_users(users))
+        except Exception as exc:
+            print(self.renderer.c(f"获取用户列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     # ------------------ Lobby Loop ------------------
 
-    async def run_lobby_loop(self):
-        """Main lobby interactive loop."""
-        while self.current_user:
-            try:
-                rooms = await self.api.list_rooms()
-            except Exception as e:
-                print(f"获取房间列表失败: {e}")
-                rooms = []
+    async def _fetch_rooms(self) -> List[Dict[str, Any]]:
+        try:
+            rooms = await self.api.list_rooms()
+            self.rooms = rooms
+            return rooms
+        except Exception as exc:
+            print(self.renderer.c(f"获取房间列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            return self.rooms
 
-            # Display lobby
+    async def run_lobby_loop(self) -> None:
+        """Run the lobby until logout or EOF/quit."""
+
+        while self.current_user:
+            rooms = await self._fetch_rooms()
             if self.renderer.mode == "dashboard":
                 self.renderer.clear_screen()
             print(self.renderer.render_lobby(self.current_user, rooms, self.server_url))
 
-            cmd = (await self._async_input("大厅命令 > ")).strip()
-            if not cmd:
+            command = await self._read_command("大厅> ")
+            if command is None:
+                break
+            if not command:
                 continue
+            self.command_history.append(command.raw)
 
-            parts = cmd.split()
-            main_cmd = parts[0].lower()
-
-            if main_cmd in ("q", "quit", "exit"):
-                print("再见！祝游戏愉快！")
+            try:
+                should_continue = await self._dispatch_lobby_command(command, rooms)
+            except Exception as exc:
+                print(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+                should_continue = True
+            if not should_continue:
                 break
 
-            elif main_cmd in ("r", "refresh", "list"):
-                continue
+    async def _dispatch_lobby_command(
+        self,
+        command: CliCommand,
+        rooms: Sequence[Dict[str, Any]],
+    ) -> bool:
+        name = command.name
+        args = command.args
 
-            elif main_cmd in ("user", "switch", "login"):
-                await self.login_flow()
-                continue
-
-            elif main_cmd.isdigit():
-                idx = int(main_cmd)
-                if 1 <= idx <= len(rooms):
-                    target_room_id = rooms[idx - 1]["room_id"]
-                    await self.enter_room(target_room_id)
-                else:
-                    print("无效的房间序号！")
-                    await asyncio.sleep(1)
-
-            elif main_cmd in ("j", "join"):
-                if len(parts) > 1:
-                    r_id = parts[1]
-                    await self.enter_room(r_id)
-                else:
-                    r_id = (await self._async_input("请输入房间ID: ")).strip()
-                    if r_id:
-                        await self.enter_room(r_id)
-
-            elif main_cmd in ("c", "create", "new"):
-                await self.create_room_flow()
-
+        if name in {"q", "quit", "exit"}:
+            print("再见！祝游戏愉快！")
+            return False
+        if name in {"r", "refresh", "list", "rooms"}:
+            return True
+        if name in {"help", "h", "?"}:
+            print(self.renderer.render_help("lobby"))
+            return True
+        if name in {"users", "userlist"}:
+            await self._show_users()
+            return True
+        if name in {"mode", "view"}:
+            self._set_mode(args[0] if args else None)
+            return True
+        if name == "color":
+            self._set_color(args[0] if args else None)
+            return True
+        if name in {"user", "switch", "login", "logout"}:
+            self.current_user = None
+            self.auth_token = None
+            self.default_username = None
+            return await self.login_flow()
+        if name in {"create", "new", "c"}:
+            if args and args[0].lower() in {"help", "?"}:
+                print(self._render_create_help())
             else:
-                print(f"未知指令 '{cmd}'，输入 [help] 或直接输入房间序号。")
-                await asyncio.sleep(1)
+                await self.create_room_flow(args)
+            return True
+        if name in {"join", "j"}:
+            room_ref = args[0] if args else await self._async_input("房间序号或 ID: ")
+            if self._stdin_closed:
+                return False
+            if room_ref.strip():
+                await self.enter_room(self._resolve_room_ref(room_ref.strip(), rooms))
+            return True
+        if name in {"info", "inspect", "show"}:
+            if not args:
+                print("用法: info <房间序号或 room_id>")
+            else:
+                await self._show_room_info(self._resolve_room_ref(args[0], rooms))
+            return True
+        if name.isdigit():
+            index = int(name)
+            if 1 <= index <= len(rooms):
+                await self.enter_room(str(rooms[index - 1].get("room_id", "")))
+            else:
+                print("无效的房间序号。")
+            return True
 
-    async def create_room_flow(self):
-        """Interactive room creation with sensible defaults."""
-        print("\n" + self.renderer.c("--- 创建德州扑克现金桌 (直接按回车使用默认配置) ---", Colors.BOLD + Colors.CYAN))
-        default_name = f"{self.current_user['nickname']}的局"
-        name = (await self._async_input(f"房间名称 [{default_name}]: ")).strip() or default_name
+        print(f"未知大厅命令: {command.raw}；输入 help 查看可用命令。")
+        return True
 
-        buyin_str = (await self._async_input("买入筹码 [1000]: ")).strip()
-        buyin = int(buyin_str) if buyin_str.isdigit() else 1000
+    def _resolve_room_ref(self, value: str, rooms: Sequence[Dict[str, Any]]) -> str:
+        if value.isdigit():
+            index = int(value)
+            if 1 <= index <= len(rooms):
+                return str(rooms[index - 1].get("room_id", ""))
+        return value
 
-        cash_str = (await self._async_input("折合现金(元) [100.0]: ")).strip()
+    async def _show_room_info(self, room_id: str) -> None:
         try:
-            cash = float(cash_str) if cash_str else 100.0
-        except ValueError:
-            cash = 100.0
+            room = await self.api.get_room(room_id, self._current_user_id())
+            print(self.renderer.render_room_details(room))
+        except Exception as exc:
+            print(self.renderer.c(f"获取房间详情失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
-        sb_str = (await self._async_input("小盲注(SB) [10]: ")).strip()
-        sb = int(sb_str) if sb_str.isdigit() else 10
+    async def create_room_flow(self, args: Optional[Sequence[str]] = None) -> None:
+        """Create a room interactively or from ``create --option value``."""
 
-        timeout_str = (await self._async_input("操作思考超时(秒) [15]: ")).strip()
-        timeout = int(timeout_str) if timeout_str.isdigit() else 15
+        if not self.current_user:
+            return
+        options = list(args or [])
+        defaults: Dict[str, Any] = {
+            "name": f"{self.current_user.get('nickname', '玩家')}的局",
+            "buyin": 1000,
+            "cash": 100.0,
+            "sb": 10,
+            "timeout": 15,
+            "seats": 6,
+        }
 
-        seats_str = (await self._async_input("座位数 (2~9) [6]: ")).strip()
-        max_seats = int(seats_str) if seats_str.isdigit() and 2 <= int(seats_str) <= 9 else 6
+        if options:
+            try:
+                supplied = self._parse_create_options(options)
+                defaults.update(supplied)
+            except ValueError as exc:
+                print(self.renderer.c(f"创建参数错误: {exc}", Colors.BRIGHT_RED))
+                print(self._render_create_help())
+                return
+        else:
+            print("\n" + self.renderer.c("--- 创建德州扑克现金桌（回车使用默认值）---", Colors.BOLD + Colors.CYAN))
+            name = await self._prompt_text(f"房间名称 [{defaults['name']}]: ", str(defaults["name"]))
+            if name is None:
+                return
+            defaults["name"] = name
+            for key, label, parser, minimum, maximum in (
+                ("buyin", "买入筹码", int, 10, None),
+                ("cash", "买入现金(元)", float, 0.01, None),
+                ("sb", "小盲注 SB", int, 1, None),
+                ("timeout", "行动时限(秒)", int, 5, 60),
+                ("seats", "座位数", int, 2, 9),
+            ):
+                value = await self._prompt_number(
+                    f"{label} [{defaults[key]}]: ",
+                    defaults[key],
+                    parser,
+                    minimum,
+                    maximum,
+                )
+                if value is None:
+                    return
+                defaults[key] = value
 
         try:
+            self._validate_create_options(defaults)
             room_data = await self.api.create_room(
-                host_player_id=self.current_user["user_id"],
-                room_name=name,
-                buyin_chips=buyin,
-                cash_value=cash,
-                small_blind=sb,
-                action_timeout=timeout,
-                max_seats=max_seats,
+                host_player_id=self._current_user_id(),
+                room_name=str(defaults["name"]),
+                buyin_chips=int(defaults["buyin"]),
+                cash_value=float(defaults["cash"]),
+                small_blind=int(defaults["sb"]),
+                action_timeout=int(defaults["timeout"]),
+                max_seats=int(defaults["seats"]),
             )
-            print(f"✓ 房间创建成功！ID: {room_data['room_id']}")
-            await asyncio.sleep(0.5)
-            await self.enter_room(room_data["room_id"])
-        except Exception as e:
-            print(f"✗ 创建房间失败: {e}")
-            await asyncio.sleep(1.5)
+            room_id = room_data.get("room_id", "")
+            print(self.renderer.c(f"✓ 房间创建成功！ID: {room_id}", Colors.BRIGHT_GREEN + Colors.BOLD))
+            if room_id:
+                await self.enter_room(room_id)
+        except Exception as exc:
+            print(self.renderer.c(f"✗ 创建房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+
+    @staticmethod
+    def _parse_create_options(args: Sequence[str]) -> Dict[str, Any]:
+        aliases = {
+            "--name": "name",
+            "-n": "name",
+            "--buyin": "buyin",
+            "--chips": "buyin",
+            "--cash": "cash",
+            "--sb": "sb",
+            "--small-blind": "sb",
+            "--timeout": "timeout",
+            "--seats": "seats",
+        }
+        parsers = {"buyin": int, "cash": float, "sb": int, "timeout": int, "seats": int}
+        result: Dict[str, Any] = {}
+        positional_name: Optional[str] = None
+        index = 0
+        while index < len(args):
+            token = args[index]
+            if "=" in token and token.startswith("-"):
+                option, raw_value = token.split("=", 1)
+            elif token.startswith("-"):
+                option = token
+                index += 1
+                if index >= len(args):
+                    raise ValueError(f"{option} 缺少值")
+                raw_value = args[index]
+            else:
+                if positional_name is not None:
+                    raise ValueError("只能提供一个房间名称")
+                positional_name = token
+                index += 1
+                continue
+
+            key = aliases.get(option.lower())
+            if key is None:
+                raise ValueError(f"不支持的选项 {option}")
+            if not raw_value.strip():
+                raise ValueError(f"{option} 的值不能为空")
+            try:
+                result[key] = parsers.get(key, str)(raw_value) if key != "name" else raw_value
+            except ValueError as exc:
+                raise ValueError(f"{option} 的值无效: {raw_value}") from exc
+            index += 1
+        if positional_name is not None and "name" not in result:
+            result["name"] = positional_name
+        return result
+
+    @staticmethod
+    def _validate_create_options(options: Dict[str, Any]) -> None:
+        if not str(options.get("name", "")).strip():
+            raise ValueError("房间名称不能为空")
+        if int(options["buyin"]) < 10:
+            raise ValueError("买入筹码不能少于 10")
+        if float(options["cash"]) <= 0:
+            raise ValueError("现金金额必须大于 0")
+        if int(options["sb"]) < 1:
+            raise ValueError("小盲注必须至少为 1")
+        if not 5 <= int(options["timeout"]) <= 60:
+            raise ValueError("行动时限必须在 5~60 秒之间")
+        if not 2 <= int(options["seats"]) <= 9:
+            raise ValueError("座位数必须在 2~9 之间")
+
+    def _render_create_help(self) -> str:
+        return (
+            "创建方式: create [房间名] [--buyin 筹码] [--cash 元] "
+            "[--sb 小盲] [--timeout 秒] [--seats 2~9]\n"
+            "示例: create \"周五现金局\" --buyin 2000 --cash 200 --sb 10 --timeout 20 --seats 6"
+        )
 
     # ------------------ Room Gameplay Flow ------------------
 
-    async def enter_room(self, room_id: str):
-        """Connect to room and start in-game command loop."""
+    async def enter_room(self, room_id: str) -> None:
+        """Connect to a room and keep the command loop alive across reconnects."""
+
+        room_id = room_id.strip()
+        if not room_id or not self.current_user:
+            print("房间 ID 不能为空。")
+            return
+
         self.active_room_id = room_id
+        self.active_room_data = None
         self._in_room = True
-
-        ws_proto = "wss" if self.server_url.startswith("https") else "ws"
-        host = self.server_url.split("://")[1]
-        ws_url = f"{ws_proto}://{host}/ws/{room_id}/{self.current_user['user_id']}"
-
-        self.ws_client = PokerWsClient(ws_url=ws_url)
-        self.ws_client.on_room_state = self._on_ws_room_state
-        self.ws_client.on_sound_effect = self._on_ws_sound_effect
-        self.ws_client.on_error = self._on_ws_error
-        self.ws_client.on_disconnect = self._on_ws_disconnect
+        self._closing_room = False
+        self._connection_lost = False
+        self._room_deleted = False
+        self.ws_client = self._new_ws_client(room_id)
 
         print(f"正在连接房间 {room_id} ...")
         try:
-            await self.ws_client.connect()
-        except Exception as e:
-            print(f"✗ 无法连接到房间: {e}")
-            self._in_room = False
-            self.active_room_id = None
-            await asyncio.sleep(1.5)
-            return
-
-        # Start game command input loop
-        try:
+            await self.ws_client.connect(retries=self.reconnect_attempts, retry_delay=0.8)
+            print(self.renderer.c("✓ 已连接。输入 help 查看牌桌命令。", Colors.BRIGHT_GREEN))
             await self._in_room_input_loop()
+        except Exception as exc:
+            print(self.renderer.c(f"✗ 无法连接到房间: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
         finally:
             self._in_room = False
+            self._closing_room = True
             if self.ws_client:
                 await self.ws_client.disconnect()
-                self.ws_client = None
+            self.ws_client = None
             self.active_room_id = None
             self.active_room_data = None
+            self._closing_room = False
 
-    async def _on_ws_room_state(self, data: Dict[str, Any]):
-        """WebSocket ROOM_STATE handler."""
+    def _new_ws_client(self, room_id: str) -> PokerWsClient:
+        parsed = urlsplit(self.server_url if "://" in self.server_url else f"http://{self.server_url}")
+        scheme = "wss" if parsed.scheme == "https" else "ws"
+        netloc = parsed.netloc or parsed.path
+        ws_url = f"{scheme}://{netloc}/ws/{quote(room_id, safe='')}/{quote(self._current_user_id(), safe='')}"
+        client = PokerWsClient(ws_url=ws_url)
+        client.on_room_state = self._on_ws_room_state
+        client.on_action_event = self._on_ws_action_event
+        client.on_sound_effect = self._on_ws_sound_effect
+        client.on_settlement_report = self._on_ws_settlement_report
+        client.on_room_deleted = self._on_ws_room_deleted
+        client.on_error = self._on_ws_error
+        client.on_disconnect = self._on_ws_disconnect
+        return client
+
+    async def _in_room_input_loop(self) -> None:
+        """Dispatch room commands; offline mode keeps only recovery commands."""
+
+        while self._in_room:
+            prompt = "断线> " if not self.ws_client or not self.ws_client.is_connected else "牌桌> "
+            command = await self._read_command(prompt)
+            if command is None:
+                break
+            if not command:
+                continue
+            self.command_history.append(command.raw)
+            try:
+                await self._dispatch_room_command(command)
+            except Exception as exc:
+                print(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+
+    async def _dispatch_room_command(self, command: CliCommand) -> None:
+        name = command.name
+        args = command.args
+
+        if name in {"leave", "back", "lobby", "exit"}:
+            print("正在离开房间...")
+            self._in_room = False
+            return
+        if name in {"help", "h", "?"}:
+            self._print_in_game_help()
+            return
+        if name in {"redraw", "clear", "cls", "refresh"}:
+            await self._redraw_room()
+            return
+        if name in {"status", "info", "table"}:
+            if self.active_room_data:
+                print(self.renderer.render_room_details(self.active_room_data))
+            else:
+                print("尚未收到房间状态。")
+            return
+        if name in {"history", "log"}:
+            limit = self._parse_positive_int(args[0], 10) if args else 10
+            if self.active_room_data:
+                print(self.renderer.render_action_history(self.active_room_data, limit))
+            return
+        if name in {"mode", "view"}:
+            self._set_mode(args[0] if args else None)
+            if self.active_room_data:
+                await self._redraw_room()
+            return
+        if name == "color":
+            self._set_color(args[0] if args else None)
+            return
+        if name in {"reconnect", "retry"}:
+            await self._reconnect_room()
+            return
+        if name in {"ready", "rd"}:
+            await self._send_ws("player_ready", True)
+            return
+        if name in {"unready", "unrd"}:
+            await self._send_ws("player_ready", False)
+            return
+        if name in {"start", "begin"}:
+            await self._send_ws("start_game")
+            return
+        if name in {"rebuy", "rb", "buyin"}:
+            await self._send_ws("rebuy")
+            return
+        if name in {"sit", "seat"}:
+            if not args:
+                print("用法: sit <座位号>（从 0 开始）")
+                return
+            seat = self._parse_nonnegative_int(args[0])
+            if seat is None:
+                print("座位号必须是非负整数。")
+                return
+            await self._send_ws("sit_down", seat)
+            return
+        if name in {"stand", "standup"}:
+            seat = self._get_my_seat_index()
+            if seat is None:
+                print("你当前未入座。")
+            else:
+                await self._send_ws("stand_up", seat)
+            return
+
+        # Action aliases are intentionally checked before the generic utility
+        # commands so ``r`` always means raise in a room; redraw is explicit.
+        if name in {"check", "call", "c"}:
+            await self._handle_check_or_call()
+            return
+        if name in {"fold", "f"}:
+            await self._send_action("FOLD", 0)
+            return
+        if name in {"allin", "all-in", "ai", "a"}:
+            await self._handle_all_in()
+            return
+        if name in {"bet", "raise", "r", "b"}:
+            await self._handle_raise_command([name, *args])
+            return
+        if name in {"tc", "time", "timecard"}:
+            await self._send_ws("use_time_card")
+            return
+        if name == "rit":
+            choice = self._parse_positive_int(args[0], 0) if args else 0
+            if choice not in (1, 2):
+                print("用法: rit 1（发一次）或 rit 2（发两次）")
+            else:
+                await self._send_ws("rit_choice", choice)
+            return
+        if name in {"show", "showall", "s1", "s2", "sa", "muck", "hide"}:
+            await self._handle_show_command(name, list(args))
+            return
+        if name in {"bill", "report", "settlement"}:
+            await self._show_settlement()
+            return
+        if name in {"end", "endroom"}:
+            await self._end_room()
+            return
+        if name in {"delete", "del", "destroy"}:
+            await self._delete_room()
+            return
+        if name in {"export", "save"}:
+            await self._export_settlement(args[0] if args else None)
+            return
+
+        print(f"未知牌桌命令: {command.raw}；输入 help 查看可用命令。")
+
+    async def _reconnect_room(self) -> None:
+        if not self.ws_client:
+            print("当前没有房间连接。")
+            return
+        try:
+            print("正在重连...")
+            await self.ws_client.reconnect(retries=self.reconnect_attempts, retry_delay=0.8)
+            self._connection_lost = False
+            print(self.renderer.c("✓ 重连成功，服务器会发送最新状态。", Colors.BRIGHT_GREEN))
+        except Exception as exc:
+            self._connection_lost = True
+            print(self.renderer.c(f"重连失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+
+    async def _send_ws(self, method: str, *args: Any, **kwargs: Any) -> bool:
+        if not self.ws_client or not self.ws_client.is_connected:
+            print("当前已断线，请输入 reconnect 重连。")
+            return False
+        try:
+            await getattr(self.ws_client, method)(*args, **kwargs)
+            return True
+        except Exception as exc:
+            print(self.renderer.c(f"发送操作失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+            return False
+
+    async def _send_action(self, action: str, amount: int) -> bool:
+        legal = self._get_legal_actions()
+        if action == "FOLD" and not legal.get("can_fold", False):
+            print("当前不能弃牌。")
+            return False
+        if action == "CHECK" and not legal.get("can_check", False):
+            print("当前不能过牌。")
+            return False
+        if action == "CALL" and not legal.get("can_call", False):
+            print("当前不能跟注。")
+            return False
+        if action == "ALL_IN" and not legal.get("can_all_in", False):
+            print("当前不能全下。")
+            return False
+        if action in {"BET", "RAISE"} and not (
+            legal.get("can_bet", False) or legal.get("can_raise", False)
+        ):
+            print("当前不能下注或加注。")
+            return False
+        return await self._send_ws("player_action", action, int(amount))
+
+    async def _handle_check_or_call(self) -> None:
+        legal = self._get_legal_actions()
+        if legal.get("can_check"):
+            await self._send_action("CHECK", 0)
+        elif legal.get("can_call"):
+            await self._send_action("CALL", self._as_int(legal.get("call_amount")))
+        else:
+            print("当前不可过牌或跟注（可能还没轮到你）。")
+
+    async def _handle_all_in(self) -> None:
+        legal = self._get_legal_actions()
+        await self._send_action("ALL_IN", self._as_int(legal.get("all_in_amount")))
+
+    # ------------------ Action Parsing Helpers ------------------
+
+    async def _handle_raise_command(self, parts: List[str]) -> None:
+        """Resolve a total round-bet amount and send BET/RAISE."""
+
+        legal = self._get_legal_actions()
+        can_bet = bool(legal.get("can_bet", False))
+        can_raise = bool(legal.get("can_raise", False))
+        if not can_bet and not can_raise:
+            print("当前不可下注或加注（可能还没轮到你）。")
+            return
+
+        action = "BET" if can_bet else "RAISE"
+        minimum = self._as_int(legal.get("min_bet" if can_bet else "min_raise_to"))
+        if not minimum:
+            minimum = self._as_int(legal.get("min_raise" if can_raise else "min_bet"))
+        maximum = self._as_int(legal.get("max_bet" if can_bet else "max_raise_to"))
+        if not maximum:
+            maximum = self._as_int(legal.get("max_raise" if can_raise else "max_bet"))
+
+        table = self.active_room_data.get("table", {}) if self.active_room_data else {}
+        config = self.active_room_data.get("config", {}) if self.active_room_data else {}
+        my_seat = self._get_my_seat()
+        context = BetSizingContext(
+            pot=self._as_int(table.get("total_pot")),
+            minimum=minimum,
+            maximum=maximum,
+            small_blind=self._as_int(table.get("small_blind"), self._as_int(config.get("small_blind"), 1)),
+            current_round_bet=self._as_int(my_seat.get("current_round_bet")) if my_seat else 0,
+            current_highest_bet=self._as_int(table.get("current_round_highest_bet")),
+            big_blind=self._as_int(table.get("big_blind"), self._as_int(config.get("big_blind"), 0)) or None,
+        )
+        token = parts[1] if len(parts) > 1 else None
+        target = resolve_bet_amount(token, context)
+        if target is None:
+            print("无法识别下注额度；示例: r 100、r 1/2p、r 2.5bb、r +1bb、r allin")
+            return
+
+        raw_numeric = self._parse_raw_number(token)
+        if raw_numeric is not None and raw_numeric < minimum:
+            print(f"下注金额小于最小值 {minimum}，已调整为 {target}。")
+        if raw_numeric is not None and raw_numeric > maximum:
+            print(f"下注金额超过最大值 {maximum}，已调整为全下额度 {target}。")
+        await self._send_action(action, target)
+
+    async def _handle_show_command(self, name: str, args: List[str]) -> None:
+        if not self.active_room_data or self.active_room_data.get("table", {}).get("street") != "HAND_END":
+            print("只有本手结束后才能亮牌。")
+            return
+
+        choice = name.lower()
+        value = args[0].lower() if args else ""
+        if choice == "s1" or value == "1":
+            await self._send_ws("show_card", card_index=0)
+            print("✓ 已亮出第 1 张手牌。")
+        elif choice == "s2" or value == "2":
+            await self._send_ws("show_card", card_index=1)
+            print("✓ 已亮出第 2 张手牌。")
+        elif choice in {"sa", "showall"} or value in {"all", "a"}:
+            await self._send_ws("show_card", show_all=True)
+            print("✓ 已亮出全部手牌。")
+        elif choice in {"muck", "hide"} or value in {"hide", "none", "muck"}:
+            await self._send_ws("show_card", hide_all=True)
+            print("✓ 已盖牌。")
+        elif value == "toggle" and len(args) > 1 and args[1] in {"1", "2"}:
+            await self._send_ws("show_card", toggle_index=int(args[1]) - 1)
+        else:
+            print("用法: show 1 | show 2 | show all | show toggle 1 | muck")
+
+    # ------------------ Room Lifecycle / Settlement ------------------
+
+    async def _end_room(self) -> None:
+        if not self._is_host():
+            print("只有房主可以结束房间。")
+            return
+        confirmed = (await self._async_input("确定结束房间并生成结算清单吗？(y/n): ")).strip().lower()
+        if self._stdin_closed or confirmed not in {"y", "yes"}:
+            print("已取消。")
+            return
+        if self.ws_client and self.ws_client.is_connected:
+            await self._send_ws("end_room")
+            return
+        try:
+            report = await self.api.end_room(self.active_room_id or "", self._current_user_id())
+            self._merge_settlement_report(report)
+            print(self.renderer.render_settlement_report(report))
+        except Exception as exc:
+            print(self.renderer.c(f"结束房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+
+    async def _delete_room(self) -> None:
+        if not self._is_host() and not bool(self.current_user and self.current_user.get("is_admin")):
+            print("只有房主或管理员可以解散房间。")
+            return
+        confirmed = (await self._async_input("确定解散房间并让所有玩家退出吗？(y/n): ")).strip().lower()
+        if self._stdin_closed or confirmed not in {"y", "yes"}:
+            print("已取消。")
+            return
+        if self.ws_client and self.ws_client.is_connected:
+            await self._send_ws("delete_room")
+            return
+        try:
+            await self.api.delete_room(self.active_room_id or "", self._current_user_id())
+            print("房间已解散。")
+            self._in_room = False
+        except Exception as exc:
+            print(self.renderer.c(f"解散房间失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+
+    async def _show_settlement(self) -> None:
+        report = self.active_room_data.get("settlement_report") if self.active_room_data else None
+        if report:
+            print(self.renderer.render_settlement_report(report))
+            return
+        if not self.active_room_id:
+            print("当前没有房间结算清单。")
+            return
+        try:
+            room = await self.api.get_room(self.active_room_id, self._current_user_id())
+            report = room.get("settlement_report")
+            if report:
+                self.active_room_data = room
+                print(self.renderer.render_settlement_report(report))
+            else:
+                print("当前房间尚未结束；房主输入 end 后才会生成结算清单。")
+        except Exception as exc:
+            print(self.renderer.c(f"获取结算清单失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+
+    async def _export_settlement(self, requested_path: Optional[str]) -> None:
+        report = self.active_room_data.get("settlement_report") if self.active_room_data else None
+        if not report:
+            print("当前没有可导出的结算清单。")
+            return
+        target = Path(requested_path or f"settlement-{self.active_room_id or 'room'}.txt")
+        try:
+            target.write_text(self.renderer.render_settlement_report(report) + "\n", encoding="utf-8")
+            print(f"✓ 结算清单已保存到: {target}")
+        except OSError as exc:
+            print(self.renderer.c(f"保存失败: {exc}", Colors.BRIGHT_RED))
+
+    def _merge_settlement_report(self, report: Dict[str, Any]) -> None:
+        if self.active_room_data is None:
+            self.active_room_data = {"room_id": self.active_room_id, "settlement_report": report}
+        else:
+            self.active_room_data["settlement_report"] = report
+            self.active_room_data["is_ended"] = True
+
+    # ------------------ WebSocket Event Handlers ------------------
+
+    async def _on_ws_room_state(self, data: Dict[str, Any]) -> None:
         self.active_room_data = data
         async with self._render_lock:
             if self.renderer.mode == "dashboard":
                 self.renderer.clear_screen()
-                out = self.renderer.render_table_dashboard(data, self.current_user["user_id"])
-                print(out)
-                sys.stdout.write("> ")
-                sys.stdout.flush()
+                print(self.renderer.render_table_dashboard(data, self._current_user_id()))
             else:
-                stream_log = self.renderer.render_stream_event("ROOM_STATE", data, self.current_user["user_id"])
+                stream_log = self.renderer.render_stream_event("ROOM_STATE", data, self._current_user_id())
                 if stream_log:
                     print("\n" + stream_log)
-                    sys.stdout.write("> ")
-                    sys.stdout.flush()
+            if self._in_room and not self._closing_room:
+                self._write_prompt("牌桌> ")
 
-    async def _on_ws_sound_effect(self, sound: str, extra: Dict[str, Any]):
-        """WebSocket SOUND_EFFECT handler."""
+    async def _on_ws_action_event(self, data: Dict[str, Any]) -> None:
         if self.renderer.mode == "stream":
-            sound_map = {
-                "deal": "🃏 发牌",
-                "check": "👌 过牌 (Check)",
-                "call": "📞 跟注 (Call)",
-                "raise": "🚀 加注 (Raise)",
-                "fold": "❌ 弃牌 (Fold)",
-                "allin": "🔥 全下 (All-in)!",
-                "win_pot": "🏆 收池获胜",
-                "time_card": "⏱️ 使用了时间卡 (+30s)",
-                "rebuy": "💰 重新买入筹码",
-            }
-            s_name = sound_map.get(sound, sound)
-            p_id = extra.get("player_id")
-            p_note = f" (玩家: {p_id})" if p_id else ""
-            print(f"[HPoker 音效] {s_name}{p_note}")
-            sys.stdout.write("> ")
-            sys.stdout.flush()
+            line = self.renderer.render_stream_event("ACTION_EVENT", data, self._current_user_id())
+            if line:
+                print("\n" + line)
+                self._write_prompt("牌桌> ")
 
-    async def _on_ws_error(self, msg: str):
-        print(f"\n[提示] {msg}")
-        sys.stdout.write("> ")
-        sys.stdout.flush()
+    async def _on_ws_sound_effect(self, sound: str, extra: Dict[str, Any]) -> None:
+        if self.renderer.mode != "stream":
+            return
+        sound_map = {
+            "deal": "🃏 发牌",
+            "check": "👌 过牌",
+            "call": "📞 跟注",
+            "bet": "🪙 下注",
+            "raise": "🚀 加注",
+            "fold": "❌ 弃牌",
+            "allin": "🔥 全下",
+            "win_pot": "🏆 收池",
+            "time_card": "⏱️ 使用时间卡",
+            "time_card_gain": "⏱️ 获得时间卡",
+            "rebuy": "💰 重买",
+        }
+        player_id = extra.get("player_id") if isinstance(extra, dict) else None
+        note = f" · {player_id}" if player_id else ""
+        print(f"\n[HPoker] {sound_map.get(sound, sound)}{note}")
+        self._write_prompt("牌桌> ")
 
-    async def _on_ws_disconnect(self):
+    async def _on_ws_settlement_report(self, data: Dict[str, Any]) -> None:
+        report = data.get("report") if isinstance(data, dict) and isinstance(data.get("report"), dict) else data
+        if isinstance(report, dict):
+            self._merge_settlement_report(report)
+            if self.renderer.mode == "stream":
+                print("\n" + self.renderer.render_settlement_report(report))
+                self._write_prompt("牌桌> ")
+
+    async def _on_ws_room_deleted(self, data: Dict[str, Any]) -> None:
+        message = data.get("message", "房间已被解散") if isinstance(data, dict) else "房间已被解散"
+        print(self.renderer.c(f"\n[房间已关闭] {message}", Colors.BRIGHT_YELLOW))
+        self._room_deleted = True
+        self._in_room = False
+
+    async def _on_ws_error(self, msg: str) -> None:
+        print(self.renderer.c(f"\n[服务器提示] {msg}", Colors.BRIGHT_RED))
         if self._in_room:
-            print("\n[连接已断开] 正在退出房间...")
-            self._in_room = False
+            self._write_prompt("牌桌> ")
 
-    async def _in_room_input_loop(self):
-        """In-room command dispatcher."""
-        while self._in_room and self.ws_client and self.ws_client.is_connected:
-            cmd = (await self._async_input("")).strip()
-            if not cmd:
-                continue
-
-            parts = cmd.split()
-            main_cmd = parts[0].lower()
-
-            if main_cmd in ("leave", "back", "lobby", "exit"):
-                print("正在离开房间...")
-                break
-
-            elif main_cmd in ("help", "h", "?"):
-                self._print_in_game_help()
-                continue
-
-            elif main_cmd in ("clear", "cls", "r", "refresh"):
-                if self.active_room_data:
-                    await self._on_ws_room_state(self.active_room_data)
-                continue
-
-            elif main_cmd == "mode":
-                # Toggle Dashboard / Stream
-                self.renderer.mode = "stream" if self.renderer.mode == "dashboard" else "dashboard"
-                print(f"已切换为: {'仪表盘 (Dashboard)' if self.renderer.mode == 'dashboard' else '极简日志流 (Stream)'} 模式")
-                if self.active_room_data and self.renderer.mode == "dashboard":
-                    await self._on_ws_room_state(self.active_room_data)
-                continue
-
-            elif main_cmd == "color":
-                self.renderer.enable_color = not self.renderer.enable_color
-                print(f"终端色彩已{'开启' if self.renderer.enable_color else '关闭'}")
-                continue
-
-            elif main_cmd in ("ready", "rd"):
-                await self.ws_client.player_ready(True)
-
-            elif main_cmd in ("unready", "unrd"):
-                await self.ws_client.player_ready(False)
-
-            elif main_cmd in ("start", "s"):
-                await self.ws_client.start_game()
-
-            elif main_cmd in ("rebuy", "rb", "buyin"):
-                await self.ws_client.rebuy()
-
-            elif main_cmd in ("sit", "seat"):
-                if len(parts) > 1 and parts[1].isdigit():
-                    s_idx = int(parts[1])
-                    await self.ws_client.sit_down(s_idx)
-                else:
-                    print("用法: sit <座位号 0~5>")
-
-            elif main_cmd in ("stand", "standup"):
-                s_idx = self._get_my_seat_index()
-                if s_idx is not None:
-                    await self.ws_client.stand_up(s_idx)
-                else:
-                    print("你当前未入座。")
-
-            # Game Actions
-            elif main_cmd in ("c", "check", "call"):
-                # Determine CHECK or CALL based on legal actions
-                la = self._get_legal_actions()
-                if la.get("can_check"):
-                    await self.ws_client.player_action("CHECK", 0)
-                elif la.get("can_call"):
-                    amt = la.get("call_amount", 0)
-                    await self.ws_client.player_action("CALL", amt)
-                else:
-                    print("当前不可过牌或跟注！")
-
-            elif main_cmd in ("f", "fold"):
-                await self.ws_client.player_action("FOLD", 0)
-
-            elif main_cmd in ("a", "allin", "ai"):
-                la = self._get_legal_actions()
-                allin_amt = la.get("all_in_amount", 0)
-                await self.ws_client.player_action("ALL_IN", allin_amt)
-
-            elif main_cmd in ("r", "raise", "b", "bet"):
-                await self._handle_raise_command(parts)
-
-            elif main_cmd in ("tc", "time", "timecard"):
-                await self.ws_client.use_time_card()
-
-            elif main_cmd == "rit":
-                if len(parts) > 1 and parts[1] in ("1", "2"):
-                    choice = int(parts[1])
-                    await self.ws_client.rit_choice(choice)
-                else:
-                    print("用法: rit 1 (发1次) 或 rit 2 (发2次)")
-
-            # Show / Muck
-            elif main_cmd in ("show", "s1", "s2", "sa", "muck", "hide"):
-                await self._handle_show_command(main_cmd, parts)
-
-            # End room & Settlements
-            elif main_cmd in ("end", "endroom"):
-                if not self.active_room_data or self.active_room_data.get("host_player_id") != self.current_user["user_id"]:
-                    print("只有房主可以结束房间！")
-                    continue
-                confirm = (await self._async_input("确定要结束房间并生成结算清单吗？(y/n): ")).strip().lower()
-                if confirm in ("y", "yes"):
-                    await self.ws_client.end_room()
-
-            elif main_cmd in ("bill", "report", "settlement"):
-                if self.active_room_data and self.active_room_data.get("settlement_report"):
-                    rep = self.active_room_data["settlement_report"]
-                    print(self.renderer.render_settlement_report(rep))
-                else:
-                    print("当前房间尚未生成结算清单 (房主输入 [end] 即可结束并结算)。")
-
-            else:
-                print(f"未知指令 '{cmd}'，输入 [help] 查看帮助。")
-
-    # ------------------ Action Parsing Helpers ------------------
-
-    async def _handle_raise_command(self, parts: List[str]):
-        """Parse raise amount with smart pot fraction calculations."""
-        la = self._get_legal_actions()
-        can_bet = la.get("can_bet", False)
-        can_raise = la.get("can_raise", False)
-
-        if not can_bet and not can_raise:
-            print("当前不可下注或加注！")
+    async def _on_ws_disconnect(self) -> None:
+        if self._closing_room or self._room_deleted:
             return
+        self._connection_lost = True
+        print(self.renderer.c("\n[连接已断开] 输入 reconnect 重连，或 leave 返回大厅。", Colors.BRIGHT_YELLOW))
+        self._write_prompt("断线> ")
 
-        act_type = "BET" if can_bet else "RAISE"
-        min_amt = la.get("min_bet" if can_bet else "min_raise", 0)
-        max_amt = la.get("max_bet" if can_bet else "max_raise", 0)
-        total_pot = self.active_room_data.get("table", {}).get("total_pot", 0)
+    # ------------------ State / Input Helpers ------------------
 
-        if len(parts) == 1:
-            print(f"用法: r <金额或比例>，例如: r {min_amt} / r 0.5p / r 2/3p / r 1p / r all")
-            return
-
-        arg = parts[1].lower()
-
-        # Parse pot shortcut: e.g. "0.5p", "1/2p", "2/3p", "1p", "pot", "half", "all"
-        target_amt = None
-        if arg in ("all", "max"):
-            target_amt = max_amt
-        elif arg in ("pot", "1p"):
-            target_amt = max(min_amt, total_pot)
-        elif arg in ("half", "0.5p", "1/2p", "1/2"):
-            target_amt = max(min_amt, int(total_pot * 0.5))
-        elif arg in ("0.33p", "1/3p", "1/3"):
-            target_amt = max(min_amt, int(total_pot * 0.333))
-        elif arg in ("0.67p", "2/3p", "2/3"):
-            target_amt = max(min_amt, int(total_pot * 0.667))
-        elif arg.endswith("p"):
-            try:
-                frac = float(arg[:-1])
-                target_amt = max(min_amt, int(total_pot * frac))
-            except ValueError:
-                pass
-        elif arg.isdigit():
-            target_amt = int(arg)
-
-        if target_amt is None:
-            print(f"无法识别的下注额度: {arg}")
-            return
-
-        # Bound check
-        if target_amt < min_amt:
-            print(f"下注金额小于最小下注额 {min_amt}，已自动调整为 {min_amt}")
-            target_amt = min_amt
-        elif target_amt > max_amt:
-            print(f"下注金额大于最大筹码 {max_amt}，已自动调整为全下 {max_amt}")
-            target_amt = max_amt
-
-        await self.ws_client.player_action(act_type, target_amt)
-
-    async def _handle_show_command(self, main_cmd: str, parts: List[str]):
-        """Handle card showing / mucking options."""
-        if main_cmd == "s1" or (len(parts) > 1 and parts[1] == "1"):
-            await self.ws_client.show_card(card_index=0)
-            print("✓ 已亮出左侧第 1 张手牌")
-        elif main_cmd == "s2" or (len(parts) > 1 and parts[1] == "2"):
-            await self.ws_client.show_card(card_index=1)
-            print("✓ 已亮出右侧第 2 张手牌")
-        elif main_cmd in ("sa", "showall") or (len(parts) > 1 and parts[1] in ("all", "a")):
-            await self.ws_client.show_card(show_all=True)
-            print("✓ 已亮出全部手牌")
-        elif main_cmd in ("muck", "hide") or (len(parts) > 1 and parts[1] in ("hide", "none", "muck")):
-            await self.ws_client.show_card(hide_all=True)
-            print("✓ 已盖牌")
-        else:
-            print("亮牌指令: show 1 (亮左牌) | show 2 (亮右牌) | show all (全亮) | muck (盖牌)")
-
-    def _get_legal_actions(self) -> Dict[str, Any]:
-        """Fetch legal action dict for current user."""
+    async def _redraw_room(self) -> None:
         if not self.active_room_data:
-            return {}
-        table = self.active_room_data.get("table", {})
-        return table.get("legal_actions") or {}
+            print("尚未收到房间状态。")
+            return
+        if self.renderer.mode == "dashboard":
+            self.renderer.clear_screen()
+        print(self.renderer.render_table_dashboard(self.active_room_data, self._current_user_id()))
 
-    def _get_my_seat_index(self) -> Optional[int]:
-        """Find seat index of current player."""
-        if not self.active_room_data or not self.current_user:
+    async def _read_command(self, prompt: str) -> Optional[CliCommand]:
+        line = await self._async_input(prompt)
+        if self._stdin_closed:
             return None
-        seats = self.active_room_data.get("table", {}).get("seats", [])
-        for idx, s in enumerate(seats):
-            if s and s.get("player_id") == self.current_user["user_id"]:
-                return idx
-        return None
+        try:
+            return parse_command(line)
+        except CommandParseError as exc:
+            print(self.renderer.c(str(exc), Colors.BRIGHT_RED))
+            return None
 
-    def _print_in_game_help(self):
-        """Print detailed help manual for terminal gameplay."""
-        print("\n" + self.renderer.c("==================== HPoker 终端操作指南 ====================", Colors.BOLD + Colors.CYAN))
-        print("  【牌局行动指令】 (在轮到你的回合时直接输入):")
-        print("    • " + self.renderer.c("c", Colors.BRIGHT_GREEN) + " 或 " + self.renderer.c("check", Colors.BRIGHT_GREEN) + " / " + self.renderer.c("call", Colors.BRIGHT_GREEN) + "       : 智能 过牌 或 跟注")
-        print("    • " + self.renderer.c("f", Colors.BRIGHT_RED) + " 或 " + self.renderer.c("fold", Colors.BRIGHT_RED) + "               : 弃牌 (Fold)")
-        print("    • " + self.renderer.c("r <数值>", Colors.BRIGHT_YELLOW) + " / " + self.renderer.c("b <数值>", Colors.BRIGHT_YELLOW) + "        : 下注/加注指定筹码数 (如: r 40)")
-        print("    • " + self.renderer.c("r 0.5p", Colors.BRIGHT_YELLOW) + " / " + self.renderer.c("r 2/3p", Colors.BRIGHT_YELLOW) + " / " + self.renderer.c("r 1p", Colors.BRIGHT_YELLOW) + " : 智能比例加注 (0.5池, 2/3池, 1满池)")
-        print("    • " + self.renderer.c("a", Colors.BRIGHT_MAGENTA) + " 或 " + self.renderer.c("allin", Colors.BRIGHT_MAGENTA) + "             : 全下 (All-in)")
-        print("    • " + self.renderer.c("tc", Colors.CYAN) + " 或 " + self.renderer.c("time", Colors.CYAN) + "               : 消耗 1 张时间卡 (+30s思考时间)")
-        print("")
-        print("  【局间与秀牌指令】:")
-        print("    • " + self.renderer.c("ready", Colors.BRIGHT_GREEN) + " 或 " + self.renderer.c("rd", Colors.BRIGHT_GREEN) + "           : 准备 / 取消准备")
-        print("    • " + self.renderer.c("start", Colors.BRIGHT_GREEN) + " 或 " + self.renderer.c("s", Colors.BRIGHT_GREEN) + "            : 开始新手牌 (仅房主)")
-        print("    • " + self.renderer.c("rebuy", Colors.BRIGHT_YELLOW) + " 或 " + self.renderer.c("rb", Colors.BRIGHT_YELLOW) + "          : 重买补充初始买入筹码")
-        print("    • " + self.renderer.c("show 1", Colors.WHITE) + " / " + self.renderer.c("show 2", Colors.WHITE) + " / " + self.renderer.c("show all", Colors.WHITE) + " : 亮出第1张/第2张/全部手牌")
-        print("    • " + self.renderer.c("muck", Colors.DIM) + " 或 " + self.renderer.c("hide", Colors.DIM) + "            : 盖牌不秀")
-        print("    • " + self.renderer.c("rit 1", Colors.BRIGHT_MAGENTA) + " / " + self.renderer.c("rit 2", Colors.BRIGHT_MAGENTA) + "         : 多次发牌投票 (发1次 / 发2次)")
-        print("")
-        print("  【房间管理与视图】:")
-        print("    • " + self.renderer.c("end", Colors.BRIGHT_RED) + " 或 " + self.renderer.c("endroom", Colors.BRIGHT_RED) + "           : 结束房间并生成清算账单 (仅房主)")
-        print("    • " + self.renderer.c("bill", Colors.BRIGHT_GREEN) + " 或 " + self.renderer.c("report", Colors.BRIGHT_GREEN) + "         : 查看终局结算转账清单")
-        print("    • " + self.renderer.c("mode", Colors.CYAN) + "                    : 切换 仪表盘(Dashboard) / 极简日志流(Stream) 模式")
-        print("    • " + self.renderer.c("leave", Colors.YELLOW) + " 或 " + self.renderer.c("back", Colors.YELLOW) + "           : 离开房间返回大厅")
-        print("    • " + self.renderer.c("clear", Colors.WHITE) + " / " + self.renderer.c("r", Colors.WHITE) + "              : 清屏并重新绘制当前牌局")
-        print(self.renderer.c("================================================================", Colors.BOLD + Colors.CYAN) + "\n")
+    async def _prompt_text(self, prompt: str, default: str) -> Optional[str]:
+        value = await self._async_input(prompt)
+        if self._stdin_closed:
+            return None
+        return value.strip() or default
 
-    # ------------------ Async Helper ------------------
+    async def _prompt_number(
+        self,
+        prompt: str,
+        default: Any,
+        parser: Any,
+        minimum: float,
+        maximum: Optional[float],
+    ) -> Optional[Any]:
+        while True:
+            value = await self._async_input(prompt)
+            if self._stdin_closed:
+                return None
+            raw = value.strip()
+            if not raw:
+                return default
+            try:
+                parsed = parser(raw)
+                if parsed < minimum or (maximum is not None and parsed > maximum):
+                    raise ValueError
+                return parsed
+            except ValueError:
+                range_text = f"{minimum}~{maximum}" if maximum is not None else f">={minimum}"
+                print(f"请输入有效数字（{range_text}）。")
+
+    def _write_prompt(self, prompt: str) -> None:
+        if self._closing_room or self._stdin_closed:
+            return
+        sys.stdout.write(prompt)
+        sys.stdout.flush()
+        self._prompt_displayed = True
 
     async def _async_input(self, prompt: str = "") -> str:
-        """Asynchronously read a line from standard input."""
-        if prompt:
+        """Read stdin without blocking the event loop, with EOF detection."""
+
+        if prompt and not self._prompt_displayed:
             sys.stdout.write(prompt)
             sys.stdout.flush()
+        self._prompt_displayed = False
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, sys.stdin.readline)
+        line = await loop.run_in_executor(None, sys.stdin.readline)
+        if line == "":
+            self._stdin_closed = True
+            return ""
+        return line.rstrip("\n")
 
-    async def _async_password_input(self, prompt: str = "请输入密码: ") -> str:
-        """Asynchronously read password (hidden if tty available)."""
+    async def _async_password_input(self, prompt: str = "密码: ") -> str:
         loop = asyncio.get_running_loop()
         if sys.stdin.isatty():
             import getpass
+
             return await loop.run_in_executor(None, getpass.getpass, prompt)
+        return (await self._async_input(prompt)).strip()
+
+    def _set_mode(self, mode: Optional[str]) -> None:
+        if not mode:
+            mode = "stream" if self.renderer.mode == "dashboard" else "dashboard"
+        mode = mode.lower()
+        if mode not in {"dashboard", "stream"}:
+            print("模式只能是 dashboard 或 stream。")
+            return
+        self.renderer.mode = mode
+        print(f"已切换为 {mode} 模式。")
+
+    def _set_color(self, value: Optional[str]) -> None:
+        if value:
+            value = value.lower()
+            if value in {"on", "yes", "true", "1"}:
+                self.renderer.enable_color = True
+            elif value in {"off", "no", "false", "0"}:
+                self.renderer.enable_color = False
+            else:
+                print("color 用法: color on 或 color off")
+                return
         else:
-            return (await self._async_input(prompt)).strip()
+            self.renderer.enable_color = not self.renderer.enable_color
+        print(f"终端颜色已{'开启' if self.renderer.enable_color else '关闭'}。")
+
+    def _get_legal_actions(self) -> Dict[str, Any]:
+        if not self.active_room_data:
+            return {}
+        raw = self.active_room_data.get("table", {}).get("legal_actions") or {}
+        actions = dict(raw)
+        if "min_raise_to" not in actions:
+            actions["min_raise_to"] = actions.get("min_raise", 0)
+        if "max_raise_to" not in actions:
+            actions["max_raise_to"] = actions.get("max_raise", 0)
+        if "min_raise" not in actions:
+            actions["min_raise"] = actions.get("min_raise_to", 0)
+        if "max_raise" not in actions:
+            actions["max_raise"] = actions.get("max_raise_to", 0)
+        return actions
+
+    def _get_my_seat_index(self) -> Optional[int]:
+        if not self.active_room_data:
+            return None
+        seats = self.active_room_data.get("table", {}).get("seats", [])
+        user_id = self._current_user_id()
+        for index, seat in enumerate(seats):
+            if seat and seat.get("player_id") == user_id:
+                return index
+        return None
+
+    def _get_my_seat(self) -> Optional[Dict[str, Any]]:
+        index = self._get_my_seat_index()
+        if index is None or not self.active_room_data:
+            return None
+        seats = self.active_room_data.get("table", {}).get("seats", [])
+        return seats[index] if index < len(seats) else None
+
+    def _is_host(self) -> bool:
+        return bool(self.active_room_data and self.active_room_data.get("host_player_id") == self._current_user_id())
+
+    def _current_user_id(self) -> str:
+        return str(self.current_user.get("user_id", "")) if self.current_user else ""
+
+    @staticmethod
+    def _as_int(value: Any, default: int = 0) -> int:
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _parse_positive_int(value: str, default: int) -> int:
+        try:
+            parsed = int(value)
+            return parsed if parsed > 0 else default
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _parse_nonnegative_int(value: str) -> Optional[int]:
+        try:
+            parsed = int(value)
+            return parsed if parsed >= 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_raw_number(value: Optional[str]) -> Optional[float]:
+        if not value:
+            return None
+        cleaned = value.strip().replace(",", "")
+        if cleaned.startswith(("¥", "$")):
+            cleaned = cleaned[1:]
+        if not re.fullmatch(r"\d+(?:\.\d+)?", cleaned):
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _friendly_error(exc: Exception) -> str:
+        if isinstance(exc, PokerApiError):
+            return str(exc)
+        if isinstance(exc, (ConnectionError, OSError, TimeoutError)):
+            return "网络连接失败，请检查服务地址或输入 reconnect 重试"
+        return str(exc) or exc.__class__.__name__
+
+    def _print_in_game_help(self) -> None:
+        print("\n" + self.renderer.render_help("room"))

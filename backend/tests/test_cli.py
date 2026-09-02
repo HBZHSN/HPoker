@@ -267,6 +267,35 @@ class TestPokerWsClient:
         assert '"event": "RIT_CHOICE"' in mock_ws.send.call_args[0][0]
         assert '"choice": 2' in mock_ws.send.call_args[0][0]
 
+    async def test_ws_client_dispatches_room_events_and_sound_metadata(self):
+        ws_client = PokerWsClient("ws://localhost:8000/ws/test/u1")
+        ws_client.on_action_event = AsyncMock()
+        ws_client.on_sound_effect = AsyncMock()
+        ws_client.on_settlement_report = AsyncMock()
+        ws_client.on_room_deleted = AsyncMock()
+
+        await ws_client._dispatch({
+            "event": "ACTION_EVENT",
+            "payload": {"action": "CALL", "amount": 20},
+        })
+        await ws_client._dispatch({
+            "event": "SOUND_EFFECT",
+            "payload": {"sound": "raise", "player_id": "u1"},
+        })
+        await ws_client._dispatch({
+            "event": "SETTLEMENT_REPORT",
+            "payload": {"room_id": "r1"},
+        })
+        await ws_client._dispatch({
+            "event": "ROOM_DELETED",
+            "payload": {"room_id": "r1", "message": "closed"},
+        })
+
+        ws_client.on_action_event.assert_awaited_once_with({"action": "CALL", "amount": 20})
+        ws_client.on_sound_effect.assert_awaited_once_with("raise", {"player_id": "u1"})
+        ws_client.on_settlement_report.assert_awaited_once_with({"room_id": "r1"})
+        ws_client.on_room_deleted.assert_awaited_once_with({"room_id": "r1", "message": "closed"})
+
 
 @pytest.mark.asyncio
 class TestPokerCliController:
