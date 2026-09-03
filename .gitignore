@@ -19,6 +19,10 @@ dist/
 .vite/
 *.local
 
+# Runtime room checkpoints
+backend/data/rooms.json
+backend/data/rooms.json.tmp
+
 # Logs and OS files
 *.log
 .DS_Store

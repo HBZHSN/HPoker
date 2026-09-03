@@ -2,7 +2,7 @@ import pytest
 from backend.app.engine.state_machine import TableStateMachine, Street, ActionType
 
 
-def test_sit_down_and_stand_up():
+def test_sit_down_validation():
     table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
     assert table.sit_down("p1", "Alice", seat_index=0, chips=100) is True
     assert table.sit_down("p2", "Bob", seat_index=1, chips=100) is True
@@ -13,12 +13,6 @@ def test_sit_down_and_stand_up():
     assert table.sit_down("p1", "Alice", seat_index=2, chips=100) is False
 
     assert len(table.active_seated_players) == 2
-
-    # Stand up
-    player = table.stand_up(0)
-    assert player is not None
-    assert player.name == "Alice"
-    assert len(table.active_seated_players) == 1
 
 
 def test_two_player_heads_up_flow():
@@ -156,12 +150,21 @@ def test_allin_fast_forward():
     # Contenders have hole cards revealed
     assert len(table.seats[0].shown_cards) == 2
     assert len(table.seats[1].shown_cards) == 2
+    voting_state = table.get_table_state(viewer_player_id="p1")
+    assert len(voting_state["seats"][0]["shown_cards"]) == 2
+    assert len(voting_state["seats"][1]["shown_cards"]) == 2
+    assert voting_state["seats"][1]["hole_cards"] == []
 
-    # P1 votes Run It Once -> finalized
+    # One vote cannot start the runout while the other contender is undecided.
     status, is_tw = table.vote_rit("p1", 1)
-    assert status == "FINALIZED"
+    assert status == "WAITING"
     assert is_tw is False
     assert table.rit_enabled is False
+    assert table.street == Street.RIT_DECISION
+
+    status, is_tw = table.vote_rit("p2", 1)
+    assert status == "FINALIZED"
+    assert is_tw is False
 
     # Deal step by step
     step1 = table.deal_all_in_next_step()

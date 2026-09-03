@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2 } from 'lucide-react';
+import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2, Wallet } from 'lucide-react';
 
 export default function Lobby({
-  users,
   currentUser,
   token,
   onUpdateUser,
   onOpenProfile,
   onOpenAdmin,
+  onOpenBalance,
   onLogout,
   rooms,
   onCreateRoom,
@@ -46,7 +46,7 @@ export default function Lobby({
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-black text-white tracking-wider flex items-center gap-2">
-              HPOKER 在线德州现金局
+              HPoker
             </h1>
           </div>
         </div>
@@ -62,11 +62,24 @@ export default function Lobby({
                   👑 管理员
                 </span>
               )}
+              {currentUser?.is_test && (
+                <span className="text-[10px] bg-purple-950 text-purple-300 px-1.5 py-0.2 rounded border border-purple-500/40 font-bold">
+                  🧪 测试账号
+                </span>
+              )}
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">@{currentUser?.username}</span>
           </div>
 
           <div className="flex items-center gap-1.5 ml-2">
+            {/* Balance Button */}
+            <button
+              onClick={onOpenBalance}
+              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1"
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              余额
+            </button>
+
             {/* Edit Profile Button */}
             <button
               onClick={onOpenProfile}
@@ -105,7 +118,7 @@ export default function Lobby({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-amber-400" />
-            <h2 className="text-lg font-bold text-white tracking-wide">进行中的牌桌</h2>
+            <h2 className="text-lg font-bold text-white tracking-wide">牌桌列表</h2>
             <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">
               {rooms.length} 桌
             </span>
@@ -263,7 +276,7 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">大盲 (BB，自动)</label>
+                  <label className="text-slate-400 font-semibold block mb-1">大盲 (BB)</label>
                   <div className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-amber-300 font-black">
                     {Number(smallBlind) > 0 ? Number(smallBlind) * 2 : '—'}
                     <span className="ml-1 text-[10px] text-slate-500 font-medium">SB × 2</span>
@@ -285,14 +298,15 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">座位上限</label>
+                  <label className="text-slate-400 font-semibold block mb-1">房间人数</label>
                   <select
                     value={maxSeats}
                     onChange={(e) => setMaxSeats(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
                   >
-                    <option value={6}>6 人桌</option>
-                    <option value={9}>9 人桌</option>
+                    {Array.from({ length: 8 }, (_, index) => index + 2).map((seatCount) => (
+                      <option key={seatCount} value={seatCount}>{seatCount} 人桌</option>
+                    ))}
                   </select>
                 </div>
               </div>

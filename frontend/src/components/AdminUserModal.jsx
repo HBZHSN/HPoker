@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, UserPlus, KeyRound, Trash2, Edit3, X, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Shield, UserPlus, KeyRound, Trash2, Edit3, X, CheckCircle2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 
-export default function AdminUserModal({ isOpen, adminUser, onClose }) {
+export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
   if (!isOpen || !adminUser || !adminUser.is_admin) return null;
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -25,7 +26,9 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/users?admin_id=${adminUser.user_id}`);
+      const res = await fetch(`/api/admin/users?admin_id=${adminUser.user_id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error('获取用户列表失败');
       const data = await res.json();
       setUsers(data);
@@ -56,7 +59,10 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           admin_user_id: adminUser.user_id,
           username: newUsername.trim(),
@@ -87,7 +93,10 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           admin_user_id: adminUser.user_id,
           nickname: editNickname.trim() || undefined,
@@ -114,6 +123,7 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
     try {
       const res = await fetch(`/api/admin/users/${userId}?admin_id=${adminUser.user_id}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '删除失败');
@@ -122,6 +132,35 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
       fetchUsers();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleClearAllRecords = async () => {
+    if (
+      !window.confirm(
+        '⚠️ 警告：确定要清空所有结算记录与账单数据吗？\n\n此操作将彻底清除所有未结账单、已结账单和历史结算批次，所有玩家余额归零重新起算，数据无法恢复！\n\n是否确认清空？'
+      )
+    ) {
+      return;
+    }
+    setClearingData(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`/api/balance/all-records?admin_id=${adminUser.user_id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || '清空失败');
+      }
+      const data = await res.json();
+      setSuccess(data.message || '已成功清空所有结算与账单记录，重新开始计算！');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setClearingData(false);
     }
   };
 
@@ -315,6 +354,27 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Settlement Data Reset Panel */}
+        <div className="p-3 bg-slate-900/90 border border-red-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <div className="text-xs font-black text-red-300 flex items-center gap-1.5">
+              <RotateCcw className="w-3.5 h-3.5 text-red-400" />
+              战局结算与账单数据管理
+            </div>
+            <div className="text-[11px] text-slate-400">
+              一键清除所有对局结算与账单记录，所有玩家余额归零重新起算
+            </div>
+          </div>
+          <button
+            onClick={handleClearAllRecords}
+            disabled={clearingData}
+            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black shadow transition active:scale-95 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {clearingData ? '正在清空...' : '一键清空数据'}
+          </button>
         </div>
       </div>
     </div>

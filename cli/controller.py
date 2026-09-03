@@ -21,6 +21,8 @@ from cli.commands import (
     BetSizingContext,
     CommandParseError,
     CliCommand,
+    is_global_command,
+    normalize_command,
     parse_command,
     resolve_bet_amount,
 )
@@ -73,8 +75,12 @@ class PokerCliController:
         self._tui_view: Optional[str] = None
         self._tui_notice = ""
         self._tui_panel: Optional[str] = None
+        self._tui_panel_title = ""
+        self._tui_panel_kind: Optional[str] = None
         self._tui_prompt = ""
         self._tui_timer_task: Optional[asyncio.Task] = None
+        self._dismissed_hand_result_number: Optional[int] = None
+        self._last_stream_hand_result_number: Optional[int] = None
 
     # ------------------ Fixed-screen TUI ------------------
 
@@ -88,6 +94,8 @@ class PokerCliController:
         if self._tui_view != view:
             self._tui_prompt = ""
             self._tui_panel = None
+            self._tui_panel_title = ""
+            self._tui_panel_kind = None
             self.tui.clear_input()
         self._tui_view = view
         if view == "room":
@@ -106,6 +114,8 @@ class PokerCliController:
         self._tui_view = None
         self._tui_notice = ""
         self._tui_panel = None
+        self._tui_panel_title = ""
+        self._tui_panel_kind = None
         self._tui_prompt = ""
 
     def _start_tui_timer(self) -> None:
@@ -164,7 +174,11 @@ class PokerCliController:
         else:
             frame = "HPoker\n\n正在加载……"
 
-        if self._tui_view == "room":
+        if self._tui_panel_kind == "settlement":
+            prompt = "结算> "
+        elif self._tui_panel_kind == "hand_result":
+            prompt = "本手结算> "
+        elif self._tui_view == "room":
             prompt = "断线> " if not self.ws_client or not self.ws_client.is_connected else "牌桌> "
         else:
             prompt = "大厅> "
@@ -172,7 +186,7 @@ class PokerCliController:
             prompt = self._tui_prompt
         footer = self._tui_notice
         if self._tui_panel:
-            panel_hint = "输入命令后返回主画面；方向键 ↑/↓ 可浏览历史命令"
+            panel_hint = "输入 q 返回上一页；方向键 ↑/↓ 可浏览历史命令"
             footer = f"{footer}\n{panel_hint}" if footer else panel_hint
         self.tui.draw(
             frame,
@@ -181,7 +195,14 @@ class PokerCliController:
             footer=footer,
         )
 
-    def _output(self, message: Any = "", *, panel: bool = False) -> None:
+    def _output(
+        self,
+        message: Any = "",
+        *,
+        panel: bool = False,
+        panel_title: str = "详情",
+        panel_kind: str = "details",
+    ) -> None:
         """Send user feedback to the footer instead of scrolling the TUI."""
 
         if not self.tui.active:
@@ -190,9 +211,77 @@ class PokerCliController:
         text = str(message)
         if panel or "\n" in text.strip("\n"):
             self._tui_panel = text.strip("\n")
+            self._tui_panel_title = panel_title
+            self._tui_panel_kind = panel_kind
         else:
             self._tui_notice = text
         self._refresh_tui()
+
+    def _close_tui_panel(self) -> bool:
+        """Close the current detail/settlement page without leaving its parent."""
+
+        if self._tui_panel is None:
+            return False
+        if self._tui_panel_kind == "hand_result" and self.active_room_data:
+            hand_number = self.active_room_data.get("table", {}).get("hand_number")
+            if isinstance(hand_number, int):
+                self._dismissed_hand_result_number = hand_number
+        self._tui_panel = None
+        self._tui_panel_title = ""
+        self._tui_panel_kind = None
+        self._tui_notice = ""
+        self._refresh_tui()
+        return True
+
+    async def _dispatch_global_command(
+        self,
+        command: CliCommand,
+        scope: str,
+        rooms: Sequence[Dict[str, Any]] = (),
+    ) -> Optional[bool]:
+        """Handle commands whose aliases and meaning are identical everywhere."""
+
+        name = command.name
+        args = command.args
+        if name == "back":
+            if self._close_tui_panel():
+                return True
+            if scope == "room":
+                self._output("正在离开房间...")
+                self._in_room = False
+            else:
+                self._output("当前已是大厅首页；按 Ctrl+C 可退出程序。")
+            return True
+        if name == "help":
+            self._output(self.renderer.render_help(scope), panel=True)
+            return True
+        if name == "users":
+            await self._show_users()
+            return True
+        if name == "info":
+            if scope == "lobby":
+                if not args:
+                    self._output("用法: info <房间序号或 room_id>")
+                else:
+                    await self._show_room_info(self._resolve_room_ref(args[0], rooms))
+            elif self.active_room_data:
+                self._output(self.renderer.render_room_details(self.active_room_data), panel=True)
+            else:
+                self._output("尚未收到房间状态。")
+            return True
+        if name == "refresh":
+            if scope == "room":
+                await self._redraw_room()
+            return True
+        if name == "mode":
+            self._set_mode(args[0] if args else None)
+            if scope == "room" and self.active_room_data:
+                await self._redraw_room()
+            return True
+        if name == "color":
+            self._set_color(args[0] if args else None)
+            return True
+        return None
 
     # ------------------ Authentication Flow ------------------
 
@@ -233,15 +322,13 @@ class PokerCliController:
             self._output(self.renderer.c("  HPoker 终端客户端 - 用户登录", Colors.BOLD + Colors.BRIGHT_WHITE))
             self._output(self.renderer.c("=" * 60, Colors.CYAN))
 
-            username = (await self._async_input("用户名（输入 users 查看账号，q 退出）: ")).strip()
+            username = (await self._async_input("用户名（输入 users 查看账号，Ctrl+C 退出）: ")).strip()
             if self._stdin_closed:
                 return False
             if not username:
                 continue
-            if username.lower() in {"q", "quit", "exit"}:
-                return False
-            if username.lower() in {"users", "list"}:
-                await self._show_users()
+            if is_global_command(username, "back"):
+                self._output("当前已是登录页；按 Ctrl+C 可退出程序。")
                 continue
 
             password = await self._async_password_input("密码: ")
@@ -249,11 +336,14 @@ class PokerCliController:
                 return False
             if await self._try_login(username, password):
                 return True
-            self._output("请重新输入；输入 users 可查看可用账号。")
+            self._output("用户名或密码错误，请重新输入。")
 
     async def _show_users(self) -> None:
+        if not self.current_user or not self.current_user.get("is_admin"):
+            self._output(self.renderer.c("仅管理员有权限查看用户列表", Colors.YELLOW))
+            return
         try:
-            users = await self.api.list_users()
+            users = await self.api.list_users(token=self.token, admin_id=self.current_user.get("user_id"))
             self._output(self.renderer.render_users(users), panel=True)
         except Exception as exc:
             self._output(self.renderer.c(f"获取用户列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
@@ -270,7 +360,7 @@ class PokerCliController:
             return self.rooms
 
     async def run_lobby_loop(self) -> None:
-        """Run the lobby until logout or EOF/quit."""
+        """Run the lobby until logout, EOF, or an external interrupt."""
 
         self._begin_tui("lobby")
         try:
@@ -307,50 +397,33 @@ class PokerCliController:
         command: CliCommand,
         rooms: Sequence[Dict[str, Any]],
     ) -> bool:
+        command = normalize_command(command, "lobby")
         name = command.name
         args = command.args
 
-        if name in {"q", "quit", "exit"}:
-            self._output("再见！祝游戏愉快！")
-            return False
-        if name in {"r", "refresh", "list", "rooms"}:
+        global_result = await self._dispatch_global_command(command, "lobby", rooms)
+        if global_result is not None:
+            return global_result
+        if name == "rooms":
             return True
-        if name in {"help", "h", "?"}:
-            self._output(self.renderer.render_help("lobby"), panel=True)
-            return True
-        if name in {"users", "userlist"}:
-            await self._show_users()
-            return True
-        if name in {"mode", "view"}:
-            self._set_mode(args[0] if args else None)
-            return True
-        if name == "color":
-            self._set_color(args[0] if args else None)
-            return True
-        if name in {"user", "switch", "login", "logout"}:
+        if name == "user":
             self._end_tui()
             self.current_user = None
             self.auth_token = None
             self.default_username = None
             return await self.login_flow()
-        if name in {"create", "new", "c"}:
+        if name == "create":
             if args and args[0].lower() in {"help", "?"}:
                 self._output(self._render_create_help(), panel=True)
             else:
                 await self.create_room_flow(args)
             return True
-        if name in {"join", "j"}:
+        if name == "join":
             room_ref = args[0] if args else await self._async_input("房间序号或 ID: ")
             if self._stdin_closed:
                 return False
             if room_ref.strip():
                 await self.enter_room(self._resolve_room_ref(room_ref.strip(), rooms))
-            return True
-        if name in {"info", "inspect", "show"}:
-            if not args:
-                self._output("用法: info <房间序号或 room_id>")
-            else:
-                await self._show_room_info(self._resolve_room_ref(args[0], rooms))
             return True
         if name.isdigit():
             index = int(name)
@@ -587,54 +660,41 @@ class PokerCliController:
                 self._output(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _dispatch_room_command(self, command: CliCommand) -> None:
+        command = normalize_command(command, "room")
         name = command.name
         args = command.args
 
-        if name in {"leave", "back", "lobby", "exit"}:
+        global_result = await self._dispatch_global_command(command, "room")
+        if global_result is not None:
+            return
+        if name == "leave":
             self._output("正在离开房间...")
             self._in_room = False
             return
-        if name in {"help", "h", "?"}:
-            self._print_in_game_help()
-            return
-        if name in {"redraw", "clear", "cls", "refresh"}:
-            await self._redraw_room()
-            return
-        if name in {"status", "info", "table"}:
-            if self.active_room_data:
-                self._output(self.renderer.render_room_details(self.active_room_data), panel=True)
-            else:
-                self._output("尚未收到房间状态。")
-            return
-        if name in {"history", "log"}:
+        if name == "history":
             limit = self._parse_positive_int(args[0], 10) if args else 10
             if self.active_room_data:
                 self._output(self.renderer.render_action_history(self.active_room_data, limit), panel=True)
             return
-        if name in {"mode", "view"}:
-            self._set_mode(args[0] if args else None)
-            if self.active_room_data:
-                await self._redraw_room()
+        if name == "result":
+            self._show_hand_result()
             return
-        if name == "color":
-            self._set_color(args[0] if args else None)
-            return
-        if name in {"reconnect", "retry"}:
+        if name == "reconnect":
             await self._reconnect_room()
             return
-        if name in {"ready", "rd"}:
+        if name == "ready":
             await self._send_ws("player_ready", True)
             return
-        if name in {"unready", "unrd"}:
+        if name == "unready":
             await self._send_ws("player_ready", False)
             return
-        if name in {"start", "begin"}:
+        if name == "start":
             await self._send_ws("start_game")
             return
-        if name in {"rebuy", "rb", "buyin"}:
+        if name == "rebuy":
             await self._send_ws("rebuy")
             return
-        if name in {"sit", "seat"}:
+        if name == "sit":
             if not args:
                 self._output("用法: sit <座位号>（从 0 开始）")
                 return
@@ -644,29 +704,26 @@ class PokerCliController:
                 return
             await self._send_ws("sit_down", seat)
             return
-        if name in {"stand", "standup"}:
-            seat = self._get_my_seat_index()
-            if seat is None:
-                self._output("你当前未入座。")
-            else:
-                await self._send_ws("stand_up", seat)
+        if name == "bot":
+            seat = self._parse_nonnegative_int(args[0]) if args else None
+            await self._handle_add_bot(seat)
             return
 
         # Action aliases are intentionally checked before the generic utility
         # commands so ``r`` always means raise in a room; redraw is explicit.
-        if name in {"check", "call", "c"}:
+        if name == "check":
             await self._handle_check_or_call()
             return
-        if name in {"fold", "f"}:
+        if name == "fold":
             await self._send_action("FOLD", 0)
             return
-        if name in {"allin", "all-in", "ai", "a"}:
+        if name == "allin":
             await self._handle_all_in()
             return
-        if name in {"bet", "raise", "r", "b"}:
+        if name == "raise":
             await self._handle_raise_command([name, *args])
             return
-        if name in {"tc", "time", "timecard"}:
+        if name == "timecard":
             await self._send_ws("use_time_card")
             return
         if name == "rit":
@@ -676,19 +733,19 @@ class PokerCliController:
             else:
                 await self._send_ws("rit_choice", choice)
             return
-        if name in {"show", "showall", "s1", "s2", "sa", "muck", "hide"}:
+        if name == "show":
             await self._handle_show_command(name, list(args))
             return
-        if name in {"bill", "report", "settlement"}:
+        if name == "bill":
             await self._show_settlement()
             return
-        if name in {"end", "endroom"}:
+        if name == "end":
             await self._end_room()
             return
-        if name in {"delete", "del", "destroy"}:
+        if name == "delete":
             await self._delete_room()
             return
-        if name in {"export", "save"}:
+        if name == "export":
             await self._export_settlement(args[0] if args else None)
             return
 
@@ -823,6 +880,49 @@ class PokerCliController:
 
     # ------------------ Room Lifecycle / Settlement ------------------
 
+    async def _handle_add_bot(self, seat_index: Optional[int] = None) -> None:
+        if not self._is_host():
+            self._output("只有房主可以添加测试机器人。")
+            return
+        if self.active_room_data:
+            table = self.active_room_data.get("table", {})
+            street = table.get("street")
+            if street not in ("IDLE", "HAND_END"):
+                self._output("只能在手牌间隙（未开局或手牌结束时）添加机器人。")
+                return
+            seats = table.get("seats", [])
+            if seat_index is not None:
+                if seat_index < 0 or seat_index >= len(seats):
+                    self._output(f"座位号超出范围（0 - {len(seats) - 1}）。")
+                    return
+                if seats[seat_index] is not None:
+                    self._output(f"座位 {seat_index} 已有玩家。")
+                    return
+            else:
+                if all(s is not None for s in seats):
+                    self._output("牌桌已满，无法添加机器人。")
+                    return
+
+        if self.ws_client and self.ws_client.is_connected:
+            ok = await self._send_ws("add_bot", seat_index=seat_index)
+            if ok:
+                seat_str = f" 到座位 {seat_index}" if seat_index is not None else ""
+                self._output(f"已请求添加测试机器人{seat_str}。")
+            return
+
+        try:
+            room = await self.api.add_test_bot(
+                self.active_room_id or "",
+                requester_id=self._current_user_id(),
+                seat_index=seat_index,
+            )
+            self.active_room_data = room
+            self._output("✓ 已成功添加测试机器人。")
+            if self.renderer.mode == "dashboard":
+                await self._redraw_room()
+        except Exception as exc:
+            self._output(self.renderer.c(f"添加机器人失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
+
     async def _end_room(self) -> None:
         if not self._is_host():
             self._output("只有房主可以结束房间。")
@@ -862,7 +962,7 @@ class PokerCliController:
     async def _show_settlement(self) -> None:
         report = self.active_room_data.get("settlement_report") if self.active_room_data else None
         if report:
-            self._output(self.renderer.render_settlement_report(report), panel=True)
+            self._open_settlement_page(report)
             return
         if not self.active_room_id:
             self._output("当前没有房间结算清单。")
@@ -872,7 +972,7 @@ class PokerCliController:
             report = room.get("settlement_report")
             if report:
                 self.active_room_data = room
-                self._output(self.renderer.render_settlement_report(report), panel=True)
+                self._open_settlement_page(report)
             else:
                 self._output("当前房间尚未结束；房主输入 end 后才会生成结算清单。")
         except Exception as exc:
@@ -897,21 +997,75 @@ class PokerCliController:
             self.active_room_data["settlement_report"] = report
             self.active_room_data["is_ended"] = True
 
+    def _open_settlement_page(self, report: Dict[str, Any]) -> None:
+        """Open the final bill as a first-class CLI page."""
+
+        self._output(
+            self.renderer.render_settlement_report(report),
+            panel=True,
+            panel_title="终局结算",
+            panel_kind="settlement",
+        )
+
+    def _show_hand_result(self) -> None:
+        table = self.active_room_data.get("table", {}) if self.active_room_data else {}
+        if table.get("street") != "HAND_END" or not table.get("hand_results"):
+            self._output("当前没有可查看的本手结算。")
+            return
+        self._dismissed_hand_result_number = None
+        self._open_hand_result_page(table)
+
+    def _open_hand_result_page(self, table: Dict[str, Any]) -> None:
+        """Open the completed hand summary with cards and chip profit/loss."""
+
+        hand_number = self._as_int(table.get("hand_number"))
+        self._output(
+            self.renderer.render_hand_result(table, self._current_user_id()),
+            panel=True,
+            panel_title=f"第 {hand_number} 手结算",
+            panel_kind="hand_result",
+        )
+
     # ------------------ WebSocket Event Handlers ------------------
 
     async def _on_ws_room_state(self, data: Dict[str, Any]) -> None:
         self.active_room_data = data
+        report = data.get("settlement_report") if data.get("is_ended") else None
+        table = data.get("table", {})
+        hand_number = table.get("hand_number")
+        has_hand_result = (
+            table.get("street") == "HAND_END"
+            and bool(table.get("hand_results"))
+            and hand_number != self._dismissed_hand_result_number
+        )
         async with self._render_lock:
             if self.tui.active:
-                self._tui_panel = None
-                self._refresh_tui()
+                if isinstance(report, dict):
+                    self._open_settlement_page(report)
+                elif has_hand_result:
+                    self._open_hand_result_page(table)
+                else:
+                    self._tui_panel = None
+                    self._tui_panel_title = ""
+                    self._tui_panel_kind = None
+                    self._refresh_tui()
             elif self.renderer.mode == "dashboard":
                 self.renderer.clear_screen()
-                self._output(self.renderer.render_table_dashboard(data, self._current_user_id()))
+                if isinstance(report, dict):
+                    self._output(self.renderer.render_settlement_report(report), panel=True)
+                elif has_hand_result:
+                    self._output(self.renderer.render_hand_result(table, self._current_user_id()), panel=True)
+                else:
+                    self._output(self.renderer.render_table_dashboard(data, self._current_user_id()))
             else:
                 stream_log = self.renderer.render_stream_event("ROOM_STATE", data, self._current_user_id())
                 if stream_log:
                     self._output("\n" + stream_log)
+                if isinstance(report, dict):
+                    self._output("\n" + self.renderer.render_settlement_report(report), panel=True)
+                elif has_hand_result and hand_number != self._last_stream_hand_result_number:
+                    self._output("\n" + self.renderer.render_hand_result(table, self._current_user_id()), panel=True)
+                    self._last_stream_hand_result_number = hand_number
             if self._in_room and not self._closing_room and not self.tui.active:
                 self._write_prompt("牌桌> ")
 
@@ -953,7 +1107,7 @@ class PokerCliController:
                 self._output("\n" + self.renderer.render_settlement_report(report), panel=True)
                 self._write_prompt("牌桌> ")
             elif self.tui.active:
-                self._output("结算报表已更新，输入 bill 查看完整清单。")
+                self._open_settlement_page(report)
 
     async def _on_ws_room_deleted(self, data: Dict[str, Any]) -> None:
         message = data.get("message", "房间已被解散") if isinstance(data, dict) else "房间已被解散"
@@ -981,8 +1135,8 @@ class PokerCliController:
             self._output("尚未收到房间状态。")
             return
         if self.tui.active:
-            self._tui_panel = None
-            self._refresh_tui()
+            if not self._close_tui_panel():
+                self._refresh_tui()
             return
         if self.renderer.mode == "dashboard":
             self.renderer.clear_screen()
@@ -1055,7 +1209,6 @@ class PokerCliController:
                 self.tui.clear_input()
             if getattr(self.tui, "eof_requested", False):
                 self._stdin_closed = True
-            self._tui_panel = None
             self._refresh_tui()
             return line
 
@@ -1188,6 +1341,3 @@ class PokerCliController:
         if isinstance(exc, (ConnectionError, OSError, TimeoutError)):
             return "网络连接失败，请检查服务地址或输入 reconnect 重试"
         return str(exc) or exc.__class__.__name__
-
-    def _print_in_game_help(self) -> None:
-        self._output(self.renderer.render_help("room"), panel=True)

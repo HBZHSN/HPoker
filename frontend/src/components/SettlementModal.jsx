@@ -9,8 +9,11 @@ export default function SettlementModal({
 
   if (!report) return null;
 
+  const isBalanceMode = (report.settlement_type || 'balance') === 'balance';
+
   const copySettlementText = () => {
     let text = `【${report.room_name} - 结算清单】\n`;
+    text += `模式: ${isBalanceMode ? '计入余额' : '实时转账'}\n`;
     text += `买入: ${report.buyin_chips}筹码 = ¥${report.cash_value}\n\n`;
     text += `--- 玩家战绩 ---\n`;
     report.player_records.forEach((r, idx) => {
@@ -18,7 +21,7 @@ export default function SettlementModal({
       text += `${idx + 1}. ${r.player_name}: 买入x${r.rebuy_count} (${r.total_buyin_chips}筹码) -> 余额${r.final_chips}筹码 | 净输赢: ${sign}¥${r.net_cash.toFixed(2)}\n`;
     });
 
-    text += `\n--- 转账 ---\n`;
+    text += `\n--- 转账明细 ---\n`;
     if (report.transactions.length === 0) {
       text += `无需转账。\n`;
     } else {
@@ -38,13 +41,22 @@ export default function SettlementModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-              <Award className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+              <Award className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white tracking-wide">战局结束 · 现金结算清单</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black text-white tracking-wide">结算</h2>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                  isBalanceMode
+                    ? 'bg-amber-950 text-amber-300 border-amber-500/50'
+                    : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                }`}>
+                  {isBalanceMode ? '计入余额' : '实时转账'}
+                </span>
+              </div>
               <p className="text-xs text-slate-400">
-                {report.room_name} · 买入: ${report.buyin_chips} = ¥{report.cash_value}
+                {report.room_name}
               </p>
             </div>
           </div>
@@ -77,7 +89,18 @@ export default function SettlementModal({
                     <tr key={r.player_id} className="hover:bg-slate-900/40 transition">
                       <td className="p-2.5 font-bold text-white flex items-center gap-1.5">
                         <span className="text-[10px] w-4 text-slate-500">{i + 1}</span>
-                        {r.player_name}
+                        <span
+                          className="w-7 h-7 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-base leading-none flex-shrink-0"
+                          aria-label={`${r.player_name}的头像`}
+                        >
+                          {r.avatar || '👤'}
+                        </span>
+                        <span className="truncate">{r.player_name}</span>
+                        {(r.is_test || r.player_name?.toLowerCase()?.includes('test') || r.player_id?.startsWith('bot_')) && (
+                          <span className="text-[9px] bg-purple-950/80 text-purple-300 border border-purple-500/40 px-1 py-0.2 rounded font-bold ml-1">
+                            测试
+                          </span>
+                        )}
                       </td>
                       <td className="p-2.5 text-center text-slate-300">
                         x{r.rebuy_count}
@@ -153,16 +176,16 @@ export default function SettlementModal({
         <div className="flex gap-3 pt-2">
           <button
             onClick={copySettlementText}
-            className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition flex items-center justify-center gap-1.5"
+            className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition flex items-center justify-center gap-1.5 text-xs"
           >
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {copied ? "已复制" : "复制结算清单"}
+            {copied ? "已复制" : "复制"}
           </button>
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 transition"
+            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 transition text-xs"
           >
-            返回大厅
+            返回
           </button>
         </div>
       </div>

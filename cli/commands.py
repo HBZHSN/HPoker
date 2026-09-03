@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import math
 import re
 import shlex
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 
 class CommandParseError(ValueError):
@@ -37,6 +37,129 @@ class CliCommand:
         return self.args[0] if self.args else None
 
 
+@dataclass(frozen=True)
+class CommandSpec:
+    """One canonical command and the aliases exposed by a UI scope."""
+
+    name: str
+    aliases: tuple[str, ...]
+    usage: str
+    description: str
+    group: str = "通用"
+    sidebar: bool = False
+
+    @property
+    def tokens(self) -> tuple[str, ...]:
+        return (self.name, *self.aliases)
+
+
+GLOBAL_COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec("info", ("status", "inspect", "table"), "info [目标]", "查看当前上下文详情", "全局"),
+    CommandSpec("refresh", ("redraw", "clear", "cls"), "refresh", "刷新当前界面", "全局"),
+    CommandSpec("users", ("userlist",), "users", "查看用户", "全局"),
+    CommandSpec("mode", ("view",), "mode <dashboard|stream>", "切换视图", "全局"),
+    CommandSpec("color", (), "color <on|off>", "切换颜色", "全局"),
+    CommandSpec("help", ("h", "?"), "help", "完整帮助", "全局", True),
+    CommandSpec("back", ("q", "quit", "exit"), "q", "返回当前页面", "全局", True),
+)
+
+
+LOBBY_COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec("join", ("j",), "join <序号|ID>", "加入房间", "房间", True),
+    CommandSpec("create", ("new", "c"), "create [选项]", "创建房间", "房间", True),
+    CommandSpec("rooms", ("list", "r"), "rooms", "刷新房间", "房间", True),
+    CommandSpec("user", ("switch", "login", "logout"), "user", "切换账号", "账户"),
+)
+
+
+ROOM_COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec("check", ("call", "c"), "check", "过牌 / 跟注", "行动", True),
+    CommandSpec("fold", ("f",), "fold", "弃牌", "行动", True),
+    CommandSpec("raise", ("bet", "r", "b"), "raise [额度]", "下注 / 加注", "行动", True),
+    CommandSpec("allin", ("all-in", "ai", "a"), "allin", "全下", "行动", True),
+    CommandSpec("timecard", ("tc", "time"), "timecard", "使用时间卡", "行动"),
+    CommandSpec("ready", ("rd",), "ready", "准备", "牌局", True),
+    CommandSpec("unready", ("unrd",), "unready", "取消准备", "牌局"),
+    CommandSpec("start", ("begin",), "start", "开始下一手", "牌局", True),
+    CommandSpec("sit", ("seat",), "sit <座位>", "入座", "座位", True),
+    CommandSpec("rebuy", ("rb", "buyin"), "rebuy", "补码", "座位", True),
+    CommandSpec("bot", ("addbot", "add_bot", "add-bot", "testbot"), "bot [座位]", "添加测试机器人", "管理"),
+    CommandSpec("rit", (), "rit <1|2>", "选择发牌次数", "牌局"),
+    CommandSpec("show", ("showall", "s1", "s2", "sa", "muck", "hide"), "show <1|2|all|muck>", "亮牌 / 盖牌", "牌局"),
+    CommandSpec("history", ("log",), "history [数量]", "最近动态", "查看"),
+    CommandSpec("result", ("hand", "handresult"), "result", "本手结算", "查看", True),
+    CommandSpec("bill", ("report", "settlement"), "bill", "结算账单", "查看"),
+    CommandSpec("export", ("save",), "export [路径]", "导出账单", "查看"),
+    CommandSpec("reconnect", ("retry",), "reconnect", "重新连接", "连接"),
+    CommandSpec("end", ("endroom",), "end", "结束并结算", "管理"),
+    CommandSpec("delete", ("del", "destroy"), "delete", "解散房间", "管理"),
+    CommandSpec("leave", ("lobby",), "leave", "返回大厅", "通用", True),
+)
+
+
+COMMANDS_BY_SCOPE: Dict[str, tuple[CommandSpec, ...]] = {
+    "lobby": LOBBY_COMMANDS,
+    "room": ROOM_COMMANDS,
+}
+
+
+def command_specs(scope: str) -> tuple[CommandSpec, ...]:
+    """Return the command catalogue used by parsing, help, and sidebars."""
+
+    return (*COMMANDS_BY_SCOPE.get(scope, ()), *GLOBAL_COMMANDS)
+
+
+def command_alias_conflicts(scope: str) -> Dict[str, tuple[str, ...]]:
+    """Return duplicate tokens in an effective scope for invariant tests."""
+
+    owners: Dict[str, list[str]] = {}
+    for spec in command_specs(scope):
+        for token in spec.tokens:
+            owners.setdefault(token, []).append(spec.name)
+    return {
+        token: tuple(names)
+        for token, names in owners.items()
+        if len(set(names)) > 1
+    }
+
+
+def is_global_command(value: str, name: str) -> bool:
+    """Check a raw token against one canonical global command."""
+
+    token = value.strip().lower()
+    return any(spec.name == name and token in spec.tokens for spec in GLOBAL_COMMANDS)
+
+
+def normalize_command(command: CliCommand, scope: str) -> CliCommand:
+    """Resolve a scope-specific alias to its canonical command name.
+
+    Aliases may intentionally overlap between scopes: ``c`` creates a room in
+    the lobby and checks/calls at a table; ``r`` refreshes the lobby and raises
+    at a table.  Legacy show-card aliases are converted into explicit args so
+    the controller only needs one handler.
+    """
+
+    original_name = command.name.lower()
+    canonical = original_name
+    for spec in command_specs(scope):
+        if original_name in spec.tokens:
+            canonical = spec.name
+            break
+
+    args = command.args
+    show_args = {
+        "showall": ("all",),
+        "sa": ("all",),
+        "s1": ("1",),
+        "s2": ("2",),
+        "muck": ("muck",),
+        "hide": ("muck",),
+    }
+    if scope == "room" and canonical == "show" and original_name in show_args:
+        args = (*show_args[original_name], *args)
+    return CliCommand(name=canonical, args=args, raw=command.raw)
+
+
 def parse_command(line: str) -> Optional[CliCommand]:
     """Parse one shell-like command line.
 
@@ -48,6 +171,13 @@ def parse_command(line: str) -> Optional[CliCommand]:
     raw = line.strip()
     if not raw:
         return None
+    compact_raise = re.fullmatch(r"(?P<name>[rb])(?P<amount>\d+(?:\.\d+)?)", raw, re.IGNORECASE)
+    if compact_raise:
+        return CliCommand(
+            name=compact_raise.group("name").lower(),
+            args=(compact_raise.group("amount"),),
+            raw=raw,
+        )
     try:
         tokens = shlex.split(raw)
     except ValueError as exc:
@@ -148,7 +278,16 @@ def _raw_target(token: str, context: BetSizingContext) -> Optional[float]:
         base = context.current_highest_bet or context.current_round_bet
         return base + amount
 
-    return _number(value)
+    plain = _number(value)
+    # Tiny bare values are far more useful as pot multipliers than as chip
+    # amounts.  The legal minimum / blind unit keeps this unambiguous on
+    # normal 10/20-style tables: ``r0.5`` means half pot and ``r1`` means pot,
+    # while ``raise 200`` remains an exact chip target.
+    if plain is not None:
+        chip_floor = max(int(context.minimum), context.unit)
+        if 0 < plain <= 3 and plain < chip_floor:
+            return context.pot * plain
+    return plain
 
 
 def align_bet_amount(amount: int, context: BetSizingContext) -> int:
@@ -182,6 +321,7 @@ def resolve_bet_amount(token: Optional[str], context: BetSizingContext) -> Optio
     Supported forms include:
 
     * chip amounts: ``120``, ``1,200`` or ``¥120``;
+    * short pot ratios below the legal chip floor: ``0.5`` or ``1``;
     * pot fractions: ``1/3p``, ``1/2``, ``2/3p``, ``p``, ``1.5p``;
     * blind multiples: ``2.5bb`` and ``10sb``;
     * relative increments: ``+1bb`` and ``+20``;

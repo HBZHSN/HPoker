@@ -9,7 +9,6 @@ class EventType(str, Enum):
     # Client -> Server
     JOIN_ROOM = "JOIN_ROOM"
     SIT_DOWN = "SIT_DOWN"
-    STAND_UP = "STAND_UP"
     START_GAME = "START_GAME"
     PLAYER_ACTION = "PLAYER_ACTION"
     REBUY = "REBUY"
@@ -23,6 +22,8 @@ class EventType(str, Enum):
     ADD_TEST_BOT = "ADD_TEST_BOT"
     # Short alias retained for lightweight clients that call it ADD_BOT.
     ADD_BOT = "ADD_BOT"
+    CHAT_MESSAGE = "CHAT_MESSAGE"
+    EMOJI_REACTION = "EMOJI_REACTION"
     PING = "PING"
 
     # Server -> Client
@@ -33,6 +34,29 @@ class EventType(str, Enum):
     ROOM_DELETED = "ROOM_DELETED"
     ERROR_MESSAGE = "ERROR_MESSAGE"
     PONG = "PONG"
+
+
+CHAT_MESSAGE_MAX_LENGTH = 120
+ALLOWED_EMOJI_REACTIONS = (
+    "😀", "😃", "😄", "😁", "😆", "😂", "🤣", "😊", "😇", "🙂",
+    "🙃", "😉", "😍", "🥰", "😘", "😋", "😜", "🤪", "🤩", "🥳",
+    "😎", "🤓", "🧐", "🤔", "🤫", "🤭", "🫡", "😴", "😢", "😭",
+    "😤", "😡", "🤬", "😱", "😨", "🥶", "🥵", "🤢", "🤮", "🤡",
+    "👻", "💀", "👽", "🤖", "💩", "👍", "👎", "👏", "🙌", "🫶",
+    "🤝", "💪", "🙏", "👊", "✌️", "🤞", "👌", "🤟", "❤️", "🧡",
+    "💛", "💚", "💙", "💜", "🖤", "💯", "🔥", "🎉", "🎊", "⭐",
+    "✨", "💥", "🏆", "🃏", "♠️", "♥️", "♣️", "♦️",
+)
+
+
+def normalize_chat_message(value: Any) -> Optional[str]:
+    """Return a compact valid chat message, or None for invalid input."""
+    if not isinstance(value, str):
+        return None
+    message = " ".join(value.split()).strip()
+    if not message or len(message) > CHAT_MESSAGE_MAX_LENGTH:
+        return None
+    return message
 
 
 def make_message(event: EventType, payload: Dict[str, Any], room_id: Optional[str] = None) -> dict:

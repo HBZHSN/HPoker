@@ -217,9 +217,6 @@ class PokerWsClient:
     async def sit_down(self, seat_index: int) -> None:
         await self.send_event("SIT_DOWN", {"seat_index": seat_index})
 
-    async def stand_up(self, seat_index: int) -> None:
-        await self.send_event("STAND_UP", {"seat_index": seat_index})
-
     async def start_game(self) -> None:
         await self.send_event("START_GAME", {})
 
@@ -260,3 +257,9 @@ class PokerWsClient:
 
     async def delete_room(self) -> None:
         await self.send_event("DELETE_ROOM", {})
+
+    async def add_bot(self, seat_index: Optional[int] = None) -> None:
+        payload: Dict[str, Any] = {}
+        if seat_index is not None:
+            payload["seat_index"] = seat_index
+        await self.send_event("ADD_TEST_BOT", payload)

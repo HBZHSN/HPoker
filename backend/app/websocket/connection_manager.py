@@ -72,6 +72,11 @@ class ConnectionManager:
 
     async def broadcast_room_state(self, room: Room) -> None:
         """Broadcast customized room snapshots to each connected client in the room."""
+        # Every state-changing WebSocket route finishes with a broadcast,
+        # including automated timeout and bot actions.
+        from backend.app.services.room_manager import room_manager
+        room_manager.checkpoint_room(room)
+
         room_id = room.room_id
         sockets = self.room_connections.get(room_id, set())
         for ws in list(sockets):
@@ -99,6 +104,16 @@ class ConnectionManager:
                 await ws.send_text(raw)
             except Exception as e:
                 logger.warning(f"Failed to send sound to socket: {e}")
+
+    async def broadcast_event(self, room_id: str, event: EventType, payload: dict) -> None:
+        """Broadcast an ephemeral room event without checkpointing game state."""
+        sockets = self.room_connections.get(room_id, set())
+        raw = json.dumps(make_message(event, payload, room_id=room_id))
+        for ws in list(sockets):
+            try:
+                await ws.send_text(raw)
+            except Exception as e:
+                logger.warning(f"Failed to broadcast {event.value}: {e}")
 
 
 # Global singleton

@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import CardView from './CardView';
 import { sortCardsLowToHigh } from '../utils/cards';
 import {
-  ChevronUp,
-  ChevronDown,
   Flame,
   Clock,
   Zap,
@@ -21,6 +19,7 @@ export default function ActionBar({
   disabled = false,
   selfSeat = null,
   onRebuy,
+  canRebuy = false,
   currentTurnPlayer = null,
   isMyTurn = false,
   street = 'IDLE',
@@ -45,10 +44,13 @@ export default function ActionBar({
   const alignAmount = (value) => {
     const numericValue = Number(value);
     if (!Number.isFinite(numericValue)) return sizingMin || 0;
+    if (maxVal > 0 && numericValue >= maxVal) return maxVal;
+    if (minVal > 0 && numericValue <= minVal) return minVal;
     if (!hasAlignedRange) {
       return Math.max(minVal, Math.min(maxVal, numericValue));
     }
     const snapped = Math.round(numericValue / blindUnit) * blindUnit;
+    if (sizingMax > 0 && snapped >= sizingMax) return maxVal;
     return Math.max(alignedMinVal, Math.min(alignedMaxVal, snapped));
   };
 
@@ -90,6 +92,11 @@ export default function ActionBar({
   }, [currentTurnPlayer?.player_id, street, turnCount, actionHistory?.length, effectiveTimeout, isUsingTimeBank]);
 
   const currentAmount = alignAmount(raiseAmount || minVal);
+  const isAllIn = Boolean(
+    (legalActions?.can_bet || legalActions?.can_raise) &&
+    maxVal > 0 &&
+    (currentAmount >= maxVal || (sizingMax > 0 && currentAmount >= sizingMax))
+  );
   const orderedHoleCards = sortCardsLowToHigh(selfSeat?.hole_cards || []);
 
   const currentAmountRef = useRef(currentAmount);
@@ -114,16 +121,22 @@ export default function ActionBar({
           onAction('CALL', legal.call_amount);
         }
       } else if (e.code === 'KeyR' && (legal.can_bet || legal.can_raise)) {
-        const act = legal.can_bet ? 'BET' : 'RAISE';
-        onAction(act, currentAmountRef.current);
-      } else if (e.code === 'KeyA' && legal.can_all_in) {
-        onAction('ALL_IN', legal.all_in_amount);
+        if (currentAmountRef.current >= maxVal && legal.can_all_in) {
+          onAction('ALL_IN', legal.all_in_amount || maxVal);
+        } else {
+          const act = legal.can_bet ? 'BET' : 'RAISE';
+          onAction(act, currentAmountRef.current);
+        }
+      } else if (e.code === 'KeyA' && (legal.can_all_in || legal.can_bet || legal.can_raise)) {
+        if (legal.can_all_in) {
+          onAction('ALL_IN', legal.all_in_amount || maxVal);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [disabled, onAction, isMyTurn]);
+  }, [disabled, onAction, isMyTurn, maxVal]);
 
   // Preset Bet Sizing helpers
   const calcPresetAmount = (ratio) => {
@@ -131,22 +144,43 @@ export default function ActionBar({
     return alignAmount(target);
   };
 
-  const applyPresetRatio = (ratio) => {
-    const target = calcPresetAmount(ratio);
-    setRaiseAmount(target);
-  };
-
   const calcBBAmount = (mult) => {
     return alignAmount(Math.round(mult * bigBlind));
   };
 
-  const applyBBMultiplier = (mult) => {
-    const target = calcBBAmount(mult);
-    setRaiseAmount(target);
-  };
-
   const adjustBB = (multiplier) => {
     setRaiseAmount(alignAmount(currentAmount + multiplier * bigBlind));
+  };
+
+  const executeBetOrRaise = (targetAmount) => {
+    if (disabled || !isMyTurn || !legalActions) return;
+    if (!legalActions.can_bet && !legalActions.can_raise && !legalActions.can_all_in) return;
+
+    const amount = alignAmount(targetAmount);
+    setRaiseAmount(amount);
+
+    const isTargetAllIn = Boolean(
+      maxVal > 0 &&
+      (amount >= maxVal || (sizingMax > 0 && amount >= sizingMax))
+    );
+
+    if (isTargetAllIn && legalActions.can_all_in) {
+      onAction('ALL_IN', legalActions.all_in_amount || maxVal);
+      return;
+    }
+
+    const act = legalActions.can_bet ? 'BET' : 'RAISE';
+    onAction(act, amount);
+  };
+
+  const executeAllIn = () => {
+    if (disabled || !isMyTurn || !legalActions) return;
+    if (legalActions.can_all_in) {
+      setRaiseAmount(maxVal);
+      onAction('ALL_IN', legalActions.all_in_amount || maxVal);
+    } else if (legalActions.can_bet || legalActions.can_raise) {
+      executeBetOrRaise(maxVal);
+    }
   };
 
   const potPresets = [
@@ -169,6 +203,10 @@ export default function ActionBar({
 
   const handleRaiseSubmit = () => {
     if (!legalActions) return;
+    if (isAllIn && legalActions.can_all_in) {
+      onAction('ALL_IN', legalActions.all_in_amount || maxVal);
+      return;
+    }
     const act = legalActions.can_bet ? 'BET' : 'RAISE';
     onAction(act, currentAmount);
   };
@@ -300,7 +338,7 @@ export default function ActionBar({
       </div>
 
       {/* 2. Rebuy Alert Card (Only when player has 0 chips) */}
-      {selfSeat && selfSeat.chips === 0 && (
+      {canRebuy && (
         <div className="poker-action-rebuy bg-gradient-to-r from-red-950/90 via-amber-950/90 to-red-950/90 border border-amber-500/80 lg:border-2 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex items-center justify-between shadow-glow-gold">
           <div className="flex flex-col gap-0.5">
             <span className="text-[11px] lg:text-xs font-black text-amber-300 flex items-center gap-1">
@@ -395,31 +433,82 @@ export default function ActionBar({
             </button>
           )}
 
-          {/* Bet or Raise Button */}
+          {/* Row 2, Col 1: Horizontal Sizing Slider */}
+          <div
+            className={`poker-action-slider-container flex flex-col justify-between py-1.5 lg:py-2 px-2 lg:px-2.5 rounded-lg lg:rounded-xl border shadow-lg transition-all min-h-[52px] lg:min-h-[60px] ${
+              isMyTurn && (legalActions?.can_bet || legalActions?.can_raise)
+                ? isAllIn
+                  ? 'bg-gradient-to-b from-slate-900 via-purple-950/40 to-slate-950 border-purple-500/60 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
+                  : 'bg-slate-950/90 border-amber-500/40'
+                : 'bg-slate-950/50 border-slate-800 opacity-40'
+            }`}
+          >
+            <div className="flex items-center justify-between text-[11px] lg:text-xs">
+              <span className="text-slate-400 font-bold">
+                {legalActions?.can_bet ? '下注' : '加注'}
+              </span>
+              <span className={`font-black ${isAllIn ? 'text-purple-300 animate-pulse' : 'text-amber-300'}`}>
+                ${currentAmount}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={sizingMin}
+              max={sizingMax}
+              step={blindUnit}
+              value={currentAmount}
+              disabled={disabled || !isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val >= sizingMax || val >= maxVal) {
+                  setRaiseAmount(maxVal);
+                } else {
+                  setRaiseAmount(alignAmount(val));
+                }
+              }}
+              className={`poker-horizontal-raise-slider w-full h-2 lg:h-2.5 my-1 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-slate-800 ${
+                isAllIn ? 'accent-purple-400' : 'accent-amber-400'
+              }`}
+              aria-label="横向调整下注额度"
+            />
+            <div className="flex items-center justify-between text-[9px] lg:text-[10px] text-slate-500 font-semibold px-0.5">
+              <span>${sizingMin}</span>
+              <span className={isAllIn ? 'text-purple-400 font-bold' : ''}>
+                {isAllIn ? '全下' : `$${sizingMax}`}
+              </span>
+            </div>
+          </div>
+
+          {/* Row 2, Col 2: Raise Button (dynamically turns to All-In when dragged to end) */}
           <button
             onClick={handleRaiseSubmit}
             disabled={disabled || !isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 disabled:opacity-35 disabled:cursor-not-allowed text-white font-black rounded-lg lg:rounded-xl border border-amber-300/70 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer shadow-glow-gold"
+            className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed min-h-[52px] lg:min-h-[60px] ${
+              isAllIn
+                ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
+                : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
+            }`}
           >
-            <span className="text-sm lg:text-base font-black tracking-wide text-amber-200">
-              {legalActions?.can_bet ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`}
-            </span>
-            <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">
-              {legalActions?.can_bet ? 'Bet [R]' : 'Raise [R]'}
-            </span>
-          </button>
-
-          {/* All In Button */}
-          <button
-            onClick={() => onAction('ALL_IN', legalActions?.all_in_amount || 0)}
-            disabled={disabled || !isMyTurn || !legalActions?.can_all_in}
-            className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-purple-800 to-red-950 hover:from-purple-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-amber-300 font-black rounded-lg lg:rounded-xl border border-purple-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
-          >
-            <span className="text-sm lg:text-base font-black tracking-wide flex items-center gap-1">
-              <Flame className="w-3 h-3 lg:w-4 lg:h-4 text-amber-400 fill-amber-400" />
-              全下 ${legalActions?.all_in_amount || 0}
-            </span>
-            <span className="text-[10px] lg:text-[11px] text-purple-300/80 font-medium">All-In [A]</span>
+            {isAllIn ? (
+              <>
+                <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-400 fill-amber-400" />
+                  全下 ${legalActions?.all_in_amount || currentAmount}
+                </span>
+                <span className="text-[10px] lg:text-[11px] text-purple-300/90 font-medium">
+                  All-In [R]
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap">
+                  {legalActions?.can_bet ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`}
+                </span>
+                <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">
+                  {legalActions?.can_bet ? 'Bet [R]' : 'Raise [R]'}
+                </span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -430,18 +519,36 @@ export default function ActionBar({
           <span className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider">
             下注额
           </span>
-          <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 lg:px-2.5 rounded-lg border border-amber-500/40">
-            <span className="text-amber-400 font-black text-xs lg:text-sm">$</span>
-            <input
-              type="number"
-              min={sizingMin}
-              max={sizingMax}
-              step={blindUnit}
-              value={currentAmount}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => adjustBB(-1)}
               disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-              onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
-              className="w-14 lg:w-16 bg-transparent text-right font-black text-amber-300 text-xs lg:text-sm focus:outline-none"
-            />
+              className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
+              title="-1 BB"
+            >
+              -1BB
+            </button>
+            <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 lg:px-2.5 rounded-lg border border-amber-500/40">
+              <span className="text-amber-400 font-black text-xs lg:text-sm">$</span>
+              <input
+                type="number"
+                min={sizingMin}
+                max={sizingMax}
+                step={blindUnit}
+                value={currentAmount}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+                onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
+                className="w-14 lg:w-16 bg-transparent text-right font-black text-amber-300 text-xs lg:text-sm focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={() => adjustBB(1)}
+              disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+              className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
+              title="+1 BB"
+            >
+              +1BB
+            </button>
           </div>
         </div>
 
@@ -453,8 +560,8 @@ export default function ActionBar({
             return (
               <button
                 key={idx}
-                onClick={() => (preset.isMax ? setRaiseAmount(maxVal) : applyPresetRatio(preset.ratio))}
-                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+                onClick={() => (preset.isMax ? executeAllIn() : executeBetOrRaise(amount))}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in))}
                 className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border ${
                   isSelected
                     ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -490,7 +597,7 @@ export default function ActionBar({
             return (
               <button
                 key={idx}
-                onClick={() => applyBBMultiplier(preset.mult)}
+                onClick={() => executeBetOrRaise(amount)}
                 disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
                 className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border ${
                   isSelected
@@ -507,38 +614,6 @@ export default function ActionBar({
               </button>
             );
           })}
-        </div>
-
-        {/* Slider & Stepper Controls */}
-        <div className="flex items-center gap-1.5 lg:gap-2 mt-1">
-          <button
-            onClick={() => adjustBB(-1)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow"
-            title="-1 BB"
-          >
-            -1BB
-          </button>
-
-          <input
-            type="range"
-            min={sizingMin}
-            max={sizingMax}
-            step={blindUnit}
-            value={currentAmount}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
-            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400 disabled:opacity-40 lg:h-2.5"
-          />
-
-          <button
-            onClick={() => adjustBB(1)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow"
-            title="+1 BB"
-          >
-            +1BB
-          </button>
         </div>
       </div>
 

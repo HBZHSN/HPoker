@@ -7,6 +7,7 @@ import sys
 import time
 from typing import Any, Dict, Iterable, List, Optional
 
+from cli.commands import BetSizingContext, command_specs, resolve_bet_amount
 from cli.text_utils import clip_display, display_width, pad_display
 
 
@@ -212,6 +213,288 @@ class PokerUiRenderer:
             return "(无)"
         return " ".join(self.format_card(c) for c in cards)
 
+    def format_large_cards(
+        self,
+        cards: List[Dict[str, Any]],
+        *,
+        slots: int = 0,
+    ) -> str:
+        """Render terminal-sized cards as a compact multi-line group."""
+
+        visible_cards: List[Optional[Dict[str, Any]]] = list(cards)
+        if slots:
+            visible_cards.extend([None] * max(0, slots - len(visible_cards)))
+        if not visible_cards:
+            return self.c("等待发牌", Colors.DIM)
+
+        rows: List[List[str]] = [[] for _ in range(5)]
+        for card in visible_cards:
+            if card:
+                rank = self._text(card.get("rank_symbol") or card.get("rank"), "?")
+                suit = self._text(card.get("suit_symbol"), "")
+                if not suit:
+                    suit = {"s": "♠", "h": "♥", "c": "♣", "d": "♦"}.get(
+                        self._text(card.get("suit")).lower(), "?"
+                    )
+                color = Colors.BRIGHT_RED if suit in {"♥", "♦"} else Colors.BRIGHT_WHITE
+                rank_text = self.c(rank, color + Colors.BOLD)
+                suit_text = self.c(suit, color + Colors.BOLD)
+                rows[0].append("┌─────┐")
+                rows[1].append(f"│{self._pad_display(rank_text, 5)}│")
+                rows[2].append(f"│  {suit_text}  │")
+                rows[3].append(f"│{self._pad_display('', max(0, 5 - display_width(rank_text)))}{rank_text}│")
+                rows[4].append("└─────┘")
+            else:
+                dim = self.c("·", Colors.DIM)
+                rows[0].append(self.c("┌─────┐", Colors.DIM))
+                rows[1].append(f"│     │")
+                rows[2].append(f"│  {dim}  │")
+                rows[3].append(f"│     │")
+                rows[4].append(self.c("└─────┘", Colors.DIM))
+        return "\n".join(" ".join(row) for row in rows)
+
+    def render_lobby_main(self, current_user: Dict[str, Any], rooms: List[Dict[str, Any]]) -> str:
+        """Render the primary lobby content for the Textual workspace."""
+
+        user_name = current_user.get("nickname") or current_user.get("username", "Unknown")
+        lines = [self.c(f"{user_name}，欢迎回来", Colors.BOLD + Colors.BRIGHT_WHITE), ""]
+        if not rooms:
+            lines.extend([
+                self.c("当前没有进行中的房间", Colors.DIM),
+                "",
+                "输入 create 创建一张新牌桌。",
+            ])
+            return "\n".join(lines)
+
+        lines.append(self.c(f"活跃房间  {len(rooms)}", Colors.BOLD + Colors.CYAN))
+        lines.append(self.c("─" * 72, Colors.DIM))
+        for index, room in enumerate(rooms, 1):
+            cfg = room.get("config", {})
+            name = room.get("room_name") or cfg.get("room_name") or "德州现金桌"
+            room_id = room.get("room_id", "")
+            sb = self._int(cfg.get("small_blind", 10), 10)
+            bb = self._int(cfg.get("big_blind", sb * 2), sb * 2)
+            seats = room.get("seated_players_count", room.get("seated_count", 0))
+            maximum = cfg.get("max_seats", 6)
+            lines.extend([
+                self.c(f"[{index}]  {name}", Colors.BOLD + Colors.BRIGHT_WHITE),
+                f"     {room_id}  ·  {sb}/{bb}  ·  {seats}/{maximum} 人",
+                self.c("─" * 72, Colors.DIM),
+            ])
+        return "\n".join(lines)
+
+    def render_lobby_sidebar(self, is_admin: bool = False) -> str:
+        """Render commands from the same registry used by the dispatcher."""
+
+        lines = [self.c("快速操作", Colors.BOLD + Colors.BRIGHT_CYAN)]
+        for spec in command_specs("lobby"):
+            if spec.sidebar:
+                lines.append(f"  {self.c(spec.usage, Colors.BRIGHT_WHITE)}")
+                lines.append(self.c(f"    {spec.description}", Colors.DIM))
+        if is_admin:
+            lines.extend(["", self.c("管理员可在牌桌内使用 delete 解散房间", Colors.DIM)])
+        lines.extend(["", self.c("↑ / ↓  历史命令   Ctrl+D  返回", Colors.DIM)])
+        return "\n".join(lines)
+
+    def render_table_main(
+        self,
+        room: Dict[str, Any],
+        current_user_id: str,
+        *,
+        compact: bool = False,
+    ) -> str:
+        """Render board, hero cards, and seats as the primary visual hierarchy.
+
+        Compact mode keeps both card groups on single lines for small or
+        deliberately discreet terminal windows.
+        """
+
+        table = room.get("table", {})
+        cfg = room.get("config", {})
+        street = table.get("street", "IDLE")
+        hand_number = self._int(table.get("hand_number", 0))
+        total_pot = self._int(table.get("total_pot", 0))
+        seats = table.get("seats", [])
+        board = table.get("board_cards", [])
+        board_2 = table.get("board_cards_2", [])
+        host_id = room.get("host_player_id", "")
+        current_turn = table.get("current_turn_seat")
+
+        lines = [
+            f"第 {hand_number} 手  ·  {self.format_street_name(street)}  ·  "
+            + self.c(f"底池 {total_pot}", Colors.BOLD + Colors.BRIGHT_YELLOW),
+        ]
+        if compact:
+            lines.append(f"公共牌  {self.format_cards(board)}")
+        else:
+            lines.extend([
+                "",
+                self.c("公共牌", Colors.BOLD + Colors.BRIGHT_CYAN),
+                self.format_large_cards(board, slots=5),
+            ])
+        if table.get("rit_enabled") and board_2:
+            if compact:
+                lines.append(f"第二板  {self.format_cards(board_2)}")
+            else:
+                lines.extend(["", self.c("公共牌 · 第二板", Colors.BOLD + Colors.BRIGHT_MAGENTA)])
+                lines.append(self.format_large_cards(board_2, slots=5))
+
+        my_seat = next((seat for seat in seats if seat and seat.get("player_id") == current_user_id), None)
+        hole_cards = my_seat.get("hole_cards", []) if my_seat else []
+        if compact:
+            lines.append(f"手牌    {self.format_cards(hole_cards)}")
+        else:
+            lines.extend(["", self.c("你的手牌", Colors.BOLD + Colors.BRIGHT_CYAN)])
+            if hole_cards:
+                lines.append(self.format_large_cards(hole_cards))
+            else:
+                lines.append(self.c("未入座或等待发牌", Colors.DIM))
+
+        lines.extend(["", self.c("玩家", Colors.BOLD + Colors.BRIGHT_CYAN)])
+        ready_ids = table.get("ready_player_ids", [])
+        for index, seat in enumerate(seats):
+            if not seat:
+                lines.append(self.c(f"  [{index}]  空座", Colors.DIM))
+                continue
+            player_id = seat.get("player_id", "")
+            markers = []
+            if player_id == current_user_id:
+                markers.append("你")
+            if player_id == host_id:
+                markers.append("房主")
+            if seat.get("is_bot"):
+                markers.append("BOT")
+            tag = f"  {'/'.join(markers)}" if markers else ""
+            turn = self.c("▶", Colors.BRIGHT_YELLOW + Colors.BOLD) if current_turn == index else " "
+            state = "弃牌" if seat.get("is_folded") else "全下" if seat.get("is_all_in") else ""
+            if street == "IDLE":
+                state = "已准备" if player_id in ready_ids else "未准备"
+            bet = self._int(seat.get("current_round_bet", 0))
+            bet_text = f"  ·  已下 {bet}" if bet else ""
+            lines.append(
+                f"{turn} [{index}] {seat.get('name', '玩家')}{tag}  ·  "
+                f"{self._int(seat.get('chips', 0))} 筹码{bet_text}"
+                + (f"  ·  {state}" if state else "")
+            )
+
+        if room.get("is_ended"):
+            lines.extend(["", self.c("牌局已结束，可使用 bill 查看结算。", Colors.BRIGHT_YELLOW)])
+        return "\n".join(lines)
+
+    def render_table_sidebar(
+        self,
+        room: Dict[str, Any],
+        current_user_id: str,
+        *,
+        compact: bool = False,
+    ) -> str:
+        """Render state-aware actions, sizing hints, timer, and recent events."""
+
+        table = room.get("table", {})
+        cfg = room.get("config", {})
+        seats = table.get("seats", [])
+        street = table.get("street", "IDLE")
+        legal = table.get("legal_actions") or {}
+        current_turn = table.get("current_turn_seat")
+        my_index = next(
+            (index for index, seat in enumerate(seats) if seat and seat.get("player_id") == current_user_id),
+            None,
+        )
+        is_my_turn = current_turn is not None and my_index == current_turn
+        lines = [self.c("当前操作", Colors.BOLD + Colors.BRIGHT_CYAN)]
+
+        if room.get("is_ended"):
+            lines.extend([self.c("牌局已结束", Colors.BRIGHT_YELLOW), "  bill     查看结算"])
+        elif street == "RIT_DECISION":
+            lines.extend([self.c("选择发牌次数", Colors.BRIGHT_MAGENTA), "  rit 1    发一次", "  rit 2    发两次"])
+        elif street in {"IDLE", "HAND_END", "SHOWDOWN"}:
+            ready_ids = table.get("ready_player_ids", [])
+            lines.append("  unready  取消准备" if current_user_id in ready_ids else "  ready    准备")
+            if current_user_id == room.get("host_player_id"):
+                lines.append("  start    开始下一手")
+            lines.extend(["  rebuy    补码", "  leave    返回大厅"])
+            if street in {"HAND_END", "SHOWDOWN"}:
+                lines.append("  result    查看本手结算")
+                lines.append("  show all / muck")
+        elif is_my_turn:
+            duration = max(1, self._int(table.get("current_turn_duration", cfg.get("action_timeout", 15)), 15))
+            remaining = self._remaining_turn_seconds(table, duration, time.time())
+            timer_color = self._timer_color(remaining, duration)
+            lines.append(self.c(f"轮到你  {math.ceil(remaining):02d}s", timer_color))
+            if not compact:
+                lines.append(self.c(self._progress_bar(remaining, duration, 22), timer_color))
+            if legal.get("can_check"):
+                lines.append("  check     过牌")
+            if legal.get("can_call"):
+                lines.append(f"  check     跟注 {self._int(legal.get('call_amount'))}")
+            if legal.get("can_fold"):
+                lines.append("  fold      弃牌")
+            if legal.get("can_bet"):
+                lines.append(f"  raise N   下注 {legal.get('min_bet', 0)}~{legal.get('max_bet', 0)}")
+            elif legal.get("can_raise"):
+                minimum = legal.get("min_raise_to", legal.get("min_raise", 0))
+                maximum = legal.get("max_raise_to", legal.get("max_raise", 0))
+                lines.append(f"  raise N   加注 {minimum}~{maximum}")
+            if legal.get("can_all_in"):
+                lines.append(f"  allin     全下 {legal.get('all_in_amount', 0)}")
+        else:
+            player = seats[current_turn] if isinstance(current_turn, int) and current_turn < len(seats) else None
+            name = player.get("name", "其他玩家") if player else "其他玩家"
+            lines.append(self.c(f"等待 {name} 行动", Colors.DIM))
+
+        if (legal.get("can_bet") or legal.get("can_raise")) and is_my_turn:
+            pot = self._int(table.get("total_pot", 0))
+            can_bet = bool(legal.get("can_bet"))
+            minimum = self._int(
+                legal.get("min_bet" if can_bet else "min_raise_to", legal.get("min_raise", 0))
+            )
+            maximum = self._int(
+                legal.get("max_bet" if can_bet else "max_raise_to", legal.get("max_raise", 0))
+            )
+            small_blind = self._int(table.get("small_blind", cfg.get("small_blind", 1)), 1)
+            sizing_context = BetSizingContext(
+                pot=pot,
+                minimum=minimum,
+                maximum=maximum,
+                small_blind=small_blind,
+                current_highest_bet=self._int(table.get("current_round_highest_bet", 0)),
+                big_blind=self._int(table.get("big_blind", cfg.get("big_blind", 0))) or None,
+            )
+            size_options = []
+            for ratio, label in (("1/3p", "1/3池"), ("0.5", "半池"), ("1", "整池")):
+                amount = resolve_bet_amount(ratio, sizing_context)
+                if amount is not None and amount not in {item[0] for item in size_options}:
+                    size_options.append((amount, label))
+            if compact:
+                numeric_sizes = "  ".join(f"raise {amount}" for amount, _ in size_options)
+                lines.extend(["", f"快捷  {numeric_sizes}", self.c("比例缩写  r0.5 / r1", Colors.DIM)])
+            else:
+                lines.extend([
+                    "",
+                    self.c("快捷下注", Colors.BOLD + Colors.BRIGHT_CYAN),
+                ])
+                for amount, label in size_options:
+                    lines.append(f"  raise {amount:<7} {label}")
+                lines.append(self.c("  比例缩写  r0.5 / r1", Colors.DIM))
+
+        lines.extend(["", self.c("最近动态", Colors.BOLD + Colors.BRIGHT_CYAN)])
+        history_limit = 2 if compact else 5
+        history = table.get("action_history", [])[-history_limit:]
+        if not history:
+            lines.append(self.c("  暂无操作", Colors.DIM))
+        for item in history:
+            name = item.get("player_name") or item.get("player_id", "玩家")
+            amount = self._int(item.get("amount", 0))
+            lines.append(f"  {name} · {item.get('action', '')}" + (f" {amount}" if amount else ""))
+
+        if not compact:
+            lines.extend(["", self.c("快捷命令", Colors.BOLD + Colors.BRIGHT_CYAN)])
+            for spec in command_specs("room"):
+                if spec.sidebar and spec.name in {"info", "history", "help", "leave", "back"}:
+                    lines.append(f"  {spec.usage:<14} {spec.description}")
+            lines.append(self.c("  ↑ / ↓  历史命令", Colors.DIM))
+        return "\n".join(lines)
+
     def format_street_name(self, street: str) -> str:
         """Translate street name to readable Chinese."""
         mapping = {
@@ -284,12 +567,13 @@ class PokerUiRenderer:
         lines.append("    • " + self.c("create [选项]", Colors.BRIGHT_GREEN) + " : 创建房间（默认值可直接回车）")
         lines.append("    • " + self.c("rooms / refresh", Colors.BRIGHT_CYAN) + " : 刷新房间列表")
         lines.append("    • " + self.c("info <序号|room_id>", Colors.WHITE) + " : 查看房间详情，不入座")
-        lines.append("    • " + self.c("users", Colors.WHITE) + "             : 查看可登录用户")
         lines.append("    • " + self.c("mode [dashboard|stream]", Colors.CYAN) + " : 切换显示模式")
         lines.append("    • " + self.c("user / logout", Colors.BRIGHT_MAGENTA) + " : 切换用户登录")
         lines.append("    • " + self.c("help", Colors.BRIGHT_WHITE) + "             : 查看大厅帮助")
-        lines.append("    • " + self.c("quit", Colors.BRIGHT_RED) + " 或 " + self.c("q", Colors.BRIGHT_RED) + " : 退出程序")
+        lines.append("    • " + self.c("q", Colors.BRIGHT_YELLOW) + " : 关闭当前页面（大厅首页不退出程序）")
+        lines.append("    • " + self.c("Ctrl+C", Colors.BRIGHT_RED) + " : 退出程序")
         if is_admin:
+            lines.append("    • " + self.c("users", Colors.WHITE) + "             : 管理员查看用户列表")
             lines.append("    • 管理员可通过牌桌内 " + self.c("delete", Colors.BRIGHT_RED) + " 解散房间")
         lines.append("")
 
@@ -420,6 +704,8 @@ class PokerUiRenderer:
                 name_disp += " (你)"
             if p_id == host_id:
                 name_disp += "👑"
+            if s.get("is_bot") and not name_disp.startswith("🤖"):
+                name_disp = f"🤖{name_disp}"
             if self._display_width(name_disp) > 16:
                 name_disp = f"{clip_display(name_disp, 14)}.."
 
@@ -560,7 +846,7 @@ class PokerUiRenderer:
         if is_ended:
             lines.append(self.c(self._table_line("牌局已由房主结束并生成结算账单。输入 [bill] 或 [report] 查看账单。"), Colors.BRIGHT_YELLOW))
         elif street == "RIT_DECISION":
-            lines.append(self.c(self._table_line("🎲 全下多次发牌(RIT)协商中: 输入 [rit 1] 发1次牌 / [rit 2] 发2次牌"), Colors.BRIGHT_MAGENTA + Colors.BOLD))
+            lines.append(self.c(self._table_line("🎲 全下多次发牌(RIT)协商中，等待所有玩家决定: 输入 [rit 1] 发1次牌 / [rit 2] 发2次牌"), Colors.BRIGHT_MAGENTA + Colors.BOLD))
         elif street == "IDLE":
             is_host = (current_user_id == host_id)
             is_ready = current_user_id in ready_player_ids
@@ -737,43 +1023,32 @@ class PokerUiRenderer:
         return "\n".join(lines)
 
     def render_help(self, scope: str = "lobby") -> str:
-        """Render discoverable command help for the lobby or a room."""
+        """Render help from the canonical command catalogue."""
 
+        title = "牌桌命令" if scope == "room" else "大厅命令"
+        lines = [self.c(title, Colors.BOLD + Colors.CYAN)]
+        active_group = ""
+        for spec in command_specs(scope):
+            if spec.group != active_group:
+                active_group = spec.group
+                lines.extend(["", self.c(active_group, Colors.BOLD + Colors.BRIGHT_WHITE)])
+            aliases = ", ".join(spec.aliases)
+            alias_text = self.c(f"  别名: {aliases}", Colors.DIM) if aliases else ""
+            lines.append(f"  {self._pad_display(spec.usage, 30)} {spec.description}{alias_text}")
         if scope == "room":
-            return "\n".join([
-                self.c("牌桌命令", Colors.BOLD + Colors.CYAN),
-                "  check / call / c              过牌或跟注",
-                "  fold / f                      弃牌",
-                "  bet [额度] / raise [额度] / r  下注或加注；默认最小额",
-                "  bet 1/3p | 1/2p | 2/3p | p   底池比例快捷下注",
-                "  bet 2.5bb | +1bb | allin      盲注倍数、相对加注或全下",
-                "  sit <座位> / stand            入座 / 起立（座位从 0 开始）",
-                "  ready / unready               准备或取消准备",
-                "  start                         房主开始下一手",
-                "  rebuy                         筹码为 0 时补码",
-                "  tc                            使用 1 张时间卡 (+30s)",
-                "  rit 1 / rit 2                 全下后选择发 1 次或 2 次",
-                "  show 1 / show 2 / show all    亮出手牌；muck 盖牌",
-                "  info / status                 查看当前牌桌快照",
-                "  history [数量]                查看操作记录",
-                "  mode [dashboard|stream]       切换视图；color [on|off] 切换颜色",
-                "  reconnect                     断线重连",
-                "  bill                          查看结算；end（房主）结束并结算",
-                "  delete（房主/管理员）         解散房间并让所有人退出",
-                "  redraw / clear                重新绘制；help；leave 返回大厅",
+            lines.extend([
+                "",
+                self.c("下注额度", Colors.BOLD + Colors.BRIGHT_WHITE),
+                "  raise 200                     优先使用明确的筹码总额",
+                "  r0.5 / r1                     无空格的半池 / 整池缩写",
+                "  1/3p / 1/2p / 2/3p / pot     完整底池比例语法",
+                "  2.5bb / +1bb                  盲注倍数、相对加注",
+                "  1.5p / 2p / 3p / allin       超池下注或全下",
             ])
-        return "\n".join([
-            self.c("大厅命令", Colors.BOLD + Colors.CYAN),
-            "  <序号> / join <序号|room_id>  快速加入房间",
-            "  create / c                   交互式创建房间",
-            "  create --name ...             以选项快速创建（见 create help）",
-            "  info <序号|room_id>           查看房间详情",
-            "  rooms / refresh               刷新房间列表",
-            "  users                         查看可登录用户",
-            "  mode [dashboard|stream]       切换视图；color [on|off] 切换颜色",
-            "  user / logout                 切换账号",
-            "  help；quit / q                查看帮助或退出",
-        ])
+        elif scope == "lobby":
+            lines.extend(["", "  也可直接输入房间序号快速加入。"])
+        lines.append("  Ctrl+C                         退出程序")
+        return "\n".join(lines)
 
     # Compatibility alias for integrations that used the old naming.
     render_command_help = render_help
@@ -838,4 +1113,110 @@ class PokerUiRenderer:
         lines.append(self.c("  (注: 纯纯现金局结算账单，输家按上述清单直接向赢家微信/支付宝转账即可)", Colors.DIM))
         lines.append("")
 
+        return "\n".join(lines)
+
+    def render_hand_result(self, table: Dict[str, Any], current_user_id: str) -> str:
+        """Render one completed hand with boards, cards, and chip deltas."""
+
+        hand_number = self._int(table.get("hand_number", 0))
+        results = table.get("hand_results") or []
+        board = table.get("board_cards_full") or table.get("board_cards") or []
+        board_2 = table.get("board_cards_2_full") or table.get("board_cards_2") or []
+        has_two_boards = bool(table.get("rit_enabled") or board_2)
+        pot = self._int(table.get("total_pot", 0))
+        lines = [
+            self.c(f"第 {hand_number} 手 · 牌局结果", Colors.BOLD + Colors.BRIGHT_YELLOW),
+            f"总底池  {pot}",
+            "",
+            f"公共牌  {self.format_cards(board)}",
+        ]
+        if has_two_boards:
+            lines.append(f"第二板  {self.format_cards(board_2)}")
+        lines.extend(["", self.c("玩家结果", Colors.BOLD + Colors.BRIGHT_CYAN)])
+
+        for result in results:
+            is_me = result.get("player_id") == current_user_id
+            is_winner = bool(result.get("is_winner"))
+            tags = []
+            if is_winner:
+                tags.append("赢家")
+            if is_me:
+                tags.append("你")
+            if result.get("is_ready"):
+                tags.append("已准备")
+            tag_text = f" [{' / '.join(tags)}]" if tags else ""
+            name = self._text(result.get("name"), "玩家")
+            cards = result.get("hole_cards") if is_me else result.get("shown_cards")
+            cards_text = self.format_cards(cards or []) if cards else (
+                "已弃牌" if result.get("is_folded") else "未亮牌"
+            )
+            net = self._int(result.get("net_profit", 0))
+            net_text = f"+{net}" if net > 0 else str(net)
+            net_color = Colors.BRIGHT_GREEN if net > 0 else Colors.BRIGHT_RED if net < 0 else Colors.DIM
+            lines.extend([
+                "",
+                self.c(f"{name}{tag_text}", Colors.BOLD + (Colors.BRIGHT_GREEN if is_winner else Colors.WHITE)),
+                f"  手牌    {cards_text}",
+                f"  牌型    {self._text(result.get('hand_desc'), '未知牌型')}",
+            ])
+            if has_two_boards:
+                lines.append(
+                    f"  第二板  {self._text(result.get('hand_desc_2'), '未知')}"
+                    f"  ·  分池 +{self._int(result.get('payout_board_2', 0))}"
+                )
+                lines.append(f"  第一板分池 +{self._int(result.get('payout_board_1', 0))}")
+            lines.append(
+                "  筹码    "
+                f"投入 {self._int(result.get('total_bet', 0))}  ·  "
+                f"返还 {self._int(result.get('payout_amount', 0))}  ·  "
+                f"盈亏 {self.c(net_text, net_color)}  ·  "
+                f"余额 {self._int(result.get('chips', 0))}"
+            )
+
+        return "\n".join(lines)
+
+    def render_hand_result_sidebar(self, room: Dict[str, Any], current_user_id: str) -> str:
+        """Render the actions available beside a completed-hand result page."""
+
+        table = room.get("table", {})
+        ready_ids = table.get("ready_player_ids") or []
+        lines = [
+            self.c("本手已结束", Colors.BOLD + Colors.BRIGHT_GREEN),
+            "",
+            self.c("亮牌", Colors.BOLD + Colors.BRIGHT_CYAN),
+            "  show 1 / show 2",
+            "  show all / muck",
+            "",
+            self.c("下一手", Colors.BOLD + Colors.BRIGHT_CYAN),
+            "  unready" if current_user_id in ready_ids else "  ready",
+            "  rebuy",
+        ]
+        if current_user_id == room.get("host_player_id"):
+            lines.append("  start")
+        lines.extend([
+            "",
+            "  q       返回牌桌",
+            "  leave   返回大厅",
+            "",
+            self.c("Ctrl+C 退出程序", Colors.DIM),
+        ])
+        return "\n".join(lines)
+
+    def render_settlement_sidebar(self, report: Dict[str, Any]) -> str:
+        """Render actions and summary for the dedicated settlement page."""
+
+        players = report.get("player_records") or report.get("player_settlements", [])
+        transfers = report.get("transactions") or report.get("transfers", [])
+        lines = [
+            self.c("结算完成", Colors.BOLD + Colors.BRIGHT_GREEN),
+            f"  玩家    {len(players)} 人",
+            f"  转账    {len(transfers)} 笔",
+            "",
+            self.c("可用操作", Colors.BOLD + Colors.BRIGHT_CYAN),
+            "  export [路径]  导出账单",
+            "  q              返回牌桌",
+            "  leave          返回大厅",
+            "",
+            self.c("Ctrl+C 退出程序", Colors.DIM),
+        ]
         return "\n".join(lines)

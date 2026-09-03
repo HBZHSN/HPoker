@@ -10,7 +10,7 @@ from typing import Optional, Sequence
 
 from cli.controller import PokerCliController
 
-CLI_VERSION = "2.0.0"
+CLI_VERSION = "3.0.0"
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -97,8 +97,15 @@ async def main_async(argv: Optional[Sequence[str]] = None) -> int:
         if not await controller.login_flow():
             print("未登录，程序退出。")
             return 1
-        if args.room:
+        use_textual = args.mode == "dashboard" and sys.stdin.isatty() and sys.stdout.isatty()
+        if use_textual:
+            from cli.textual_app import run_textual_ui
+
+            await run_textual_ui(controller, args.room)
+        elif args.room:
             await controller.enter_room(args.room)
+            if not controller._stdin_closed:
+                await controller.run_lobby_loop()
         else:
             await controller.run_lobby_loop()
         return 0

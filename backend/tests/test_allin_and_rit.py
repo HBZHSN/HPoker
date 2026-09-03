@@ -1,12 +1,15 @@
+import asyncio
+
 import pytest
 from backend.app.engine.state_machine import TableStateMachine, Street, ActionType
 from backend.app.engine.card import Card, Rank, Suit
 from backend.app.engine.evaluator import evaluate_hand
 from backend.app.engine.pot import PotManager
+from backend.app.services.timeout_manager import TimeoutManager
 
 
 def test_rit_veto_rule():
-    """Verify that if ANY player votes 1 (Run it once), it immediately runs once."""
+    """Verify that a one-vote veto waits for every contender before runout."""
     table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
     table.sit_down("p1", "Alice", seat_index=0, chips=100)
     table.sit_down("p2", "Bob", seat_index=1, chips=100)
@@ -25,11 +28,17 @@ def test_rit_veto_rule():
     assert status1 == "WAITING"
     assert is_tw1 is False
 
-    # Player 2 votes 1 (once) -> immediately FINALIZED as Run It Once!
+    # Player 2 votes 1 (once) -> still waiting for Player 3.
     status2, is_tw2 = table.vote_rit("p2", 1)
-    assert status2 == "FINALIZED"
+    assert status2 == "WAITING"
     assert is_tw2 is False
+    assert table.street == Street.RIT_DECISION
     assert table.rit_enabled is False
+    assert table.rit_status == "VOTING"
+
+    status3, is_tw3 = table.vote_rit("p3", 2)
+    assert status3 == "FINALIZED"
+    assert is_tw3 is False
     assert table.rit_status == "AGREED_ONCE"
 
 
@@ -56,9 +65,16 @@ def test_rit_unanimous_rule():
     assert table.rit_enabled is True
     assert table.rit_status == "AGREED_TWICE"
 
+    # Once all voters have decided, a late duplicate click cannot change the
+    # selected runout while the dealing task is starting.
+    status3, is_tw_late = table.vote_rit("p1", 1)
+    assert status3 == "IGNORED"
+    assert is_tw_late is False
+    assert table.rit_enabled is True
 
-def test_rit_timeout_defaults_to_once():
-    """Verify that timeout defaults to Run It Once if not all voted 2."""
+
+def test_rit_does_not_timeout_before_all_votes():
+    """Verify that an incomplete vote remains open without a timeout fallback."""
     table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
     table.sit_down("p1", "Alice", seat_index=0, chips=100)
     table.sit_down("p2", "Bob", seat_index=1, chips=100)
@@ -68,10 +84,28 @@ def test_rit_timeout_defaults_to_once():
     table.handle_action("p2", ActionType.CALL)
 
     table.vote_rit("p1", 2)
-    # p2 did not vote, timer expires
-    table.timeout_rit()
+    # p2 did not vote; the compatibility hook must not finalize the hand.
+    assert table.timeout_rit() is False
     assert table.rit_enabled is False
-    assert table.rit_status == "AGREED_ONCE"
+    assert table.rit_status == "VOTING"
+    assert table.street == Street.RIT_DECISION
+
+
+@pytest.mark.asyncio
+async def test_rit_timer_is_disabled():
+    """Verify that the legacy RIT timer API cannot start a countdown task."""
+    manager = TimeoutManager()
+    timed_out = False
+
+    async def on_timeout(_room_id):
+        nonlocal timed_out
+        timed_out = True
+
+    manager.start_rit_timer("room-1", 0, on_timeout)
+    await asyncio.sleep(0)
+
+    assert "room-1" not in manager._rit_tasks
+    assert timed_out is False
 
 
 def test_rit_pot_split_math():

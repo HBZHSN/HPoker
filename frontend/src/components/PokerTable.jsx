@@ -5,6 +5,8 @@ import ActionBar from './ActionBar';
 import CardView from './CardView';
 import HandResultModal from './HandResultModal';
 import SettlementModal from './SettlementModal';
+import EndRoomConfirmModal from './EndRoomConfirmModal';
+import TableSocialControls from './TableSocialControls';
 import EquityDrawer from './EquityDrawer';
 import { sortCardsLowToHigh } from '../utils/cards';
 import { soundEngine } from '../sound/SoundEngine';
@@ -31,14 +33,30 @@ const STREET_LABELS = {
   HAND_END: '牌局结束',
 };
 
+const buildSeatPositions = (seatCount) => {
+  const count = Math.max(2, Math.min(9, Number(seatCount) || 6));
+  const horizontalRadius = 42;
+  const verticalRadius = 42;
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (Math.PI / 2) + ((Math.PI * 2 * index) / count);
+    return {
+      top: `${50 + (verticalRadius * Math.sin(angle))}%`,
+      left: `${50 + (horizontalRadius * Math.cos(angle))}%`,
+    };
+  });
+};
+
 export default function PokerTable({
   room,
   currentUser,
+  socialHistory = [],
+  seatSocialBubbles = {},
   onSendWsEvent,
   onLeaveRoom,
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [settlementOpen, setSettlementOpen] = useState(false);
+  const [endRoomConfirmOpen, setEndRoomConfirmOpen] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
 
@@ -90,11 +108,24 @@ export default function PokerTable({
   }, [table?.seats, currentUser?.user_id]);
 
   const botCount = (table?.seats || []).filter((seat) => seat?.is_bot).length;
+  const showPotBreakdown = useMemo(() => {
+    const inHandSeats = (table?.seats || []).filter(
+      (seat) => seat?.has_cards && !seat.is_folded && !seat.is_sitting_out
+    );
+    const hasAllInPlayer = inHandSeats.some((seat) => seat.is_all_in);
+    const hasPlayerStillBetting = inHandSeats.some((seat) => !seat.is_all_in);
+    return (table?.pots?.length || 0) > 1 && hasAllInPlayer && hasPlayerStillBetting;
+  }, [table?.pots, table?.seats]);
   const canAddTestBot =
     isHost &&
     !room?.is_ended &&
     ['IDLE', 'HAND_END'].includes(table?.street) &&
     (table?.seats || []).some((seat) => !seat);
+  const canRebuy = Boolean(
+    selfSeat &&
+    selfSeat.chips === 0 &&
+    ['IDLE', 'HAND_END'].includes(table?.street)
+  );
 
   // Handle Settlement report prompt
   useEffect(() => {
@@ -103,32 +134,11 @@ export default function PokerTable({
     }
   }, [room?.is_ended, room?.settlement_report]);
 
-  // Visual Screen Positions (Clockwise starting from 0 = Bottom Center User Position)
-  const maxSeats = room?.config?.max_seats || 6;
-  const visualScreenPositions = useMemo(() => {
-    if (maxSeats === 6) {
-      return [
-        { top: '92%', left: '50%' },    // Screen Pos 0 (Bottom Center - Hero)
-        { top: '68%', left: '15%' },  // Screen Pos 1 (Bottom Left)
-        { top: '24%', left: '15%' },  // Screen Pos 2 (Top Left)
-        { top: '11%', left: '50%' }, // Screen Pos 3 (Top Center)
-        { top: '24%', left: '85%' },   // Screen Pos 4 (Top Right)
-        { top: '68%', left: '85%' },   // Screen Pos 5 (Bottom Right)
-      ];
-    }
-    // 9 Seats layout
-    return [
-      { top: '93%', left: '50%' },    // 0 Bottom (Hero)
-      { top: '76%', left: '16%' },  // 1 Bottom Left
-      { top: '48%', left: '9%' },   // 2 Mid Left
-      { top: '20%', left: '16%' }, // 3 Top Left
-      { top: '10%', left: '37%' }, // 4 Top Left-Center
-      { top: '10%', left: '63%' }, // 5 Top Right-Center
-      { top: '20%', left: '84%' }, // 6 Top Right
-      { top: '48%', left: '91%' },   // 7 Mid Right
-      { top: '76%', left: '84%' },   // 8 Bottom Right
-    ];
-  }, [maxSeats]);
+  // Visual positions are generated for every supported table size. Position 0
+  // remains bottom-center so rotating the real seats always keeps the viewer's
+  // own seat in the familiar hero position.
+  const maxSeats = Math.max(2, Math.min(9, Number(room?.config?.max_seats) || 6));
+  const visualScreenPositions = useMemo(() => buildSeatPositions(maxSeats), [maxSeats]);
 
   // Map visual screen position (0..maxSeats-1) to actual table seat index
   // If user is seated, visual position 0 always maps to selfSeatIndex (perspective rotation)
@@ -142,12 +152,6 @@ export default function PokerTable({
   // Actions
   const handleSitDown = (seatIndex) => {
     onSendWsEvent('SIT_DOWN', { seat_index: seatIndex });
-  };
-
-  const handleStandUp = () => {
-    if (selfSeat) {
-      onSendWsEvent('STAND_UP', { seat_index: selfSeat.seat_index });
-    }
   };
 
   const handleRebuy = () => {
@@ -172,10 +176,20 @@ export default function PokerTable({
     onSendWsEvent('REVEAL_BOARD_CARDS', {});
   };
 
+  const hasTestAccountInRoom = useMemo(() => {
+    if (!table?.seats) return false;
+    return table.seats.some(
+      (s) => s && (s.is_bot || s.name?.toLowerCase()?.includes('test') || s.player_id?.toLowerCase()?.includes('test'))
+    );
+  }, [table?.seats]);
+
   const handleEndRoom = () => {
-    if (window.confirm('确定要结束房间并生成结算清单吗？')) {
-      onSendWsEvent('END_ROOM', {});
-    }
+    setEndRoomConfirmOpen(true);
+  };
+
+  const handleConfirmEndRoom = (settlementType) => {
+    setEndRoomConfirmOpen(false);
+    onSendWsEvent('END_ROOM', { settlement_type: settlementType });
   };
 
   const handleDeleteRoom = () => {
@@ -197,26 +211,23 @@ export default function PokerTable({
     return !!(selfSeat && table?.current_turn_seat === selfSeat.seat_index);
   }, [selfSeat, table?.current_turn_seat]);
 
-  // Turn Countdown Audio Effect (5 seconds remaining warning)
+  // Turn Countdown Audio Effect (5 seconds remaining warning). RIT voting
+  // intentionally has no countdown; it waits for every contender's choice.
   const lastPlayedSecondRef = useRef(null);
 
   useEffect(() => {
-    // Only active during ongoing betting rounds or RIT voting
+    // Only active during an ongoing betting round.
     const isOngoingTurn =
       table?.street &&
-      !['IDLE', 'SHOWDOWN', 'HAND_END'].includes(table.street) &&
+      !['IDLE', 'RIT_DECISION', 'SHOWDOWN', 'HAND_END'].includes(table.street) &&
       (table.current_turn_seat !== null && table.current_turn_seat !== undefined);
 
-    const isRIT = table?.street === 'RIT_DECISION' || table?.rit_status === 'VOTING';
-
-    if (!isOngoingTurn && !isRIT) {
+    if (!isOngoingTurn) {
       lastPlayedSecondRef.current = null;
       return;
     }
 
-    const duration = isRIT
-      ? 8
-      : table?.is_using_time_bank
+    const duration = table?.is_using_time_bank
       ? (table?.current_turn_duration || 30)
       : (table?.current_turn_duration || room?.config?.action_timeout || 15);
 
@@ -232,12 +243,9 @@ export default function PokerTable({
       if (secondsCeil <= 5 && secondsCeil >= 1) {
         if (lastPlayedSecondRef.current !== secondsCeil) {
           lastPlayedSecondRef.current = secondsCeil;
-          const isUserTurn = isRIT
-            ? (table?.rit_voters?.includes(currentUser?.user_id) && table?.rit_votes?.[currentUser?.user_id] === undefined)
-            : isMyTurn;
           soundEngine.play('countdown', {
             secondsLeft: secondsCeil,
-            isMyTurn: isUserTurn,
+            isMyTurn,
           });
         }
       }
@@ -256,8 +264,6 @@ export default function PokerTable({
     table?.current_turn_duration,
     room?.config?.action_timeout,
     isMyTurn,
-    currentUser?.user_id,
-    table?.rit_status,
   ]);
 
   return (
@@ -270,19 +276,20 @@ export default function PokerTable({
             className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
           >
             <LogOut className="w-3.5 h-3.5 text-amber-400" />
-            大厅
+            <span className="hidden sm:inline">大厅</span>
+            <span className="sm:hidden">离开</span>
           </button>
 
-          <div className="flex flex-col">
+          <div className="poker-table-room-summary flex flex-col">
             <div className="flex items-center gap-2">
               <h1 className="text-sm md:text-base font-black text-amber-400 tracking-wide">
                 {room?.config?.room_name || 'HPoker 现金桌'}
               </h1>
-              <span className="text-[11px] bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-bold">
+              <span className="poker-table-room-blinds text-[11px] bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-bold">
                 盲注: ${room?.config?.small_blind}/${room?.config?.big_blind}
               </span>
             </div>
-            <span className="text-[11px] text-slate-400">
+            <span className="poker-table-room-buyin text-[11px] text-slate-400">
               买入: ${room?.config?.buyin_chips} = ¥{room?.config?.cash_value} · 超时: {room?.config?.action_timeout}s
             </span>
           </div>
@@ -300,7 +307,7 @@ export default function PokerTable({
           </button>
 
           {/* Rebuy Button (only when all chips are lost, chips === 0) */}
-          {selfSeat && selfSeat.chips === 0 && (
+          {canRebuy && (
             <button
               onClick={handleRebuy}
               className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-glow-gold transition active:scale-95 cursor-pointer animate-pulse"
@@ -311,26 +318,16 @@ export default function PokerTable({
             </button>
           )}
 
-          {/* Stand Up Button */}
-          {selfSeat && (
-            <button
-              onClick={handleStandUp}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
-            >
-              站起
-            </button>
-          )}
-
           {/* Test bot control is intentionally visible to the host only. */}
           {isHost && !room?.is_ended && (
             <button
               onClick={handleAddTestBot}
               disabled={!canAddTestBot}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 shadow bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border-indigo-400/50 disabled:bg-slate-900/70 disabled:hover:bg-slate-900/70 disabled:text-slate-600 disabled:border-slate-800 disabled:cursor-not-allowed"
-              title={canAddTestBot ? '仅用于测试：添加一个随机行动机器人' : '只能在牌局开始前或结束后、且有空座时添加机器人'}
+              title={canAddTestBot ? '添加机器人' : '当前不可添加'}
             >
               <Bot className="w-3.5 h-3.5" />
-              <span>测试机器人</span>
+              <span>机器人</span>
               {botCount > 0 && <span>×{botCount}</span>}
             </button>
           )}
@@ -356,19 +353,19 @@ export default function PokerTable({
               className="flex items-center gap-1 px-3 py-1.5 bg-red-900/80 hover:bg-red-800 text-red-200 rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"
             >
               <PowerOff className="w-3.5 h-3.5" />
-              结束房间并结算
+              结算
             </button>
           )}
 
           {/* Host Delete/Disband Room Button */}
-          {(isHost || currentUser?.is_admin) && (
+          {(isHost || currentUser?.is_admin) && !room?.is_ended && (
             <button
               onClick={handleDeleteRoom}
               className="flex items-center gap-1 px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"
               title="解散并删除房间"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              解散房间
+              解散
             </button>
           )}
         </div>
@@ -398,7 +395,7 @@ export default function PokerTable({
               {/* Center Table Area: Board Cards, Pots & Next Hand Countdown */}
               <div className="poker-table-center absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
                 {/* Street & Total Pot Badge */}
-                <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
+                <div className="poker-table-pot-summary flex flex-col items-center gap-1.5 pointer-events-auto">
                   <div className="poker-table-pot-badge flex items-center gap-3 bg-slate-950/85 px-4 py-1.5 rounded-full border-2 border-amber-500/40 backdrop-blur-md shadow-2xl">
                     <span className="text-xs md:text-sm font-bold text-slate-300">
                       {STREET_LABELS[table?.street] || '等待开局'}
@@ -409,8 +406,9 @@ export default function PokerTable({
                     </span>
                   </div>
 
-                  {/* Side Pots display if multiple pots exist */}
-                  {table?.pots && table.pots.length > 1 && (
+                  {/* Pot tiers only matter while an all-in player is capped and
+                      at least one other contender can keep betting. */}
+                  {showPotBreakdown && (
                     <div className="poker-table-side-pots flex items-center gap-2">
                       {table.pots.map((p, i) => (
                         <span
@@ -496,26 +494,34 @@ export default function PokerTable({
               </div>
 
               {/* Interactive Center RIT Decision Overlay */}
-              {(table?.street === 'RIT_DECISION' || table?.rit_status === 'VOTING') && (
+              {table?.street === 'RIT_DECISION' && table?.rit_status === 'VOTING' && (
                 <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
                   <div className="max-w-md w-full bg-gradient-to-b from-slate-900 via-slate-950 to-purple-950 border-2 border-purple-500/80 rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 text-center">
                     <div className="flex items-center justify-center gap-2 text-amber-400 font-black text-base md:text-lg">
                       全下后发牌次数
                     </div>
                     <p className="text-xs text-slate-300 leading-relaxed">
-                      双方均选 <strong className="text-purple-300">2 次</strong> 时平分底池；有一人选 <strong className="text-amber-300">1 次</strong> 则发 1 次。
+                      所有玩家均选 <strong className="text-purple-300">2 次</strong> 才平分底池；任一玩家选 <strong className="text-amber-300">1 次</strong> 则发 1 次。
                     </p>
 
-                    {/* Contender Votes Progress */}
-                    <div className="flex flex-wrap items-center justify-center gap-2 bg-black/50 p-2.5 rounded-2xl border border-slate-800">
+                    {/* Contender cards and vote progress stay visible together so
+                        players can make an informed runout choice. */}
+                    <div className="grid grid-cols-2 gap-2 bg-black/50 p-2.5 rounded-2xl border border-slate-800 max-h-48 overflow-y-auto">
                       {(table?.rit_voters || []).map((voterId) => {
                         const voterSeat = table?.seats?.find((s) => s && s.player_id === voterId);
                         const voterName = voterSeat ? voterSeat.name : voterId;
                         const vote = table?.rit_votes?.[voterId];
+                        const visibleCards = sortCardsLowToHigh(
+                          voterSeat?.shown_cards?.length
+                            ? voterSeat.shown_cards
+                            : voterSeat?.player_id === selfSeat?.player_id
+                            ? voterSeat?.hole_cards || []
+                            : []
+                        );
                         return (
-                          <span
+                          <div
                             key={voterId}
-                            className={`text-xs font-black px-3 py-1 rounded-xl border flex items-center gap-1.5 ${
+                            className={`min-w-0 px-2.5 py-2 rounded-xl border flex flex-col items-center gap-1.5 ${
                               vote === 2
                                 ? 'bg-purple-950/90 text-purple-300 border-purple-500/60 shadow'
                                 : vote === 1
@@ -523,11 +529,21 @@ export default function PokerTable({
                                 : 'bg-slate-900 text-slate-400 border-slate-700 animate-pulse'
                             }`}
                           >
-                            <span>{voterName}:</span>
-                            <span>
+                            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                              <span className="text-base leading-none flex-shrink-0">{voterSeat?.avatar || '👤'}</span>
+                              <span className="text-xs font-black truncate">{voterName}</span>
+                            </div>
+                            <div className="flex -space-x-2 min-h-[42px] items-center" aria-label={`${voterName}的手牌`}>
+                              {visibleCards.length > 0 ? visibleCards.map((card, cardIndex) => (
+                                <CardView key={cardIndex} card={card} size="xs" className="shadow-lg" />
+                              )) : (
+                                <span className="text-[10px] text-slate-500">等待亮牌</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold">
                               {vote === 2 ? '发 2 次' : vote === 1 ? '发 1 次' : '未选择'}
                             </span>
-                          </span>
+                          </div>
                         );
                       })}
                     </div>
@@ -559,8 +575,14 @@ export default function PokerTable({
                       </div>
                     ) : (
                       <div className="text-xs text-slate-400 font-bold py-1 flex items-center justify-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 animate-spin text-purple-400" />
-                        等待选择
+                        <Clock className="w-3.5 h-3.5 text-purple-400" />
+                        等待其他玩家决定
+                      </div>
+                    )}
+                    {selfSeat && table?.rit_voters?.includes(selfSeat.player_id) && table?.rit_votes?.[selfSeat.player_id] !== undefined && (
+                      <div className="text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        已选择，等待其他玩家决定
                       </div>
                     )}
                   </div>
@@ -600,6 +622,7 @@ export default function PokerTable({
                       street={table?.street || 'IDLE'}
                       turnCount={table?.turn_count || 0}
                       actionHistoryLength={table?.action_history?.length || 0}
+                      socialBubble={seatSocialBubbles[seatData?.player_id] || null}
                     />
                   </div>
                 );
@@ -661,6 +684,7 @@ export default function PokerTable({
             onAction={handlePlayerAction}
             selfSeat={selfSeat}
             onRebuy={handleRebuy}
+            canRebuy={canRebuy}
             currentTurnPlayer={currentTurnPlayer}
             isMyTurn={isMyTurn}
             street={table?.street || 'IDLE'}
@@ -674,6 +698,14 @@ export default function PokerTable({
           />
         </aside>
       </div>
+
+      <TableSocialControls
+        activities={socialHistory}
+        currentUserId={currentUser?.user_id}
+        canReact={Boolean(selfSeat)}
+        onSendChat={(message) => onSendWsEvent('CHAT_MESSAGE', { message })}
+        onSendEmoji={(emoji) => onSendWsEvent('EMOJI_REACTION', { emoji })}
+      />
 
       {/* Hand Result Settlement & Card Reveal Modal */}
       {table?.street === 'HAND_END' && !handResultDismissed && table?.hand_results && table.hand_results.length > 0 && (
@@ -703,6 +735,16 @@ export default function PokerTable({
           onRebuy={handleRebuy}
           onStartNextHand={handleStartGame}
           onClose={() => setHandResultDismissed(true)}
+        />
+      )}
+
+      {/* End Room Settlement Type Confirmation Modal */}
+      {endRoomConfirmOpen && (
+        <EndRoomConfirmModal
+          isOpen={endRoomConfirmOpen}
+          hasTestAccount={hasTestAccountInRoom}
+          onConfirm={handleConfirmEndRoom}
+          onClose={() => setEndRoomConfirmOpen(false)}
         />
       )}
 

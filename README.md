@@ -53,7 +53,7 @@
 
 - 🌐 本地桌面访问：`http://localhost:5173`
 - 📱 局域网/手机访问：`http://<局域网IP>:5173`（脚本启动时会自动显示对应 IP）
-- 💻 **轻量 CLI 终端客户端**：`./start.sh cli` 或 `.venv/bin/python poker_cli.py`
+- 💻 **Textual TUI 终端客户端**：`./start.sh cli` 或 `.venv/bin/python poker_cli.py`
 - 📖 后端 API 文档：`http://localhost:8000/docs`
 - 🛑 按 `Ctrl + C` 即可一键安全停止所有服务。
 
@@ -66,11 +66,33 @@
 > - `./start.sh stop`：强制停止占用 8000 / 5173 端口的残留进程
 > - `./start.sh help`：查看全部命令帮助
 
+### 🔄 systemd 开机自启（生产环境）
+
+仓库提供 `deploy/poker.service` 和自动安装脚本，由 systemd 直接托管虚拟环境中的 Uvicorn。执行：
+
+```bash
+cd /home/hanxu/code/python/poker
+sudo ./deploy/install-systemd.sh
+```
+
+脚本会自动构建前端，按当前项目路径与项目所有者生成服务单元，然后安装、启动并设为开机自启。
+
+常用管理命令：
+
+```bash
+systemctl status poker.service
+journalctl -u poker.service -f
+sudo systemctl restart poker.service
+sudo systemctl disable --now poker.service
+```
+
+服务默认监听 `0.0.0.0:8000`，前端静态资源由 FastAPI 同端口提供；房间和用户持久化数据保存在 `backend/data/`。
+
 ---
 
-### 💻 轻量 CLI 终端客户端
+### 💻 Textual TUI 终端客户端
 
-CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模式（`dashboard` 仪表盘 / `stream` 事件流）。默认 `dashboard` 是固定屏幕 TUI：画面在备用终端区域内持续刷新，命令结果显示在底部状态栏，不会不断向上滚动；需要日志流时再切换到 `stream`。测试或 CLI 启动不会检查前端 `node_modules`，可直接使用：
+CLI 支持大厅、实时牌桌、断线重连、单手结算页、终局结算页和两套视图模式（`dashboard` TUI / `stream` 事件流）。每手结束后会自动展示公共牌、玩家手牌、牌型、投入、返还、盈亏和余额，可输入 `q` 返回牌桌、用 `result` 再次查看；房间结束后则进入终局结算页，集中展示玩家收支、最简转账路线和导出入口。默认 `dashboard` 基于 Textual：宽屏时左侧展示牌桌、公共牌与手牌，右侧展示当前可执行操作、下注尺度和最近动态；窄终端自动切换为上下布局，并将手牌和公共牌收为低调的单行小牌，同时压缩顶栏、边框与次要提示。终端尺寸恢复后会自动切回完整牌面。底部输入框固定显示，`↑` / `↓` 可浏览命令历史。需要纯日志输出时使用 `stream`。CLI 启动不会检查前端 `node_modules`。
 
 ```bash
 # 交互式登录并进入大厅
@@ -88,7 +110,7 @@ CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模�
 - `--server URL`：后端地址，也可设置 `POKER_SERVER_URL`。
 - `--user NAME`、`--password PASSWORD`：自动登录；不提供时交互登录。
 - `--room ROOM_ID`：登录后直接进入指定房间。
-- `--mode dashboard|stream`：选择牌桌显示模式，也可设置 `POKER_CLI_MODE`。
+- `--mode dashboard|stream`：选择 Textual TUI 或纯事件流，也可设置 `POKER_CLI_MODE`。
 - `--no-color`：关闭 ANSI 颜色，适合日志重定向。
 - `--http-timeout SECONDS`、`--reconnect-attempts N`：控制请求超时和自动重连次数。
 
@@ -97,17 +119,22 @@ CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模�
 - `rooms` / `refresh`：刷新活跃房间；输入房间编号或 ID 直接加入。
 - `create "房间名"`：交互创建房间；也支持 `create "现金桌" --buyin 2000 --cash 200 --sb 10 --timeout 20 --seats 6`。
 - `users`：查看预置用户；`info ROOM_ID`：查看房间详情。
-- `mode`、`color`、`help`、`quit`：切换显示、查看帮助或退出。
+- `info`、`refresh`、`users`、`mode`、`color`、`help` 在大厅和牌桌中均可使用，并作用于当前上下文。
+- `q` / `quit` / `exit`：关闭当前详情页；在牌桌中返回大厅。大厅首页不会因这些命令退出，退出程序请按 `Ctrl+C`。
+
+命令别名由大厅与牌桌共用的命令注册表维护，但会按场景解析：大厅中 `c` / `r` 表示创建 / 刷新，牌桌中则表示过牌或跟注 / 加注。右侧操作栏和 `help` 均从同一注册表生成。
 
 牌桌常用命令：
 
 - `check` / `call` / `fold` / `allin`：过牌、跟注、弃牌、全下；快捷键为 `c`、`f`、`a`。
-- `bet <额度>` / `raise <额度>`：下注或加注；快捷键为 `r`，例如 `r 1/2p`、`r 2/3p`、`r 1.5p`、`r +1bb`、`r 200`、`r all`。
+- `bet <额度>` / `raise <额度>`：下注或加注；界面优先提示 `raise 200` 这样的明确筹码额，快捷键为 `r`。
+- 底池比例可紧凑输入：`r0.5` 表示半池、`r1` 表示整池；也兼容 `r 1/2p`、`r 2/3p`、`r 1.5p` 和 `r pot`。
 - 额度还支持 `min`、`max`、`10bb`、`20sb`；系统会自动按小盲步长对齐并限制在合法范围。
-- `ready`、`start`、`sit 2`、`stand`、`rebuy`：准备、开局、入座、离座和补码。
+- `ready`、`start`、`sit 2`、`rebuy`：准备、开局、入座和补码。
 - `show 1` / `show 2` / `show all` / `muck`：摊牌时秀牌或盖牌；`rit 1` / `rit 2`：Run It Twice 投票。
 - `reconnect`：手动重连；`status`、`history`、`redraw`：查看状态、行动记录或重绘。`r` 专用于下注，不再作为重绘别名。
 - `bill` / `export settlement.txt`：查看或导出结算报表；房主使用 `end` 结束房间，`delete` 删除已结束房间。
+- `leave` / `lobby`：返回大厅；`q` / `quit` / `exit` 返回当前页面的上一层（结算页返回牌桌，牌桌返回大厅）。退出程序请按 `Ctrl+C`。
 
 ---
 

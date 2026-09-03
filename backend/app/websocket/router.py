@@ -4,11 +4,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Optional
 
-from backend.app.websocket.protocol import EventType, make_message
+from backend.app.websocket.protocol import (
+    ALLOWED_EMOJI_REACTIONS,
+    CHAT_MESSAGE_MAX_LENGTH,
+    EventType,
+    make_message,
+    normalize_chat_message,
+)
 from backend.app.websocket.connection_manager import ws_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.services.user_manager import user_manager
@@ -18,7 +25,18 @@ from backend.app.engine.state_machine import ActionType, Street
 
 logger = logging.getLogger("poker.router")
 ws_router = APIRouter()
-BOT_ACTION_DELAY_SECONDS = 0.2
+BOT_ACTION_DELAY_MIN: float = 3.0
+BOT_ACTION_DELAY_MAX: float = 5.0
+BOT_ACTION_DELAY_SECONDS: float = 3.0
+
+
+def get_bot_action_delay() -> float:
+    """Return a randomized bot decision delay between 3 and 5 seconds."""
+    low = min(BOT_ACTION_DELAY_MIN, BOT_ACTION_DELAY_MAX)
+    high = max(BOT_ACTION_DELAY_MIN, BOT_ACTION_DELAY_MAX)
+    if low >= high:
+        return low
+    return round(low + (secrets.randbelow(int((high - low) * 1000) + 1) / 1000.0), 2)
 
 
 async def start_all_in_slow_dealing(room_id: str):
@@ -64,18 +82,11 @@ async def trigger_room_after_action(room_id: str):
 
     if room.table.street == Street.RIT_DECISION:
         timeout_manager.cancel_turn_timer(room_id)
+        # RIT is deliberately not timed. Cancel any legacy task that may
+        # still exist after a server-side reload, then wait for every voter.
+        timeout_manager.cancel_rit_timer(room_id)
         await ws_manager.broadcast_sound(room_id, "allin")
         await ws_manager.broadcast_room_state(room)
-
-        async def _on_rit_timeout(r_id: str):
-            r = room_manager.get_room(r_id)
-            if not r or r.is_ended or r.table.street != Street.RIT_DECISION:
-                return
-            r.table.timeout_rit()
-            await ws_manager.broadcast_room_state(r)
-            await start_all_in_slow_dealing(r_id)
-
-        timeout_manager.start_rit_timer(room_id, 8, _on_rit_timeout)
 
         if any(
             seat and seat.is_bot and seat.player_id in room.table.rit_voters
@@ -86,6 +97,7 @@ async def trigger_room_after_action(room_id: str):
                 if not r or r.is_ended or r.table.street != Street.RIT_DECISION:
                     return
 
+                finalized = False
                 for seat in r.table.active_in_hand_players:
                     if (
                         seat.is_bot
@@ -94,16 +106,19 @@ async def trigger_room_after_action(room_id: str):
                     ):
                         result, _ = r.table.vote_rit(seat.player_id, 1)
                         if result == "FINALIZED":
-                            timeout_manager.cancel_rit_timer(r_id)
-                            await ws_manager.broadcast_room_state(r)
-                            await start_all_in_slow_dealing(r_id)
-                        else:
-                            await ws_manager.broadcast_room_state(r)
-                        return
+                            finalized = True
+                            break
+
+                if finalized:
+                    timeout_manager.cancel_bot_action(r_id)
+                    await ws_manager.broadcast_room_state(r)
+                    await start_all_in_slow_dealing(r_id)
+                else:
+                    await ws_manager.broadcast_room_state(r)
 
             timeout_manager.start_bot_action_task(
                 room_id,
-                BOT_ACTION_DELAY_SECONDS,
+                get_bot_action_delay(),
                 _on_bot_rit_choice,
             )
 
@@ -226,7 +241,7 @@ async def trigger_room_turn_timer(room_id: str):
 
         timeout_manager.start_bot_action_task(
             room_id,
-            BOT_ACTION_DELAY_SECONDS,
+            get_bot_action_delay(),
             _on_bot_action,
         )
         return
@@ -302,14 +317,12 @@ async def trigger_room_turn_timer(room_id: str):
 
 
 def schedule_room_empty_check(room_id: str, delay_seconds: float = 3.0) -> None:
-    """Schedule auto-deletion of a room if no players remain connected."""
-    async def _cleanup_if_empty(r_id: str):
-        if ws_manager.get_room_connection_count(r_id) == 0:
-            logger.info(f"Room {r_id} is empty (0 connections), auto-deleting room.")
-            timeout_manager.cancel_all_timers(r_id)
-            room_manager.delete_room(r_id)
+    """Retain an empty active room so disconnected clients can resume it.
 
-    timeout_manager.schedule_empty_room_cleanup(room_id, delay_seconds, _cleanup_if_empty)
+    Kept as a compatibility hook for older callers. Rooms are now removed only
+    by an explicit host/admin disband operation.
+    """
+    timeout_manager.cancel_empty_room_cleanup(room_id)
 
 
 @ws_router.websocket("/ws/{room_id}/{user_id}")
@@ -356,6 +369,58 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 await ws_manager.send_personal_message(websocket, make_message(EventType.PONG, {}))
                 continue
 
+            elif event == EventType.CHAT_MESSAGE:
+                message = normalize_chat_message(payload.get("message"))
+                if message is None:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"message": f"聊天内容需为 1-{CHAT_MESSAGE_MAX_LENGTH} 个字符"},
+                            room_id=room_id,
+                        ),
+                    )
+                    continue
+                await ws_manager.broadcast_event(
+                    room_id,
+                    EventType.CHAT_MESSAGE,
+                    {
+                        "message_id": secrets.token_hex(8),
+                        "player_id": user_id,
+                        "name": nickname,
+                        "avatar": avatar,
+                        "message": message,
+                    },
+                )
+
+            elif event == EventType.EMOJI_REACTION:
+                emoji = payload.get("emoji")
+                is_seated = any(
+                    seat and seat.player_id == user_id
+                    for seat in room.table.seats
+                )
+                if emoji not in ALLOWED_EMOJI_REACTIONS or not is_seated:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"message": "当前无法发送该表情"},
+                            room_id=room_id,
+                        ),
+                    )
+                    continue
+                await ws_manager.broadcast_event(
+                    room_id,
+                    EventType.EMOJI_REACTION,
+                    {
+                        "reaction_id": secrets.token_hex(8),
+                        "player_id": user_id,
+                        "name": nickname,
+                        "avatar": avatar,
+                        "emoji": emoji,
+                    },
+                )
+
             elif event == EventType.SIT_DOWN:
                 seat_index = payload.get("seat_index")
                 if seat_index is not None:
@@ -363,13 +428,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
-
-            elif event == EventType.STAND_UP:
-                seat_index = payload.get("seat_index")
-                if seat_index is not None:
-                    room.stand_up_player(seat_index)
-                    await ws_manager.broadcast_room_state(room)
-                    await trigger_room_after_action(room_id)
 
             elif event == EventType.REBUY:
                 ok = room.rebuy_player(user_id)
@@ -379,13 +437,17 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
 
             elif event == EventType.START_GAME:
                 # Only room host can trigger start of next hand when idle / hand_end
-                if user_id == room.host_player_id and room.table.can_start_hand():
-                    timeout_manager.cancel_all_timers(room_id)
-                    ok = room.table.start_new_hand()
-                    if ok:
-                        await ws_manager.broadcast_sound(room_id, "deal")
-                        await ws_manager.broadcast_room_state(room)
-                        await trigger_room_after_action(room_id)
+                if user_id == room.host_player_id:
+                    for seat in room.table.seats:
+                        if seat and seat.is_bot and seat.chips <= 0:
+                            room.rebuy_player(seat.player_id)
+                    if room.table.can_start_hand():
+                        timeout_manager.cancel_all_timers(room_id)
+                        ok = room.table.start_new_hand()
+                        if ok:
+                            await ws_manager.broadcast_sound(room_id, "deal")
+                            await ws_manager.broadcast_room_state(room)
+                            await trigger_room_after_action(room_id)
 
             elif event in (EventType.ADD_TEST_BOT, EventType.ADD_BOT):
                 # Test bots are intentionally a host-only room control. They
@@ -402,6 +464,24 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     if bot:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
+                    else:
+                        await ws_manager.send_personal_message(
+                            websocket,
+                            make_message(
+                                EventType.ERROR_MESSAGE,
+                                {"message": "添加机器人失败：仅能在手牌间隙且有空座时添加"},
+                                room_id=room_id,
+                            ),
+                        )
+                else:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"message": "只有房主才能添加测试机器人"},
+                            room_id=room_id,
+                        ),
+                    )
 
             elif event == EventType.PLAYER_ACTION:
                 action_str = payload.get("action")
@@ -497,11 +577,13 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                             await trigger_room_turn_timer(room_id)
 
             elif event == EventType.END_ROOM:
-                report = room.end_room(requester_id=user_id)
+                settlement_type = payload.get("settlement_type", "balance")
+                report = room.end_room(requester_id=user_id, settlement_type=settlement_type)
                 if report:
                     timeout_manager.cancel_all_timers(room_id)
                     await ws_manager.broadcast_sound(room_id, "win_pot")
                     await ws_manager.broadcast_room_state(room)
+                    room_manager.delete_room(room_id)
 
             elif event == EventType.DELETE_ROOM:
                 requester = user_manager.get_user(user_id)
@@ -530,9 +612,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     finally:
         r_id, u_id = ws_manager.disconnect(websocket)
         if r_id:
-            if ws_manager.get_room_connection_count(r_id) == 0:
-                schedule_room_empty_check(r_id, delay_seconds=3.0)
-            else:
+            if ws_manager.get_room_connection_count(r_id) > 0:
                 active_r = room_manager.get_room(r_id)
                 if active_r and not active_r.is_ended:
                     await ws_manager.broadcast_room_state(active_r)

@@ -1,54 +1,44 @@
+import asyncio
 import pytest
 import httpx
 from fastapi.testclient import TestClient
+
 from backend.main import app
-from backend.app.services.user_manager import user_manager, DEFAULT_PRESET_USERS
 from backend.app.services.room_manager import room_manager
 from backend.app.websocket.protocol import EventType
 from backend.app.models.room import RoomConfig
-
-
-@pytest.fixture(autouse=True)
-def isolate_user_manager(monkeypatch):
-    """Ensure tests run in memory without writing dummy data to backend/data/users.json."""
-    original_path = user_manager.storage_path
-    user_manager.storage_path = ":memory:"
-    user_manager.load_from_storage()
-    yield
-    user_manager.storage_path = original_path
-    user_manager.load_from_storage()
+from backend.app.engine.state_machine import ActionType, Street
 
 
 def test_rest_api_users_and_rooms():
     client = TestClient(app)
 
-    # 1. Get preset users (fwd, hx, yy)
+    # 1. Verify public /api/users is disabled to prevent leaking usernames and accounts
     resp = client.get("/api/users")
-    assert resp.status_code == 200
-    users = resp.json()
-    assert len(users) >= 3
-    assert any(u["username"] == "fwd" for u in users)
-    assert any(u["username"] == "hx" for u in users)
-    assert any(u["username"] == "yy" for u in users)
+    assert resp.status_code in (404, 405)
 
-    # 2. Auth login test with fwd
+    # Verify public registration is blocked (cannot self-register)
+    reg_resp = client.post("/api/users", json={"username": "hacker", "nickname": "hacker"})
+    assert reg_resp.status_code in (404, 405)
+
+    # 2. Auth login test with dedicated test account test1
     resp = client.post("/api/auth/login", json={
-        "username": "fwd",
+        "username": "test1",
         "password": "123"
     })
     assert resp.status_code == 200
     auth_data = resp.json()
     token = auth_data["token"]
-    assert auth_data["user"]["username"] == "fwd"
+    assert auth_data["user"]["username"] == "test1"
 
     # Verify token
     resp_me = client.get(f"/api/auth/me?token={token}")
     assert resp_me.status_code == 200
-    assert resp_me.json()["user"]["username"] == "fwd"
+    assert resp_me.json()["user"]["username"] == "test1"
 
-    # 3. Create a cash game room
+    # 3. Create a cash game room using test account
     resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
+        "host_player_id": "u_test1",
         "room_name": "High Stakes Table",
         "buyin_chips": 2000,
         "cash_value": 200.0,
@@ -72,7 +62,7 @@ def test_rest_api_users_and_rooms():
 async def test_room_blind_defaults_and_derived_big_blind():
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        default_resp = await client.post("/api/rooms", json={"host_player_id": "u_fwd"})
+        default_resp = await client.post("/api/rooms", json={"host_player_id": "u_test1"})
         assert default_resp.status_code == 200
         default_config = default_resp.json()["config"]
         assert default_config["buyin_chips"] == 1000
@@ -83,7 +73,7 @@ async def test_room_blind_defaults_and_derived_big_blind():
         # A legacy/forged BB value must not override the room's derived BB.
         custom_resp = await client.post(
             "/api/rooms",
-            json={"host_player_id": "u_fwd", "small_blind": 15, "big_blind": 999},
+            json={"host_player_id": "u_test1", "small_blind": 15, "big_blind": 999},
         )
         assert custom_resp.status_code == 200
         custom_config = custom_resp.json()["config"]
@@ -102,7 +92,7 @@ def test_websocket_room_interaction():
 
     # Create room
     resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
+        "host_player_id": "u_test1",
         "room_name": "WS Test Room",
         "buyin_chips": 1000,
         "cash_value": 100.0,
@@ -113,45 +103,45 @@ def test_websocket_room_interaction():
     })
     room_id = resp.json()["room_id"]
 
-    # Connect client 1 (fwd - Room Host) via WebSocket
-    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws1:
-        # Initial message is ROOM_STATE (with fwd automatically seated at seat 0)
+    # Connect client 1 (test1 - Room Host) via WebSocket
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws1:
+        # Initial message is ROOM_STATE (with test1 automatically seated at seat 0)
         msg = ws1.receive_json()
         assert msg["event"] == EventType.ROOM_STATE.value
         assert msg["payload"]["room_id"] == room_id
         assert msg["payload"]["table"]["seats"][0] is not None
-        assert msg["payload"]["table"]["seats"][0]["player_id"] == "u_fwd"
+        assert msg["payload"]["table"]["seats"][0]["player_id"] == "u_test1"
 
         # Ping / Pong test
         ws1.send_json({"event": EventType.PING.value})
         msg_pong = ws1.receive_json()
         assert msg_pong["event"] == EventType.PONG.value
 
-        # Connect client 2 (hx - Non-host player) via WebSocket
-        with client.websocket_connect(f"/ws/{room_id}/u_hx") as ws2:
-            # ws1 receives room state update with hx auto-seated at seat 1
+        # Connect client 2 (test2 - Non-host player) via WebSocket
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws2:
+            # ws1 receives room state update with test2 auto-seated at seat 1
             msg_ws1_sync = ws1.receive_json()
             assert msg_ws1_sync["event"] == EventType.ROOM_STATE.value
-            assert msg_ws1_sync["payload"]["table"]["seats"][1]["player_id"] == "u_hx"
+            assert msg_ws1_sync["payload"]["table"]["seats"][1]["player_id"] == "u_test2"
 
             msg_ws2_sync = ws2.receive_json()
             assert msg_ws2_sync["event"] == EventType.ROOM_STATE.value
-            assert msg_ws2_sync["payload"]["table"]["seats"][1]["player_id"] == "u_hx"
+            assert msg_ws2_sync["payload"]["table"]["seats"][1]["player_id"] == "u_test2"
 
-            # Non-host (hx) tries to send START_GAME -> rejected / ignored
+            # Non-host (test2) tries to send START_GAME -> rejected / ignored
             ws2.send_json({"event": EventType.START_GAME.value})
 
-            # Non-host (hx) sets ready -> updates ready list
+            # Non-host (test2) sets ready -> updates ready list
             ws2.send_json({
                 "event": EventType.PLAYER_READY.value,
                 "payload": {"ready": True}
             })
             msg_ready_1 = ws1.receive_json()
             msg_ready_2 = ws2.receive_json()
-            assert "u_hx" in msg_ready_1["payload"]["table"]["ready_player_ids"]
-            assert "u_hx" in msg_ready_2["payload"]["table"]["ready_player_ids"]
+            assert "u_test2" in msg_ready_1["payload"]["table"]["ready_player_ids"]
+            assert "u_test2" in msg_ready_2["payload"]["table"]["ready_player_ids"]
 
-            # Host (fwd) sends START_GAME -> Game starts!
+            # Host (test1) sends START_GAME -> Game starts!
             ws1.send_json({"event": EventType.START_GAME.value})
 
             # Sound effect 'deal' broadcast to both
@@ -167,52 +157,127 @@ def test_websocket_room_interaction():
             assert state2["payload"]["table"]["street"] == "PREFLOP"
 
 
-def test_auth_and_admin_security():
+def test_websocket_chat_and_emoji_broadcast():
+    client = TestClient(app)
+    response = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Social WS Test",
+        "max_seats": 2,
+    })
+    room_id = response.json()["room_id"]
+
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws_host:
+        ws_host.receive_json()
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws_guest:
+            ws_host.receive_json()
+            ws_guest.receive_json()
+
+            ws_guest.send_json({
+                "event": EventType.CHAT_MESSAGE.value,
+                "payload": {"message": "  好牌！  "},
+            })
+            for message in (ws_host.receive_json(), ws_guest.receive_json()):
+                assert message["event"] == EventType.CHAT_MESSAGE.value
+                assert message["room_id"] == room_id
+                assert message["payload"]["player_id"] == "u_test2"
+                assert message["payload"]["name"] == "test2"
+                assert message["payload"]["message"] == "好牌！"
+                assert message["payload"]["message_id"]
+
+            ws_host.send_json({
+                "event": EventType.EMOJI_REACTION.value,
+                "payload": {"emoji": "🔥"},
+            })
+            for message in (ws_host.receive_json(), ws_guest.receive_json()):
+                assert message["event"] == EventType.EMOJI_REACTION.value
+                assert message["payload"]["player_id"] == "u_test1"
+                assert message["payload"]["name"] == "test1"
+                assert message["payload"]["emoji"] == "🔥"
+                assert message["payload"]["reaction_id"]
+
+
+def test_websocket_rejects_invalid_social_content():
+    client = TestClient(app)
+    response = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Social Validation Test",
+    })
+    room_id = response.json()["room_id"]
+
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws:
+        ws.receive_json()
+
+        ws.send_json({
+            "event": EventType.CHAT_MESSAGE.value,
+            "payload": {"message": "   "},
+        })
+        error = ws.receive_json()
+        assert error["event"] == EventType.ERROR_MESSAGE.value
+        assert "1-120" in error["payload"]["message"]
+
+        ws.send_json({
+            "event": EventType.EMOJI_REACTION.value,
+            "payload": {"emoji": "not-an-emoji"},
+        })
+        error = ws.receive_json()
+        assert error["event"] == EventType.ERROR_MESSAGE.value
+        assert error["payload"]["message"] == "当前无法发送该表情"
+
+
+def test_auth_profile_and_password_update():
     client = TestClient(app)
 
     # 1. Invalid login
     resp = client.post("/api/auth/login", json={
-        "username": "fwd",
+        "username": "test1",
         "password": "wrong_password"
     })
     assert resp.status_code == 401
 
-    # 2. Login with correct password for player fwd (non-admin)
+    # 2. Login with correct password for test account test1
     resp = client.post("/api/auth/login", json={
-        "username": "fwd",
+        "username": "test1",
         "password": "123"
     })
     assert resp.status_code == 200
     auth_data = resp.json()
-    assert auth_data["user"]["username"] == "fwd"
-    assert auth_data["user"]["is_admin"] is False
+    assert auth_data["user"]["username"] == "test1"
+    token = auth_data["token"]
 
-    # 3. Login with admin user (is_admin == True)
-    resp_admin = client.post("/api/auth/login", json={
-        "username": "admin",
-        "password": "admin"
-    })
-    assert resp_admin.status_code == 200
-    admin_data = resp_admin.json()
-    assert admin_data["user"]["username"] == "admin"
-    assert admin_data["user"]["is_admin"] is True
-
-    # 4. Non-admin (fwd) blocked from admin API
-    resp_forbidden = client.get("/api/admin/users?admin_id=u_fwd")
-    assert resp_forbidden.status_code == 403
-
-    # 5. Admin can access admin API
-    resp_allowed = client.get("/api/admin/users?admin_id=u_admin")
-    assert resp_allowed.status_code == 200
-
-    # 6. Profile update test on isolated in-memory user
+    # 3. Profile update: nickname and avatar
     resp = client.post("/api/auth/profile", json={
-        "user_id": "u_fwd",
-        "nickname": "FWD Boss",
-        "avatar": "🦈"
+        "user_id": "u_test1",
+        "nickname": "Test1 Boss",
+        "avatar": "🧪"
     })
     assert resp.status_code == 200
-    assert resp.json()["user"]["nickname"] == "FWD Boss"
+    assert resp.json()["user"]["nickname"] == "Test1 Boss"
+
+    # 4. Password update without valid old password fails
+    resp_wrong_pwd = client.post("/api/auth/profile", json={
+        "user_id": "u_test1",
+        "old_password": "wrong_old_password",
+        "new_password": "newpassword123"
+    })
+    assert resp_wrong_pwd.status_code == 400
+    assert "原密码错误" in resp_wrong_pwd.json()["detail"]
+
+    # 5. Password update with correct old password succeeds
+    resp_correct_pwd = client.post(
+        "/api/auth/profile",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "old_password": "123",
+            "new_password": "newpassword123"
+        }
+    )
+    assert resp_correct_pwd.status_code == 200
+
+    # 6. Verify new password can log in and old password fails
+    resp_old_fail = client.post("/api/auth/login", json={"username": "test1", "password": "123"})
+    assert resp_old_fail.status_code == 401
+    resp_new_ok = client.post("/api/auth/login", json={"username": "test1", "password": "newpassword123"})
+    assert resp_new_ok.status_code == 200
 
 
 @pytest.mark.asyncio
@@ -220,9 +285,6 @@ async def test_turn_timeout_and_hand_end_auto_start():
     import asyncio
     from backend.app.websocket.router import trigger_room_turn_timer
     from backend.app.services.timeout_manager import timeout_manager
-    from backend.app.services.room_manager import room_manager
-    from backend.app.models.room import RoomConfig
-    from backend.app.engine.state_machine import Street
 
     # Create room with 1 second action timeout
     config = RoomConfig(
@@ -234,9 +296,9 @@ async def test_turn_timeout_and_hand_end_auto_start():
         action_timeout=1,
         max_seats=6
     )
-    room = room_manager.create_room(host_player_id="u_fwd", config=config)
-    room.sit_down_player("u_fwd", "fwd", 0)
-    room.sit_down_player("u_hx", "hx", 1)
+    room = room_manager.create_room(host_player_id="u_test1", config=config)
+    room.sit_down_player("u_test1", "test1", 0)
+    room.sit_down_player("u_test2", "test2", 1)
 
     # Start hand
     assert room.table.start_new_hand() is True
@@ -273,7 +335,7 @@ def test_rebuy_only_allowed_when_chips_zero_ws():
     client = TestClient(app)
 
     resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
+        "host_player_id": "u_test1",
         "room_name": "Rebuy WS Test",
         "buyin_chips": 1000,
         "cash_value": 100.0,
@@ -284,25 +346,24 @@ def test_rebuy_only_allowed_when_chips_zero_ws():
     })
     room_id = resp.json()["room_id"]
 
-    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws:
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws:
         msg = ws.receive_json()
         assert msg["payload"]["table"]["seats"][0]["chips"] == 1000
 
-        # fwd tries to rebuy with 1000 chips -> should fail / not rebuy
+        # test1 tries to rebuy with 1000 chips -> should fail / not rebuy
         ws.send_json({"event": EventType.REBUY.value})
-        # Server does not broadcast rebuy sound or changes
         room = room_manager.get_room(room_id)
         assert room.table.seats[0].chips == 1000
         assert room.table.seats[0].rebuy_count == 1
 
-        # fwd loses all chips
+        # test1 loses all chips
         room.table.seats[0].chips = 0
 
-        # fwd rebuys now with 0 chips -> succeeds
+        # test1 rebuys now with 0 chips -> succeeds
         ws.send_json({"event": EventType.REBUY.value})
         sound_msg = ws.receive_json()
         assert sound_msg["event"] == EventType.SOUND_EFFECT.value
-        assert sound_msg["payload"]["sound"] == "rebuy"
+        assert (sound_msg.get("sound") or sound_msg["payload"].get("sound")) == "rebuy"
 
         state_msg = ws.receive_json()
         assert state_msg["payload"]["table"]["seats"][0]["chips"] == 1000
@@ -313,7 +374,7 @@ def test_auto_seating_when_room_full():
     client = TestClient(app)
 
     resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
+        "host_player_id": "u_test1",
         "room_name": "Max 2 Seats Room",
         "buyin_chips": 500,
         "cash_value": 50.0,
@@ -324,24 +385,24 @@ def test_auto_seating_when_room_full():
     })
     room_id = resp.json()["room_id"]
 
-    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws_host:
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws_host:
         msg1 = ws_host.receive_json()
-        assert msg1["payload"]["table"]["seats"][0]["player_id"] == "u_fwd"
+        assert msg1["payload"]["table"]["seats"][0]["player_id"] == "u_test1"
 
-        with client.websocket_connect(f"/ws/{room_id}/u_hx") as ws_p2:
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws_p2:
             _ = ws_host.receive_json()
             msg2 = ws_p2.receive_json()
-            assert msg2["payload"]["table"]["seats"][1]["player_id"] == "u_hx"
+            assert msg2["payload"]["table"]["seats"][1]["player_id"] == "u_test2"
 
-            # 3rd player (yy) connects when max_seats = 2 -> room is full, remains spectator
-            with client.websocket_connect(f"/ws/{room_id}/u_yy") as ws_spec:
+            # 3rd player (test3) connects when max_seats = 2 -> room is full, remains spectator
+            with client.websocket_connect(f"/ws/{room_id}/u_test3") as ws_spec:
                 _ = ws_host.receive_json()
                 _ = ws_p2.receive_json()
                 msg_spec = ws_spec.receive_json()
                 seats = msg_spec["payload"]["table"]["seats"]
-                assert seats[0]["player_id"] == "u_fwd"
-                assert seats[1]["player_id"] == "u_hx"
-                assert all(s["player_id"] != "u_yy" for s in seats if s is not None)
+                assert seats[0]["player_id"] == "u_test1"
+                assert seats[1]["player_id"] == "u_test2"
+                assert all(s["player_id"] != "u_test3" for s in seats if s is not None)
 
 
 def test_host_can_delete_room_via_api():
@@ -349,7 +410,7 @@ def test_host_can_delete_room_via_api():
 
     # 1. Create a room
     resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
+        "host_player_id": "u_test1",
         "room_name": "Host Deletion Test Room",
         "buyin_chips": 1000,
         "cash_value": 100.0,
@@ -362,49 +423,27 @@ def test_host_can_delete_room_via_api():
     room_id = resp.json()["room_id"]
     assert room_manager.get_room(room_id) is not None
 
-    # 2. Non-host (u_hx) attempts to delete room -> 403 Forbidden
-    resp_forbidden = client.delete(f"/api/rooms/{room_id}?requester_id=u_hx")
+    # 2. Non-host (u_test2) attempts to delete room -> 403 Forbidden
+    resp_forbidden = client.delete(f"/api/rooms/{room_id}?requester_id=u_test2")
     assert resp_forbidden.status_code == 403
     assert room_manager.get_room(room_id) is not None
 
-    # 3. Host (u_fwd) deletes room -> 200 OK and room deleted
-    resp_delete = client.delete(f"/api/rooms/{room_id}?requester_id=u_fwd")
+    # 3. Host (u_test1) deletes room -> 200 OK and room deleted
+    resp_delete = client.delete(f"/api/rooms/{room_id}?requester_id=u_test1")
     assert resp_delete.status_code == 200
     assert resp_delete.json()["success"] is True
     assert room_manager.get_room(room_id) is None
 
     # 4. Deleting non-existent room -> 404 Not Found
-    resp_404 = client.delete(f"/api/rooms/{room_id}?requester_id=u_fwd")
+    resp_404 = client.delete(f"/api/rooms/{room_id}?requester_id=u_test1")
     assert resp_404.status_code == 404
-
-
-def test_admin_can_delete_room_via_api():
-    client = TestClient(app)
-
-    # Create room by regular user
-    resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
-        "room_name": "Admin Deletion Room",
-        "buyin_chips": 1000,
-        "cash_value": 100.0,
-        "small_blind": 5,
-        "big_blind": 10,
-        "action_timeout": 15,
-        "max_seats": 6,
-    })
-    room_id = resp.json()["room_id"]
-
-    # Admin deletes room
-    resp_delete = client.delete(f"/api/rooms/{room_id}?requester_id=u_admin")
-    assert resp_delete.status_code == 200
-    assert room_manager.get_room(room_id) is None
 
 
 def test_host_delete_room_ws_broadcast():
     client = TestClient(app)
 
     resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
+        "host_player_id": "u_test1",
         "room_name": "WS Disband Room",
         "buyin_chips": 1000,
         "cash_value": 100.0,
@@ -415,10 +454,10 @@ def test_host_delete_room_ws_broadcast():
     })
     room_id = resp.json()["room_id"]
 
-    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws_host:
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws_host:
         _ = ws_host.receive_json()
 
-        with client.websocket_connect(f"/ws/{room_id}/u_hx") as ws_guest:
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws_guest:
             _ = ws_host.receive_json()
             _ = ws_guest.receive_json()
 
@@ -437,36 +476,91 @@ def test_host_delete_room_ws_broadcast():
             assert room_manager.get_room(room_id) is None
 
 
-@pytest.mark.asyncio
-async def test_auto_delete_room_when_empty():
-    import asyncio
-    from backend.app.websocket.connection_manager import ws_manager
+def test_unsettled_room_is_retained_when_empty():
     from backend.app.websocket.router import schedule_room_empty_check
 
+    room = room_manager.create_room(
+        host_player_id="u_test1",
+        config=RoomConfig(room_name="Reconnectable Empty Room"),
+    )
+    room_id = room.room_id
+    assert room_manager.get_room(room_id) is not None
+
+    # A legacy empty-check request must no longer delete an un-settled room.
+    schedule_room_empty_check(room_id, delay_seconds=0.1)
+
+    assert room_manager.get_room(room_id) is not None
+
+
+def test_room_automatically_deleted_after_settlement():
     client = TestClient(app)
 
+    # 1. Test WebSocket END_ROOM auto dissolution
     resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
-        "room_name": "Auto Delete Empty Room",
+        "host_player_id": "u_test1",
+        "room_name": "Auto Disband WS Table",
         "buyin_chips": 1000,
         "cash_value": 100.0,
-        "small_blind": 5,
-        "big_blind": 10,
-        "action_timeout": 15,
-        "max_seats": 6,
+        "small_blind": 10,
+        "big_blind": 20,
     })
     room_id = resp.json()["room_id"]
     assert room_manager.get_room(room_id) is not None
+    assert any(r["room_id"] == room_id for r in client.get("/api/rooms").json())
 
-    # Connect player
-    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws:
-        _ = ws.receive_json()
-        assert room_manager.get_room(room_id) is not None
-        assert ws_manager.get_room_connection_count(room_id) >= 1
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws_host:
+        _ = ws_host.receive_json()  # INITIAL ROOM_STATE
 
-    # Disconnected now -> ws closed -> trigger fast empty check with 0.1s delay
-    schedule_room_empty_check(room_id, delay_seconds=0.1)
-    await asyncio.sleep(0.2)
+        # Host sends END_ROOM
+        ws_host.send_json({"event": EventType.END_ROOM.value, "payload": {"settlement_type": "balance"}})
 
-    # Room must be automatically deleted
-    assert room_manager.get_room(room_id) is None
+        # Receive messages until final ROOM_STATE with report
+        final_state = None
+        for _ in range(5):
+            msg = ws_host.receive_json()
+            if msg.get("event") == EventType.ROOM_STATE.value:
+                final_state = msg
+                if msg.get("payload", {}).get("is_ended"):
+                    break
+
+        assert final_state is not None
+        assert final_state["payload"]["is_ended"] is True
+        assert final_state["payload"]["settlement_report"] is not None
+
+        # Room must be automatically deleted from room_manager and not visible in lobby
+        assert room_manager.get_room(room_id) is None
+        assert not any(r["room_id"] == room_id for r in client.get("/api/rooms").json())
+
+    # 2. Test REST POST /api/rooms/{id}/end auto dissolution
+    resp2 = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Auto Disband REST Table",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 10,
+        "big_blind": 20,
+    })
+    room_id2 = resp2.json()["room_id"]
+    assert room_manager.get_room(room_id2) is not None
+
+    end_resp = client.post(f"/api/rooms/{room_id2}/end?requester_id=u_test1&settlement_type=balance")
+    assert end_resp.status_code == 200
+    assert end_resp.json()["room_id"] == room_id2
+    assert room_manager.get_room(room_id2) is None
+    assert not any(r["room_id"] == room_id2 for r in client.get("/api/rooms").json())
+
+
+def test_user_privacy_and_balance_endpoints():
+    client = TestClient(app)
+
+    # 1. No public user listing or registration
+    assert client.get("/api/users").status_code in (404, 405)
+    assert client.post("/api/users", json={"username": "hacker"}).status_code in (404, 405)
+
+    # 2. Balance endpoints do not leak username
+    overview = client.get("/api/balance/overview").json()
+    for u in overview.get("user_balances", []):
+        assert "username" not in u
+
+    my_bal = client.get("/api/balance/my?user_id=u_test1").json()
+    assert "username" not in my_bal

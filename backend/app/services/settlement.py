@@ -13,6 +13,7 @@ from typing import List, Dict, Tuple, Optional
 class PlayerSettlementRecord:
     player_id: str
     player_name: str
+    avatar: str
     rebuy_count: int
     total_buyin_chips: int
     final_chips: int
@@ -25,6 +26,7 @@ class PlayerSettlementRecord:
         return {
             "player_id": self.player_id,
             "player_name": self.player_name,
+            "avatar": self.avatar,
             "rebuy_count": self.rebuy_count,
             "total_buyin_chips": self.total_buyin_chips,
             "final_chips": self.final_chips,
@@ -68,6 +70,7 @@ class SettlementReport:
     transactions: List[PaymentTransaction]
     total_chips_in_game: int
     is_balanced: bool
+    settlement_type: str = "balance"
 
     def to_dict(self) -> dict:
         return {
@@ -80,6 +83,7 @@ class SettlementReport:
             "transactions": [t.to_dict() for t in self.transactions],
             "total_chips_in_game": self.total_chips_in_game,
             "is_balanced": self.is_balanced,
+            "settlement_type": self.settlement_type,
         }
 
 
@@ -150,6 +154,7 @@ class SettlementEngine:
         buyin_chips: int,
         cash_value: float,
         player_data_list: List[dict],
+        settlement_type: str = "balance",
     ) -> SettlementReport:
         """Calculate complete settlement report for a cash game room.
         
@@ -171,6 +176,7 @@ class SettlementEngine:
         for p in player_data_list:
             pid = p["player_id"]
             pname = p["player_name"]
+            avatar = p.get("avatar") or "👤"
             rebuy_count = p.get("rebuy_count", 1)
             total_buyin = p.get("total_buyin_chips", buyin_chips)
             final_chips = p.get("final_chips", 0)
@@ -186,6 +192,7 @@ class SettlementEngine:
             records.append(PlayerSettlementRecord(
                 player_id=pid,
                 player_name=pname,
+                avatar=avatar,
                 rebuy_count=rebuy_count,
                 total_buyin_chips=total_buyin,
                 final_chips=final_chips,
@@ -215,4 +222,5 @@ class SettlementEngine:
             transactions=transactions,
             total_chips_in_game=total_buyins,
             is_balanced=is_balanced,
+            settlement_type=settlement_type,
         )

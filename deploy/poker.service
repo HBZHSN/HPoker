@@ -1,0 +1,26 @@
+[Unit]
+Description=HPoker Texas Hold'em web service
+Documentation=file:///home/hanxu/code/python/poker/README.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=hanxu
+Group=Users
+WorkingDirectory=/home/hanxu/code/python/poker
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/hanxu/code/python/poker/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/hanxu/code/python/poker/backend/data
+UMask=0027
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

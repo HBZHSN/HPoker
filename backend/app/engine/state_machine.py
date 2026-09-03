@@ -256,19 +256,44 @@ class TableStateMachine:
                 count += 1
         return count
 
-    def stand_up(self, seat_index: int) -> Optional[PlayerSeat]:
-        if 0 <= seat_index < self.max_seats:
-            player = self.seats[seat_index]
-            if player:
-                if self.street not in (Street.IDLE, Street.HAND_END):
-                    # Fold if game is in progress
-                    if not player.is_folded:
-                        self.handle_action(player.player_id, ActionType.FOLD)
-                self.seats[seat_index] = None
-                return player
-        return None
+    def refund_unsettled_hand(self) -> Dict[str, int]:
+        """Return every chip committed to a hand that has not been settled.
+
+        Ending a cash-game room must not treat chips sitting in an unfinished
+        pot as lost money. The room layer uses the returned contribution map
+        to update historical records for participants outside the active seats.
+        """
+        if self.street in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END):
+            return {}
+
+        contributions = dict(self.pot_manager.total_contributions)
+        for player in self.active_seated_players:
+            refund = contributions.get(player.player_id, 0)
+            if refund > 0:
+                player.chips += refund
+                player.is_all_in = False
+
+        self.pot_manager.reset()
+        self.current_turn_seat = None
+        self.turn_started_at = None
+        self.current_round_highest_bet = 0
+        self.min_raise_increment = self.big_blind
+        self.last_raiser_seat = None
+        self.is_using_time_bank = False
+        self.current_turn_duration = self.action_timeout
+        self.is_all_in_runout = False
+        self.rit_enabled = False
+        self.rit_status = None
+        self.rit_votes.clear()
+        self.rit_voters.clear()
+        self.current_dealing_board = 1
+        self.all_in_initial_board_count = 0
+        self.street = Street.HAND_END
+        return contributions
 
     def rebuy(self, player_id: str, additional_chips: int) -> bool:
+        if self.street not in (Street.IDLE, Street.HAND_END):
+            return False
         for player in self.active_seated_players:
             if player.player_id == player_id:
                 if player.chips > 0:
@@ -731,42 +756,35 @@ class TableStateMachine:
 
     def vote_rit(self, player_id: str, choice: int) -> Tuple[str, bool]:
         """Record player's Run-It-Twice choice (1 or 2).
-        
-        Rule: If ANY player chooses 1, Run It Once (1 run).
-              If ALL players choose 2, Run It Twice (2 runs).
+
+        Every contender must submit a choice before the runout starts. If
+        every choice is 2, Run It Twice is enabled; otherwise the completed
+        vote falls back to Run It Once.
         
         Returns:
             (status, is_run_twice): status in ("FINALIZED", "WAITING", "IGNORED")
         """
-        if self.street != Street.RIT_DECISION or player_id not in self.rit_voters:
+        if (
+            self.street != Street.RIT_DECISION
+            or self.rit_status != "VOTING"
+            or player_id not in self.rit_voters
+        ):
+            return ("IGNORED", False)
+        if choice not in (1, 2):
             return ("IGNORED", False)
 
         self.rit_votes[player_id] = choice
 
-        if choice == 1:
-            # Any single vote of 1 forces Run It Once
-            self.rit_enabled = False
-            self.rit_status = "AGREED_ONCE"
-            return ("FINALIZED", False)
-        elif choice == 2:
-            # Check if all voters have chosen 2
-            if len(self.rit_votes) == len(self.rit_voters) and all(v == 2 for v in self.rit_votes.values()):
-                self.rit_enabled = True
-                self.rit_status = "AGREED_TWICE"
-                return ("FINALIZED", True)
+        if len(self.rit_votes) < len(self.rit_voters):
+            self.rit_status = "VOTING"
             return ("WAITING", False)
-        return ("IGNORED", False)
+
+        self.rit_enabled = all(vote == 2 for vote in self.rit_votes.values())
+        self.rit_status = "AGREED_TWICE" if self.rit_enabled else "AGREED_ONCE"
+        return ("FINALIZED", self.rit_enabled)
 
     def timeout_rit(self) -> bool:
-        """Fallback when RIT voting timer expires: defaults to Run It Once unless unanimous 2."""
-        if self.street == Street.RIT_DECISION or self.rit_status == "VOTING":
-            if len(self.rit_votes) == len(self.rit_voters) and all(v == 2 for v in self.rit_votes.values()):
-                self.rit_enabled = True
-                self.rit_status = "AGREED_TWICE"
-            else:
-                self.rit_enabled = False
-                self.rit_status = "AGREED_ONCE"
-            return True
+        """Compatibility hook; RIT voting intentionally has no timeout."""
         return False
 
     def deal_all_in_next_step(self) -> Optional[str]:

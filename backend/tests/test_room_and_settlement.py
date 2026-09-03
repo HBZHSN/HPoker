@@ -1,4 +1,5 @@
 import pytest
+from backend.app.engine.state_machine import ActionType, Street
 from backend.app.models.room import Room, RoomConfig
 from backend.app.services.room_manager import RoomManager
 from backend.app.services.settlement import SettlementEngine, PaymentTransaction
@@ -62,8 +63,23 @@ def test_settlement_multi_party_transfer():
     assert total_transferred == 150.0  # 1500 chips * 0.1
 
 
+@pytest.mark.parametrize("max_seats", range(2, 10))
+def test_room_config_supports_every_table_size(max_seats):
+    config = RoomConfig(max_seats=max_seats)
+    room = Room(host_player_id="host", config=config)
+
+    assert config.max_seats == max_seats
+    assert len(room.table.seats) == max_seats
+
+
+@pytest.mark.parametrize("max_seats", [1, 10])
+def test_room_config_rejects_unsupported_table_size(max_seats):
+    with pytest.raises(ValueError, match="max_seats"):
+        RoomConfig(max_seats=max_seats)
+
+
 def test_room_lifecycle_and_rebuy():
-    rm = RoomManager()
+    rm = RoomManager(storage_path=":memory:")
     cfg = RoomConfig(
         room_name="VIP Cash Room",
         buyin_chips=1000,
@@ -77,11 +93,17 @@ def test_room_lifecycle_and_rebuy():
     assert room.room_id in [r["room_id"] for r in rm.list_rooms()]
 
     # Players sit down
-    assert room.sit_down_player("host1", "Alice (Host)", seat_index=0) is True
-    assert room.sit_down_player("user2", "Bob", seat_index=1) is True
+    assert room.sit_down_player("host1", "Alice (Host)", seat_index=0, avatar="🦊") is True
+    assert room.sit_down_player("user2", "Bob", seat_index=1, avatar="🐼") is True
 
     # Bob cannot rebuy when chips > 0
     assert room.rebuy_player("user2") is False
+
+    # Even a zero-chip seat cannot buy back in before the current hand ends.
+    assert room.table.start_new_hand() is True
+    room.table.seats[1].chips = 0
+    assert room.rebuy_player("user2") is False
+    room.table.refund_unsettled_hand()
 
     # Bob loses all chips (chips == 0)
     room.table.seats[1].chips = 0
@@ -95,7 +117,99 @@ def test_room_lifecycle_and_rebuy():
     assert room.is_ended is False
 
     # Host ends room
-    report = room.end_room(requester_id="host1")
+    report = room.end_room(requester_id="host1", record_to_balance=False)
     assert report is not None
     assert room.is_ended is True
     assert len(report.player_records) == 2
+    records_by_id = {record.player_id: record for record in report.player_records}
+    assert records_by_id["host1"].avatar == "🦊"
+    assert records_by_id["user2"].avatar == "🐼"
+    serialized_records = {
+        record["player_id"]: record for record in report.to_dict()["player_records"]
+    }
+    assert serialized_records["host1"]["avatar"] == "🦊"
+    assert serialized_records["user2"]["avatar"] == "🐼"
+
+
+def test_ending_room_refunds_unsettled_hand_contributions():
+    cfg = RoomConfig(
+        room_name="Interrupted Hand Room",
+        buyin_chips=100,
+        cash_value=10.0,
+        small_blind=5,
+        action_timeout=15,
+        max_seats=6,
+    )
+    room = Room(host_player_id="host1", config=cfg)
+    assert room.sit_down_player("host1", "Alice", seat_index=0) is True
+    assert room.sit_down_player("user2", "Bob", seat_index=1) is True
+
+    assert room.table.start_new_hand() is True
+    assert room.table.pot_manager.total_pot_amount == 15
+    assert room.table.seats[0].chips == 95
+    assert room.table.seats[1].chips == 90
+
+    report = room.end_room(requester_id="host1", record_to_balance=False)
+
+    assert report is not None
+    assert report.is_balanced is True
+    assert report.total_chips_in_game == 200
+    assert report.transactions == []
+    assert room.table.pot_manager.total_pot_amount == 0
+    assert room.table.street.value == "HAND_END"
+    assert room.table.seats[0].chips == 100
+    assert room.table.seats[1].chips == 100
+    assert all(record.net_chips == 0 for record in report.player_records)
+
+
+def test_room_checkpoint_restores_completed_hand_ledger(tmp_path):
+    storage_path = tmp_path / "rooms.json"
+    manager = RoomManager(storage_path=str(storage_path))
+    room = manager.create_room(
+        host_player_id="host1",
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
+        room_id="durable1",
+    )
+    assert room.sit_down_player("host1", "Alice", seat_index=0)
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    manager.checkpoint_room(room)
+
+    assert room.table.start_new_hand()
+    acting_player = room.table.seats[room.table.current_turn_seat]
+    assert acting_player is not None
+    assert room.table.handle_action(acting_player.player_id, ActionType.FOLD)
+    assert room.table.street == Street.HAND_END
+    manager.checkpoint_room(room)
+
+    restored_manager = RoomManager(storage_path=str(storage_path))
+    restored = restored_manager.get_room("durable1")
+    assert restored is not None
+    assert restored.table.street == Street.IDLE
+    assert restored.table.hand_number == 1
+    assert [seat.chips for seat in restored.table.active_seated_players] == [95, 105]
+    assert [seat.total_buyin_chips for seat in restored.table.active_seated_players] == [100, 100]
+    assert restored.hand_records[0]["hand_number"] == 1
+    assert restored.hand_records[0]["total_chips"] == 200
+
+
+def test_in_progress_checkpoint_refunds_current_hand_contributions(tmp_path):
+    storage_path = tmp_path / "rooms.json"
+    manager = RoomManager(storage_path=str(storage_path))
+    room = manager.create_room(
+        host_player_id="host1",
+        config=RoomConfig(buyin_chips=100, small_blind=5),
+        room_id="recover1",
+    )
+    assert room.sit_down_player("host1", "Alice", seat_index=0)
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    manager.checkpoint_room(room)
+    assert room.table.start_new_hand()
+
+    # A crash during a hand restores the safe pre-hand stacks rather than
+    # stranding posted blinds in a hand that cannot be reconstructed safely.
+    manager.checkpoint_room(room)
+    restored = RoomManager(storage_path=str(storage_path)).get_room("recover1")
+    assert restored is not None
+    assert restored.table.street == Street.IDLE
+    assert [seat.chips for seat in restored.table.active_seated_players] == [100, 100]
+    assert restored.table.pot_manager.total_pot_amount == 0

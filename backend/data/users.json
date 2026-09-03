@@ -4,8 +4,9 @@
       "user_id": "u_fwd",
       "username": "fwd",
       "nickname": "fwd",
-      "avatar": "🦈",
+      "avatar": "🐉",
       "is_admin": false,
+      "is_test": false,
       "password_hash": "3c610b449f94e4221837ad37d9ef4cbeb307dc9000b40c086e1faeb8def27522",
       "created_at": 1788312742.033468
     },
@@ -15,6 +16,7 @@
       "nickname": "hx",
       "avatar": "🦁",
       "is_admin": false,
+      "is_test": false,
       "password_hash": "3c610b449f94e4221837ad37d9ef4cbeb307dc9000b40c086e1faeb8def27522",
       "created_at": 1788312742.033468
     },
@@ -24,6 +26,7 @@
       "nickname": "yy",
       "avatar": "🦊",
       "is_admin": false,
+      "is_test": false,
       "password_hash": "3c610b449f94e4221837ad37d9ef4cbeb307dc9000b40c086e1faeb8def27522",
       "created_at": 1788312742.033468
     },
@@ -33,14 +36,46 @@
       "nickname": "房主 (Admin)",
       "avatar": "👑",
       "is_admin": true,
+      "is_test": false,
       "password_hash": "f4d3a33586958d854c26df8be193e11d0fdc501d850457647343e60745aea785",
       "created_at": 1788315458.6100574
+    },
+    {
+      "user_id": "u_test1",
+      "username": "test1",
+      "nickname": "test1",
+      "avatar": "🧪",
+      "is_admin": false,
+      "is_test": true,
+      "password_hash": "3c610b449f94e4221837ad37d9ef4cbeb307dc9000b40c086e1faeb8def27522",
+      "created_at": 1788425240.8447332
+    },
+    {
+      "user_id": "u_test2",
+      "username": "test2",
+      "nickname": "test2",
+      "avatar": "🧪",
+      "is_admin": false,
+      "is_test": true,
+      "password_hash": "3c610b449f94e4221837ad37d9ef4cbeb307dc9000b40c086e1faeb8def27522",
+      "created_at": 1788425240.8447332
+    },
+    {
+      "user_id": "u_test3",
+      "username": "test3",
+      "nickname": "test3",
+      "avatar": "🧪",
+      "is_admin": false,
+      "is_test": true,
+      "password_hash": "3c610b449f94e4221837ad37d9ef4cbeb307dc9000b40c086e1faeb8def27522",
+      "created_at": 1788425240.8447332
     }
   ],
   "tokens": {
     "token_c10fae693d7f446b9d412130ec576ae1": "u_fwd",
     "token_cf278f04f52547e7aaac61cfb8d6c6e8": "u_admin",
     "token_007fca9237914fa5ae112faf9b5bc962": "u_hx",
-    "token_2ca4861888ba45cb9c143359e4a7dfaf": "u_yy"
+    "token_2ca4861888ba45cb9c143359e4a7dfaf": "u_yy",
+    "token_5d2f89948fec487f9d6af75dcf85c327": "u_test1"
   }
 }

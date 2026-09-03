@@ -88,6 +88,22 @@ html,
   display: block;
 }
 
+.poker-horizontal-raise-slider {
+  touch-action: pan-y;
+}
+
+.poker-horizontal-raise-slider::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.poker-horizontal-raise-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 @media (max-width: 767px) {
   .poker-mobile-sticky-info {
     position: sticky;
@@ -205,9 +221,9 @@ html,
     display: none;
   }
 
-  /* During our turn the hand summary is immediately followed by actions;
-     the avatar's rim remains the only timer indicator on the table. */
-  .poker-action-turn-status-self,
+  /* The table avatar already shows whose turn it is and the countdown, so the
+     mobile action console does not repeat that status row. */
+  .poker-action-turn-status,
   .poker-table-center-board {
     display: none;
   }
@@ -224,10 +240,15 @@ html,
   }
 
   .poker-table-header h1 {
-    max-width: 24vw;
+    max-width: 30vw;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .poker-table-room-blinds,
+  .poker-table-room-buyin {
+    display: none;
   }
 
   .poker-table-header > :last-child {
@@ -273,6 +294,10 @@ html,
 
   .poker-table-center {
     gap: 4px;
+  }
+
+  .poker-table-pot-summary {
+    transform: translateY(-42px);
   }
 
   .poker-table-pot-badge {
@@ -452,6 +477,53 @@ html,
 
 .animate-card-flip {
   animation: card-flip 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes seat-emoji-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.45) rotate(-8deg);
+  }
+  18%, 78% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.08) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(0.9) rotate(6deg);
+  }
+}
+
+.poker-seat-emoji {
+  animation: seat-emoji-pop 4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+}
+
+.poker-seat-chat {
+  animation: seat-emoji-pop 5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+}
+
+.poker-chat-messages {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+@media (max-width: 640px) {
+  .poker-social-controls {
+    bottom: 10px;
+    left: 10px;
+  }
+
+  .poker-chat-window {
+    max-height: min(430px, calc(100dvh - 110px));
+  }
+
+  .poker-chat-messages {
+    height: min(16rem, calc(100dvh - 230px));
+  }
 }
 
 /* A post-hand reveal keeps a small diagonal card-back corner so the full face
