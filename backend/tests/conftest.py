@@ -1,13 +1,42 @@
 """Shared test isolation for process-global poker services."""
 
 import copy
+import os
+
+# Set this before importing the application modules.  Their module-level
+# UserManager singleton must never open the production users file in pytest.
+os.environ["USERS_DATA_FILE"] = ":memory:"
+
 import pytest
 
+from backend.app.models.user import User, hash_password
+from backend.app.services.user_manager import UserManager, user_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.services.balance_manager import balance_manager
-from backend.app.services.user_manager import user_manager
 from backend.app.services.timeout_manager import timeout_manager
-from backend.app.models.user import User, hash_password
+
+
+PRODUCTION_USERS_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "data", "users.json")
+)
+_real_save_to_storage = UserManager.save_to_storage
+
+
+def _save_user_storage_outside_production_file(self):
+    """Reject accidental test writes to the real users database."""
+    storage_path = self.storage_path
+    if (
+        storage_path
+        and storage_path != ":memory:"
+        and os.path.abspath(storage_path) == PRODUCTION_USERS_PATH
+    ):
+        raise AssertionError("Tests must not write backend/data/users.json")
+    _real_save_to_storage(self)
+
+
+# Keep temporary user-storage tests possible while making the production path
+# fail closed for every UserManager instance created during this test process.
+UserManager.save_to_storage = _save_user_storage_outside_production_file
 
 
 @pytest.fixture(autouse=True)

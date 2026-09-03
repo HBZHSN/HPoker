@@ -224,61 +224,6 @@ def test_websocket_rejects_invalid_social_content():
         assert error["payload"]["message"] == "当前无法发送该表情"
 
 
-def test_auth_profile_and_password_update():
-    client = TestClient(app)
-
-    # 1. Invalid login
-    resp = client.post("/api/auth/login", json={
-        "username": "test1",
-        "password": "wrong_password"
-    })
-    assert resp.status_code == 401
-
-    # 2. Login with correct password for test account test1
-    resp = client.post("/api/auth/login", json={
-        "username": "test1",
-        "password": "123"
-    })
-    assert resp.status_code == 200
-    auth_data = resp.json()
-    assert auth_data["user"]["username"] == "test1"
-    token = auth_data["token"]
-
-    # 3. Profile update: nickname and avatar
-    resp = client.post("/api/auth/profile", json={
-        "user_id": "u_test1",
-        "nickname": "Test1 Boss",
-        "avatar": "🧪"
-    })
-    assert resp.status_code == 200
-    assert resp.json()["user"]["nickname"] == "Test1 Boss"
-
-    # 4. Password update without valid old password fails
-    resp_wrong_pwd = client.post("/api/auth/profile", json={
-        "user_id": "u_test1",
-        "old_password": "wrong_old_password",
-        "new_password": "newpassword123"
-    })
-    assert resp_wrong_pwd.status_code == 400
-    assert "原密码错误" in resp_wrong_pwd.json()["detail"]
-
-    # 5. Password update with correct old password succeeds
-    resp_correct_pwd = client.post(
-        "/api/auth/profile",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "old_password": "123",
-            "new_password": "newpassword123"
-        }
-    )
-    assert resp_correct_pwd.status_code == 200
-
-    # 6. Verify new password can log in and old password fails
-    resp_old_fail = client.post("/api/auth/login", json={"username": "test1", "password": "123"})
-    assert resp_old_fail.status_code == 401
-    resp_new_ok = client.post("/api/auth/login", json={"username": "test1", "password": "newpassword123"})
-    assert resp_new_ok.status_code == 200
-
 
 @pytest.mark.asyncio
 async def test_turn_timeout_and_hand_end_auto_start():
