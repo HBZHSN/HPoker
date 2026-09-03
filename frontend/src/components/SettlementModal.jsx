@@ -77,7 +77,13 @@ export default function SettlementModal({
                     <tr key={r.player_id} className="hover:bg-slate-900/40 transition">
                       <td className="p-2.5 font-bold text-white flex items-center gap-1.5">
                         <span className="text-[10px] w-4 text-slate-500">{i + 1}</span>
-                        {r.player_name}
+                        <span
+                          className="w-7 h-7 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-base leading-none flex-shrink-0"
+                          aria-label={`${r.player_name}的头像`}
+                        >
+                          {r.avatar || '👤'}
+                        </span>
+                        <span className="truncate">{r.player_name}</span>
                       </td>
                       <td className="p-2.5 text-center text-slate-300">
                         x{r.rebuy_count}

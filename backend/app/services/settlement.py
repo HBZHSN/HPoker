@@ -13,6 +13,7 @@ from typing import List, Dict, Tuple, Optional
 class PlayerSettlementRecord:
     player_id: str
     player_name: str
+    avatar: str
     rebuy_count: int
     total_buyin_chips: int
     final_chips: int
@@ -25,6 +26,7 @@ class PlayerSettlementRecord:
         return {
             "player_id": self.player_id,
             "player_name": self.player_name,
+            "avatar": self.avatar,
             "rebuy_count": self.rebuy_count,
             "total_buyin_chips": self.total_buyin_chips,
             "final_chips": self.final_chips,
@@ -171,6 +173,7 @@ class SettlementEngine:
         for p in player_data_list:
             pid = p["player_id"]
             pname = p["player_name"]
+            avatar = p.get("avatar") or "👤"
             rebuy_count = p.get("rebuy_count", 1)
             total_buyin = p.get("total_buyin_chips", buyin_chips)
             final_chips = p.get("final_chips", 0)
@@ -186,6 +189,7 @@ class SettlementEngine:
             records.append(PlayerSettlementRecord(
                 player_id=pid,
                 player_name=pname,
+                avatar=avatar,
                 rebuy_count=rebuy_count,
                 total_buyin_chips=total_buyin,
                 final_chips=final_chips,

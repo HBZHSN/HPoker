@@ -77,8 +77,8 @@ def test_room_lifecycle_and_rebuy():
     assert room.room_id in [r["room_id"] for r in rm.list_rooms()]
 
     # Players sit down
-    assert room.sit_down_player("host1", "Alice (Host)", seat_index=0) is True
-    assert room.sit_down_player("user2", "Bob", seat_index=1) is True
+    assert room.sit_down_player("host1", "Alice (Host)", seat_index=0, avatar="🦊") is True
+    assert room.sit_down_player("user2", "Bob", seat_index=1, avatar="🐼") is True
 
     # Bob cannot rebuy when chips > 0
     assert room.rebuy_player("user2") is False
@@ -99,6 +99,14 @@ def test_room_lifecycle_and_rebuy():
     assert report is not None
     assert room.is_ended is True
     assert len(report.player_records) == 2
+    records_by_id = {record.player_id: record for record in report.player_records}
+    assert records_by_id["host1"].avatar == "🦊"
+    assert records_by_id["user2"].avatar == "🐼"
+    serialized_records = {
+        record["player_id"]: record for record in report.to_dict()["player_records"]
+    }
+    assert serialized_records["host1"]["avatar"] == "🦊"
+    assert serialized_records["user2"]["avatar"] == "🐼"
 
 
 def test_ending_room_refunds_unsettled_hand_contributions():

@@ -77,12 +77,20 @@ class Room:
             return 0
         return self.table.add_periodic_time_cards(max_cards=self.config.max_time_cards)
 
-    def track_player(self, player_id: str, name: str, chips_added: int, is_bot: bool = False) -> None:
+    def track_player(
+        self,
+        player_id: str,
+        name: str,
+        chips_added: int,
+        avatar: str = "👤",
+        is_bot: bool = False,
+    ) -> None:
         """Record buyin or rebuy for historical accounting."""
         if player_id not in self.historical_players:
             self.historical_players[player_id] = {
                 "player_id": player_id,
                 "player_name": name,
+                "avatar": avatar or "👤",
                 "is_bot": is_bot,
                 "rebuy_count": 1,
                 "total_buyin_chips": chips_added,
@@ -90,6 +98,8 @@ class Room:
                 "is_seated": True,
             }
         else:
+            self.historical_players[player_id]["player_name"] = name
+            self.historical_players[player_id]["avatar"] = avatar or "👤"
             self.historical_players[player_id]["rebuy_count"] += 1
             self.historical_players[player_id]["total_buyin_chips"] += chips_added
             self.historical_players[player_id]["is_seated"] = True
@@ -116,7 +126,7 @@ class Room:
             is_bot=is_bot,
         )
         if success:
-            self.track_player(player_id, name, buyin, is_bot=is_bot)
+            self.track_player(player_id, name, buyin, avatar=avatar, is_bot=is_bot)
         return success
 
     def add_test_bot(self, seat_index: Optional[int] = None) -> Optional[dict]:
