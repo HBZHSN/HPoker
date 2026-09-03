@@ -336,15 +336,47 @@ def test_raise_fallback_and_clamping():
     # P1 calls
     table.handle_action("p1", ActionType.CALL)
 
-    # P2 raises with 0 amount -> should default to min raise (4) and succeed
+    # P2 cannot raise to 3 (< 2 * 2 = 4)
+    assert table.handle_action("p2", ActionType.RAISE, raise_total_amount=3) is False
+
+    # P2 raises with 0 amount -> should default to min raise 2x (4) and succeed
     assert table.handle_action("p2", ActionType.RAISE, raise_total_amount=0) is True
     assert table.current_round_highest_bet == 4
     assert table.seats[1].chips == 96
 
-    # P1 re-raises with amount=0 -> should default to min raise (6) and succeed
+    # P1 cannot raise below 2x (e.g. 5, 6, 7) when highest_bet is 4
+    assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=5) is False
+    assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=6) is False
+    assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=7) is False
+
+    # P1 re-raises with amount=0 -> should default to min raise 2x (8) and succeed
     assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=0) is True
-    assert table.current_round_highest_bet == 6
-    assert table.seats[0].chips == 94
+    assert table.current_round_highest_bet == 8
+    assert table.seats[0].chips == 92
+
+
+def test_raise_allin_exception_when_less_than_two_times():
+    # Player with chips less than 2x highest_bet can still all-in
+    table = TableStateMachine(max_seats=6, small_blind=10, big_blind=20)
+    table.sit_down("p1", "Alice", seat_index=0, chips=30)  # short stack
+    table.sit_down("p2", "Bob", seat_index=1, chips=200)
+
+    table.start_new_hand()
+    # Alice posted SB 10, remaining chips = 20. Total contribution = 30.
+    # Facing BB 20, 2x would be 40. Alice only has 30 total.
+    legal = table.get_legal_actions("p1")
+    assert legal.can_raise is True
+    assert legal.min_raise_to == 30  # Capped at all-in stack
+    assert legal.max_raise_to == 30
+
+    # Alice cannot raise to 25 (not all-in and < 40)
+    assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=25) is False
+
+    # Alice can all-in with her remaining chips (30)
+    assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=30) is True
+    assert table.seats[0].is_all_in is True
+    assert table.seats[0].chips == 0
+    assert table.current_round_highest_bet == 30
 
 
 def test_bet_and_raise_amounts_use_small_blind_as_unit():

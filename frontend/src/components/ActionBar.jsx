@@ -140,12 +140,19 @@ export default function ActionBar({
 
   // Preset Bet Sizing helpers
   const calcPresetAmount = (ratio) => {
+    if (legalActions?.can_raise) {
+      const callCost = legalActions?.call_amount || 0;
+      const effectivePot = totalPot + callCost;
+      const raiseAdd = Math.round((effectivePot * ratio) / blindUnit) * blindUnit;
+      const target = (selfSeat?.current_bet || 0) + callCost + raiseAdd;
+      return alignAmount(Math.max(minVal, target));
+    }
     const target = Math.round((totalPot * ratio) / blindUnit) * blindUnit;
     return alignAmount(target);
   };
 
   const calcBBAmount = (mult) => {
-    return alignAmount(Math.round(mult * bigBlind));
+    return Math.round((mult * bigBlind) / blindUnit) * blindUnit;
   };
 
   const adjustBB = (multiplier) => {
@@ -561,12 +568,13 @@ export default function ActionBar({
         <div className="grid grid-cols-4 gap-1 lg:gap-1.5">
           {potPresets.map((preset, idx) => {
             const amount = preset.isMax ? maxVal : calcPresetAmount(preset.ratio);
+            const isTooSmall = !preset.isMax && amount < sizingMin;
             const isSelected = isMyTurn && currentAmount === amount && (legalActions?.can_bet || legalActions?.can_raise);
             return (
               <button
                 key={idx}
                 onClick={() => (preset.isMax ? executeAllIn() : executeBetOrRaise(amount))}
-                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in))}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in)) || isTooSmall}
                 className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border ${
                   isSelected
                     ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -597,13 +605,15 @@ export default function ActionBar({
         {/* BB Multipliers */}
         <div className="grid grid-cols-4 gap-1 lg:gap-1.5">
           {bbPresets.map((preset, idx) => {
-            const amount = calcBBAmount(preset.mult);
+            const rawAmount = calcBBAmount(preset.mult);
+            const amount = alignAmount(rawAmount);
+            const isTooSmall = rawAmount < sizingMin;
             const isSelected = isMyTurn && currentAmount === amount && (legalActions?.can_bet || legalActions?.can_raise);
             return (
               <button
                 key={idx}
                 onClick={() => executeBetOrRaise(amount)}
-                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise) || isTooSmall}
                 className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border ${
                   isSelected
                     ? 'bg-amber-950/60 border-amber-400/80 shadow-[0_0_8px_rgba(251,191,36,0.2)]'
@@ -614,7 +624,7 @@ export default function ActionBar({
                   {preset.label}
                 </span>
                 <span className={`text-[10px] lg:text-[11px] font-black ${isSelected ? 'text-amber-300' : 'text-slate-400'}`}>
-                  ${amount}
+                  ${rawAmount}
                 </span>
               </button>
             );

@@ -500,8 +500,8 @@ class TableStateMachine:
         # Can Raise if highest_bet > 0 and player has more chips than call_cost
         if highest_bet > 0 and chips > call_cost:
             la.can_raise = True
-            # Standard NL min raise is current_bet + min_raise_increment
-            min_raise_to = highest_bet + self.min_raise_increment
+            # Raise sizing must be at least 2x the current highest bet (unless all-in with fewer chips)
+            min_raise_to = highest_bet * 2
             la.min_raise_to = min(min_raise_to, curr_round_bet + chips)
             la.max_raise_to = curr_round_bet + chips
 
@@ -570,42 +570,35 @@ class TableStateMachine:
                 else:
                     return False
 
-            # Clamp if below minimum legal raise but player has enough chips
-            if highest_bet == 0 and target_bet < self.big_blind:
-                if current_player.chips >= self.big_blind:
-                    target_bet = min(self.big_blind, current_player.chips)
-            elif highest_bet > 0:
-                min_target = highest_bet + self.min_raise_increment
-                if target_bet < min_target:
-                    # If player has enough chips to make min raise, clamp up to min_target
-                    if curr_round_bet + current_player.chips >= min_target:
-                        target_bet = min_target
+            max_possible_bet = curr_round_bet + current_player.chips
+            if target_bet > max_possible_bet:
+                target_bet = max_possible_bet
 
             added_chips = target_bet - curr_round_bet
             if added_chips <= 0:
                 return False
 
-            if added_chips > current_player.chips:
-                # Fallback: if all-in
-                added_chips = current_player.chips
-                target_bet = curr_round_bet + added_chips
+            is_all_in = (target_bet == max_possible_bet)
 
-            # Room-created games use the small blind as the betting unit. An
-            # explicit ALL_IN action remains available for short stacks whose
-            # remaining chips are not an exact multiple.
-            if added_chips != current_player.chips and target_bet % self.small_blind != 0:
-                return False
+            # Sizing validation (all-in is exempt from min sizing rules)
+            if not is_all_in:
+                if highest_bet == 0:
+                    if target_bet < self.big_blind:
+                        return False
+                else:
+                    # Raise sizing must be at least 2x the current highest bet
+                    if target_bet < highest_bet * 2:
+                        return False
 
-            # Check min-raise rules
+                # Room-created games use the small blind as the betting unit. An
+                # explicit ALL_IN action remains available for short stacks whose
+                # remaining chips are not an exact multiple.
+                if target_bet % self.small_blind != 0:
+                    return False
+
             raise_diff = target_bet - highest_bet
-            if target_bet < curr_round_bet + current_player.chips:  # If not all-in
-                if highest_bet == 0 and target_bet < self.big_blind:
-                    return False
-                if highest_bet > 0 and raise_diff < self.min_raise_increment:
-                    return False
-
-            if raise_diff >= self.min_raise_increment:
-                self.min_raise_increment = raise_diff
+            if raise_diff > 0:
+                self.min_raise_increment = max(self.big_blind, target_bet)
                 self.last_raiser_seat = current_player.seat_index
 
             current_player.chips -= added_chips
@@ -635,10 +628,8 @@ class TableStateMachine:
             self.pot_manager.record_bet(player_id, allin_chips)
 
             if target_bet > highest_bet:
-                raise_diff = target_bet - highest_bet
-                if raise_diff >= self.min_raise_increment:
-                    self.min_raise_increment = raise_diff
-                    self.last_raiser_seat = current_player.seat_index
+                self.min_raise_increment = max(self.big_blind, target_bet)
+                self.last_raiser_seat = current_player.seat_index
                 self.current_round_highest_bet = target_bet
                 # Re-open action for others
                 for p in self.active_in_hand_players:
