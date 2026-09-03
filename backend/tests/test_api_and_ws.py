@@ -437,36 +437,17 @@ def test_host_delete_room_ws_broadcast():
             assert room_manager.get_room(room_id) is None
 
 
-@pytest.mark.asyncio
-async def test_auto_delete_room_when_empty():
-    import asyncio
-    from backend.app.websocket.connection_manager import ws_manager
+def test_unsettled_room_is_retained_when_empty():
     from backend.app.websocket.router import schedule_room_empty_check
 
-    client = TestClient(app)
-
-    resp = client.post("/api/rooms", json={
-        "host_player_id": "u_fwd",
-        "room_name": "Auto Delete Empty Room",
-        "buyin_chips": 1000,
-        "cash_value": 100.0,
-        "small_blind": 5,
-        "big_blind": 10,
-        "action_timeout": 15,
-        "max_seats": 6,
-    })
-    room_id = resp.json()["room_id"]
+    room = room_manager.create_room(
+        host_player_id="u_fwd",
+        config=RoomConfig(room_name="Reconnectable Empty Room"),
+    )
+    room_id = room.room_id
     assert room_manager.get_room(room_id) is not None
 
-    # Connect player
-    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws:
-        _ = ws.receive_json()
-        assert room_manager.get_room(room_id) is not None
-        assert ws_manager.get_room_connection_count(room_id) >= 1
-
-    # Disconnected now -> ws closed -> trigger fast empty check with 0.1s delay
+    # A legacy empty-check request must no longer delete an un-settled room.
     schedule_room_empty_check(room_id, delay_seconds=0.1)
-    await asyncio.sleep(0.2)
 
-    # Room must be automatically deleted
-    assert room_manager.get_room(room_id) is None
+    assert room_manager.get_room(room_id) is not None

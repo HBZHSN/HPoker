@@ -195,9 +195,6 @@ async def create_room(req: CreateRoomRequest):
         max_seats=req.max_seats,
     )
     room = room_manager.create_room(host_player_id=req.host_player_id, config=cfg)
-    # Schedule initial empty room cleanup in case creator never enters room
-    from backend.app.websocket.router import schedule_room_empty_check
-    schedule_room_empty_check(room.room_id, delay_seconds=30.0)
     return room.to_dict()
 
 

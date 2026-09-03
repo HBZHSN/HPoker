@@ -6,6 +6,8 @@ import ProfileModal from './components/ProfileModal';
 import AdminUserModal from './components/AdminUserModal';
 import { soundEngine } from './sound/SoundEngine';
 
+const lastRoomStorageKey = (userId) => `hpoker_active_room_${userId}`;
+
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem('hpoker_token') || localStorage.getItem('ggpoker_token') || '');
   const [currentUser, setCurrentUser] = useState(() => {
@@ -15,8 +17,18 @@ export default function App() {
 
   const [users, setUsers] = useState([]);
   const [rooms, setRooms] = useState([]);
-  const [activeRoomId, setActiveRoomId] = useState(null);
+  const [activeRoomId, setActiveRoomId] = useState(() => {
+    const savedUser = localStorage.getItem('hpoker_user') || localStorage.getItem('ggpoker_user');
+    if (!savedUser) return null;
+    try {
+      const user = JSON.parse(savedUser);
+      return localStorage.getItem(lastRoomStorageKey(user.user_id));
+    } catch {
+      return null;
+    }
+  });
   const [roomData, setRoomData] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState(activeRoomId ? 'connecting' : 'idle');
 
   // Modals
   const [profileOpen, setProfileOpen] = useState(false);
@@ -66,6 +78,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    if (currentUser?.user_id) {
+      localStorage.removeItem(lastRoomStorageKey(currentUser.user_id));
+    }
     setToken('');
     setCurrentUser(null);
     setActiveRoomId(null);
@@ -104,9 +119,39 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchLobbyData]);
 
-  // Connect to WebSocket when entering a room
+  // A remembered room takes priority over the lobby after login or refresh.
   useEffect(() => {
-    if (!activeRoomId || !currentUser) {
+    if (!currentUser?.user_id) return;
+    const savedRoomId = localStorage.getItem(lastRoomStorageKey(currentUser.user_id));
+    if (savedRoomId) {
+      setActiveRoomId(savedRoomId);
+      setConnectionStatus('connecting');
+    }
+  }, [currentUser?.user_id]);
+
+  const rememberAndEnterRoom = useCallback((roomId) => {
+    if (currentUser?.user_id) {
+      localStorage.setItem(lastRoomStorageKey(currentUser.user_id), roomId);
+    }
+    setRoomData(null);
+    setActiveRoomId(roomId);
+    setConnectionStatus('connecting');
+  }, [currentUser?.user_id]);
+
+  const handleLeaveRoom = useCallback(() => {
+    if (currentUser?.user_id) {
+      localStorage.removeItem(lastRoomStorageKey(currentUser.user_id));
+    }
+    setActiveRoomId(null);
+    setRoomData(null);
+    setConnectionStatus('idle');
+    fetchLobbyData();
+  }, [currentUser?.user_id, fetchLobbyData]);
+
+  // Keep reconnecting after mobile background suspension. Returning to the
+  // foreground triggers an immediate attempt instead of waiting for backoff.
+  useEffect(() => {
+    if (!activeRoomId || !currentUser?.user_id) {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -114,40 +159,105 @@ export default function App() {
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    let disposed = false;
+    let terminalClose = false;
+    let reconnectTimer = null;
+    let heartbeatTimer = null;
+    let retryCount = 0;
 
-    ws.onopen = () => {
-      console.log(`WebSocket connected to room ${activeRoomId}`);
+    const clearSocketTimers = () => {
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+      reconnectTimer = null;
+      heartbeatTimer = null;
     };
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.event === 'ROOM_STATE') {
-          setRoomData(msg.payload);
-        } else if (msg.event === 'SOUND_EFFECT') {
-          soundEngine.play(msg.payload.sound);
-        } else if (msg.event === 'ROOM_DELETED') {
-          alert(msg.payload?.message || '房间已被房主解散');
-          handleLeaveRoom();
+    const connect = () => {
+      if (disposed || terminalClose) return;
+      setConnectionStatus(retryCount > 0 ? 'retrying' : 'connecting');
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (disposed) return;
+        retryCount = 0;
+        setConnectionStatus('connected');
+        heartbeatTimer = window.setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ event: 'PING', payload: {} }));
+          }
+        }, 15000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.event === 'ROOM_STATE') {
+            localStorage.setItem(lastRoomStorageKey(currentUser.user_id), activeRoomId);
+            setRoomData(msg.payload);
+            setConnectionStatus('connected');
+          } else if (msg.event === 'SOUND_EFFECT') {
+            soundEngine.play(msg.payload.sound);
+          } else if (msg.event === 'ROOM_DELETED') {
+            terminalClose = true;
+            alert(msg.payload?.message || '房间已被房主解散');
+            handleLeaveRoom();
+          } else if (msg.event === 'ERROR_MESSAGE' && msg.payload?.message === 'Room not found') {
+            terminalClose = true;
+            handleLeaveRoom();
+          }
+        } catch (err) {
+          console.error("Error parsing WS message:", err);
         }
-      } catch (err) {
-        console.error("Error parsing WS message:", err);
+      };
+
+      ws.onclose = () => {
+        if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+        if (wsRef.current === ws) wsRef.current = null;
+        if (disposed || terminalClose) return;
+        retryCount += 1;
+        setConnectionStatus('retrying');
+        const delay = Math.min(1000 * (2 ** (retryCount - 1)), 10000);
+        reconnectTimer = window.setTimeout(connect, delay);
+      };
+
+      ws.onerror = () => ws.close();
+    };
+
+    let wasHidden = document.visibilityState === 'hidden';
+    const reconnectWhenVisible = () => {
+      if (document.visibilityState === 'hidden') {
+        wasHidden = true;
+        return;
       }
+      if (!wasHidden) return;
+      wasHidden = false;
+      const socket = wsRef.current;
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+        if (wsRef.current === socket) wsRef.current = null;
+      }
+      connect();
     };
 
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-    };
-
+    connect();
+    document.addEventListener('visibilitychange', reconnectWhenVisible);
     return () => {
-      ws.close();
+      disposed = true;
+      document.removeEventListener('visibilitychange', reconnectWhenVisible);
+      clearSocketTimers();
+      if (wsRef.current) wsRef.current.close();
       wsRef.current = null;
     };
-  }, [activeRoomId, currentUser]);
+  }, [activeRoomId, currentUser?.user_id, handleLeaveRoom]);
 
   const sendWsEvent = (event, payload = {}) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -163,7 +273,7 @@ export default function App() {
         body: JSON.stringify(config),
       });
       const data = await res.json();
-      setActiveRoomId(data.room_id);
+      rememberAndEnterRoom(data.room_id);
     } catch (e) {
       console.error("Failed to create room:", e);
     }
@@ -191,13 +301,7 @@ export default function App() {
   };
 
   const handleJoinRoom = (roomId) => {
-    setActiveRoomId(roomId);
-  };
-
-  const handleLeaveRoom = () => {
-    setActiveRoomId(null);
-    setRoomData(null);
-    fetchLobbyData();
+    rememberAndEnterRoom(roomId);
   };
 
   // If not authenticated, require login
@@ -218,6 +322,22 @@ export default function App() {
           onSendWsEvent={sendWsEvent}
           onLeaveRoom={handleLeaveRoom}
         />
+      ) : activeRoomId ? (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center p-6">
+          <div className="w-10 h-10 rounded-full border-4 border-slate-700 border-t-amber-400 animate-spin" />
+          <div>
+            <div className="text-sm font-black text-amber-300">
+              {connectionStatus === 'retrying' ? '正在重新连接牌桌' : '正在恢复上次牌桌'}
+            </div>
+            <div className="mt-1 text-xs text-slate-500 font-mono">{activeRoomId}</div>
+          </div>
+          <button
+            onClick={handleLeaveRoom}
+            className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-300"
+          >
+            返回大厅
+          </button>
+        </div>
       ) : (
         <Lobby
           users={users}
@@ -256,4 +376,3 @@ export default function App() {
     </div>
   );
 }
-

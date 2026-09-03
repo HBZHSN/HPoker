@@ -311,14 +311,12 @@ async def trigger_room_turn_timer(room_id: str):
 
 
 def schedule_room_empty_check(room_id: str, delay_seconds: float = 3.0) -> None:
-    """Schedule auto-deletion of a room if no players remain connected."""
-    async def _cleanup_if_empty(r_id: str):
-        if ws_manager.get_room_connection_count(r_id) == 0:
-            logger.info(f"Room {r_id} is empty (0 connections), auto-deleting room.")
-            timeout_manager.cancel_all_timers(r_id)
-            room_manager.delete_room(r_id)
+    """Retain an empty active room so disconnected clients can resume it.
 
-    timeout_manager.schedule_empty_room_cleanup(room_id, delay_seconds, _cleanup_if_empty)
+    Kept as a compatibility hook for older callers. Rooms are now removed only
+    by an explicit host/admin disband operation.
+    """
+    timeout_manager.cancel_empty_room_cleanup(room_id)
 
 
 @ws_router.websocket("/ws/{room_id}/{user_id}")
@@ -554,9 +552,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     finally:
         r_id, u_id = ws_manager.disconnect(websocket)
         if r_id:
-            if ws_manager.get_room_connection_count(r_id) == 0:
-                schedule_room_empty_check(r_id, delay_seconds=3.0)
-            else:
+            if ws_manager.get_room_connection_count(r_id) > 0:
                 active_r = room_manager.get_room(r_id)
                 if active_r and not active_r.is_ended:
                     await ws_manager.broadcast_room_state(active_r)
