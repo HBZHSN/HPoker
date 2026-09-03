@@ -138,12 +138,6 @@ export default function PokerTable({
     onSendWsEvent('SIT_DOWN', { seat_index: seatIndex });
   };
 
-  const handleStandUp = () => {
-    if (selfSeat) {
-      onSendWsEvent('STAND_UP', { seat_index: selfSeat.seat_index });
-    }
-  };
-
   const handleRebuy = () => {
     onSendWsEvent('REBUY', {});
   };
@@ -297,16 +291,6 @@ export default function PokerTable({
             </button>
           )}
 
-          {/* Stand Up Button */}
-          {selfSeat && (
-            <button
-              onClick={handleStandUp}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
-            >
-              站起
-            </button>
-          )}
-
           {/* Test bot control is intentionally visible to the host only. */}
           {isHost && !room?.is_ended && (
             <button
@@ -316,7 +300,7 @@ export default function PokerTable({
               title={canAddTestBot ? '仅用于测试：添加一个随机行动机器人' : '只能在牌局开始前或结束后、且有空座时添加机器人'}
             >
               <Bot className="w-3.5 h-3.5" />
-              <span>测试机器人</span>
+              <span>机器人</span>
               {botCount > 0 && <span>×{botCount}</span>}
             </button>
           )}
@@ -328,7 +312,7 @@ export default function PokerTable({
               className="flex items-center gap-1 px-3 py-1.5 bg-red-900/80 hover:bg-red-800 text-red-200 rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"
             >
               <PowerOff className="w-3.5 h-3.5" />
-              结束房间并结算
+              结算
             </button>
           )}
 
@@ -340,7 +324,7 @@ export default function PokerTable({
               title="解散并删除房间"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              解散房间
+              解散
             </button>
           )}
         </div>

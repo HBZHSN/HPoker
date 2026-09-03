@@ -82,7 +82,6 @@ ROOM_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("unready", ("unrd",), "unready", "取消准备", "牌局"),
     CommandSpec("start", ("begin",), "start", "开始下一手", "牌局", True),
     CommandSpec("sit", ("seat",), "sit <座位>", "入座", "座位", True),
-    CommandSpec("stand", ("standup",), "stand", "离座", "座位"),
     CommandSpec("rebuy", ("rb", "buyin"), "rebuy", "补码", "座位", True),
     CommandSpec("bot", ("addbot", "add_bot", "add-bot", "testbot"), "bot [座位]", "添加测试机器人", "管理"),
     CommandSpec("rit", (), "rit <1|2>", "选择发牌次数", "牌局"),

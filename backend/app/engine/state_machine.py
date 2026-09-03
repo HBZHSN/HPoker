@@ -256,24 +256,12 @@ class TableStateMachine:
                 count += 1
         return count
 
-    def stand_up(self, seat_index: int) -> Optional[PlayerSeat]:
-        if 0 <= seat_index < self.max_seats:
-            player = self.seats[seat_index]
-            if player:
-                if self.street not in (Street.IDLE, Street.HAND_END):
-                    # Fold if game is in progress
-                    if not player.is_folded:
-                        self.handle_action(player.player_id, ActionType.FOLD)
-                self.seats[seat_index] = None
-                return player
-        return None
-
     def refund_unsettled_hand(self) -> Dict[str, int]:
         """Return every chip committed to a hand that has not been settled.
 
         Ending a cash-game room must not treat chips sitting in an unfinished
         pot as lost money. The room layer uses the returned contribution map
-        to update historical records for players who already stood up.
+        to update historical records for participants outside the active seats.
         """
         if self.street in (Street.IDLE, Street.SHOWDOWN, Street.HAND_END):
             return {}

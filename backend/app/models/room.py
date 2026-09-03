@@ -172,16 +172,6 @@ class Room:
                 self.historical_players[player_id]["total_buyin_chips"] += buyin
         return success
 
-    def stand_up_player(self, seat_index: int) -> Optional[dict]:
-        """Player stands up and leaves table."""
-        player = self.table.stand_up(seat_index)
-        if player:
-            if player.player_id in self.historical_players:
-                self.historical_players[player.player_id]["final_chips"] = player.chips
-                self.historical_players[player.player_id]["is_seated"] = False
-            return player.to_dict()
-        return None
-
     def end_room(self, requester_id: str) -> Optional[SettlementReport]:
         """Host ends the room and calculates final settlements."""
         if requester_id != self.host_player_id:

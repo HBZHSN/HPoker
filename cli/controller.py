@@ -660,13 +660,6 @@ class PokerCliController:
                 return
             await self._send_ws("sit_down", seat)
             return
-        if name == "stand":
-            seat = self._get_my_seat_index()
-            if seat is None:
-                self._output("你当前未入座。")
-            else:
-                await self._send_ws("stand_up", seat)
-            return
         if name == "bot":
             seat = self._parse_nonnegative_int(args[0]) if args else None
             await self._handle_add_bot(seat)

@@ -9,7 +9,6 @@ class EventType(str, Enum):
     # Client -> Server
     JOIN_ROOM = "JOIN_ROOM"
     SIT_DOWN = "SIT_DOWN"
-    STAND_UP = "STAND_UP"
     START_GAME = "START_GAME"
     PLAYER_ACTION = "PLAYER_ACTION"
     REBUY = "REBUY"

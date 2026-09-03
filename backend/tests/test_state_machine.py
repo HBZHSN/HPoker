@@ -2,7 +2,7 @@ import pytest
 from backend.app.engine.state_machine import TableStateMachine, Street, ActionType
 
 
-def test_sit_down_and_stand_up():
+def test_sit_down_validation():
     table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
     assert table.sit_down("p1", "Alice", seat_index=0, chips=100) is True
     assert table.sit_down("p2", "Bob", seat_index=1, chips=100) is True
@@ -13,12 +13,6 @@ def test_sit_down_and_stand_up():
     assert table.sit_down("p1", "Alice", seat_index=2, chips=100) is False
 
     assert len(table.active_seated_players) == 2
-
-    # Stand up
-    player = table.stand_up(0)
-    assert player is not None
-    assert player.name == "Alice"
-    assert len(table.active_seated_players) == 1
 
 
 def test_two_player_heads_up_flow():

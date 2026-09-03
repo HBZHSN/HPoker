@@ -108,7 +108,7 @@ CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模�
 - `bet <额度>` / `raise <额度>`：下注或加注；界面优先提示 `raise 200` 这样的明确筹码额，快捷键为 `r`。
 - 底池比例可紧凑输入：`r0.5` 表示半池、`r1` 表示整池；也兼容 `r 1/2p`、`r 2/3p`、`r 1.5p` 和 `r pot`。
 - 额度还支持 `min`、`max`、`10bb`、`20sb`；系统会自动按小盲步长对齐并限制在合法范围。
-- `ready`、`start`、`sit 2`、`stand`、`rebuy`：准备、开局、入座、离座和补码。
+- `ready`、`start`、`sit 2`、`rebuy`：准备、开局、入座和补码。
 - `show 1` / `show 2` / `show all` / `muck`：摊牌时秀牌或盖牌；`rit 1` / `rit 2`：Run It Twice 投票。
 - `reconnect`：手动重连；`status`、`history`、`redraw`：查看状态、行动记录或重绘。`r` 专用于下注，不再作为重绘别名。
 - `bill` / `export settlement.txt`：查看或导出结算报表；房主使用 `end` 结束房间，`delete` 删除已结束房间。

@@ -78,6 +78,7 @@ def test_cli_commands_use_one_scope_aware_registry():
     assert normalize_command(parse_command("s1"), "room").args == ("1",)
     assert normalize_command(parse_command("muck"), "room").args == ("muck",)
     assert any(spec.name == "raise" and "r" in spec.aliases for spec in command_specs("room"))
+    assert all(spec.name != "stand" for spec in command_specs("room"))
 
     for scope in ("lobby", "room"):
         assert command_alias_conflicts(scope) == {}

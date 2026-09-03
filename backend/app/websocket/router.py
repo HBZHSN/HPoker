@@ -373,13 +373,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
 
-            elif event == EventType.STAND_UP:
-                seat_index = payload.get("seat_index")
-                if seat_index is not None:
-                    room.stand_up_player(seat_index)
-                    await ws_manager.broadcast_room_state(room)
-                    await trigger_room_after_action(room_id)
-
             elif event == EventType.REBUY:
                 ok = room.rebuy_player(user_id)
                 if ok:
