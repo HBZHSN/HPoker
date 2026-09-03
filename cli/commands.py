@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import math
 import re
 import shlex
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 
 class CommandParseError(ValueError):
@@ -35,6 +35,108 @@ class CliCommand:
     @property
     def first_arg(self) -> Optional[str]:
         return self.args[0] if self.args else None
+
+
+@dataclass(frozen=True)
+class CommandSpec:
+    """One canonical command and the aliases exposed by a UI scope."""
+
+    name: str
+    aliases: tuple[str, ...]
+    usage: str
+    description: str
+    group: str = "通用"
+    sidebar: bool = False
+
+    @property
+    def tokens(self) -> tuple[str, ...]:
+        return (self.name, *self.aliases)
+
+
+LOBBY_COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec("join", ("j",), "join <序号|ID>", "加入房间", "房间", True),
+    CommandSpec("create", ("new", "c"), "create [选项]", "创建房间", "房间", True),
+    CommandSpec("rooms", ("refresh", "list", "r"), "rooms", "刷新房间", "房间", True),
+    CommandSpec("info", ("inspect", "show"), "info <序号|ID>", "查看详情", "房间"),
+    CommandSpec("users", ("userlist",), "users", "查看用户", "账户"),
+    CommandSpec("user", ("switch", "login", "logout"), "user", "切换账号", "账户"),
+    CommandSpec("mode", ("view",), "mode <dashboard|stream>", "切换视图", "设置"),
+    CommandSpec("color", (), "color <on|off>", "切换颜色", "设置"),
+    CommandSpec("help", ("h", "?"), "help", "完整帮助", "通用", True),
+    CommandSpec("quit", ("q", "exit"), "quit", "退出程序", "通用", True),
+)
+
+
+ROOM_COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec("check", ("call", "c"), "check", "过牌 / 跟注", "行动", True),
+    CommandSpec("fold", ("f",), "fold", "弃牌", "行动", True),
+    CommandSpec("raise", ("bet", "r", "b"), "raise [额度]", "下注 / 加注", "行动", True),
+    CommandSpec("allin", ("all-in", "ai", "a"), "allin", "全下", "行动", True),
+    CommandSpec("timecard", ("tc", "time"), "timecard", "使用时间卡", "行动"),
+    CommandSpec("ready", ("rd",), "ready", "准备", "牌局", True),
+    CommandSpec("unready", ("unrd",), "unready", "取消准备", "牌局"),
+    CommandSpec("start", ("begin",), "start", "开始下一手", "牌局", True),
+    CommandSpec("sit", ("seat",), "sit <座位>", "入座", "座位", True),
+    CommandSpec("stand", ("standup",), "stand", "离座", "座位"),
+    CommandSpec("rebuy", ("rb", "buyin"), "rebuy", "补码", "座位", True),
+    CommandSpec("bot", ("addbot", "add_bot", "add-bot", "testbot"), "bot [座位]", "添加机器人", "管理"),
+    CommandSpec("rit", (), "rit <1|2>", "选择发牌次数", "牌局"),
+    CommandSpec("show", ("showall", "s1", "s2", "sa", "muck", "hide"), "show <1|2|all|muck>", "亮牌 / 盖牌", "牌局"),
+    CommandSpec("status", ("info", "table"), "status", "牌桌详情", "查看"),
+    CommandSpec("history", ("log",), "history [数量]", "最近动态", "查看"),
+    CommandSpec("bill", ("report", "settlement"), "bill", "结算账单", "查看"),
+    CommandSpec("export", ("save",), "export [路径]", "导出账单", "查看"),
+    CommandSpec("reconnect", ("retry",), "reconnect", "重新连接", "连接"),
+    CommandSpec("redraw", ("clear", "cls", "refresh"), "redraw", "重绘界面", "设置"),
+    CommandSpec("mode", ("view",), "mode <dashboard|stream>", "切换视图", "设置"),
+    CommandSpec("color", (), "color <on|off>", "切换颜色", "设置"),
+    CommandSpec("end", ("endroom",), "end", "结束并结算", "管理"),
+    CommandSpec("delete", ("del", "destroy"), "delete", "解散房间", "管理"),
+    CommandSpec("help", ("h", "?"), "help", "完整帮助", "通用", True),
+    CommandSpec("leave", ("back", "lobby", "exit"), "leave", "返回大厅", "通用", True),
+)
+
+
+COMMANDS_BY_SCOPE: Dict[str, tuple[CommandSpec, ...]] = {
+    "lobby": LOBBY_COMMANDS,
+    "room": ROOM_COMMANDS,
+}
+
+
+def command_specs(scope: str) -> tuple[CommandSpec, ...]:
+    """Return the command catalogue used by parsing, help, and sidebars."""
+
+    return COMMANDS_BY_SCOPE.get(scope, ())
+
+
+def normalize_command(command: CliCommand, scope: str) -> CliCommand:
+    """Resolve a scope-specific alias to its canonical command name.
+
+    Aliases may intentionally overlap between scopes: ``c`` creates a room in
+    the lobby and checks/calls at a table; ``r`` refreshes the lobby and raises
+    at a table.  Legacy show-card aliases are converted into explicit args so
+    the controller only needs one handler.
+    """
+
+    original_name = command.name.lower()
+    canonical = original_name
+    for spec in command_specs(scope):
+        if original_name in spec.tokens:
+            canonical = spec.name
+            break
+
+    args = command.args
+    show_args = {
+        "showall": ("all",),
+        "sa": ("all",),
+        "s1": ("1",),
+        "s2": ("2",),
+        "muck": ("muck",),
+        "hide": ("muck",),
+    }
+    if scope == "room" and canonical == "show" and original_name in show_args:
+        args = (*show_args[original_name], *args)
+    return CliCommand(name=canonical, args=args, raw=command.raw)
 
 
 def parse_command(line: str) -> Optional[CliCommand]:

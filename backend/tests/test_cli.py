@@ -16,6 +16,8 @@ from cli.text_utils import display_width
 from cli.commands import (
     BetSizingContext,
     CommandParseError,
+    command_specs,
+    normalize_command,
     parse_command,
     resolve_bet_amount,
 )
@@ -48,6 +50,22 @@ def test_cli_command_parser_and_bet_sizing():
     assert resolve_bet_amount("all-in", context) == 1000
     assert resolve_bet_amount(None, context) == 40
     assert resolve_bet_amount("not-an-amount", context) is None
+
+
+def test_cli_commands_use_one_scope_aware_registry():
+    lobby_create = normalize_command(parse_command("c"), "lobby")
+    room_check = normalize_command(parse_command("c"), "room")
+    lobby_refresh = normalize_command(parse_command("r"), "lobby")
+    room_raise = normalize_command(parse_command("r 1/2p"), "room")
+
+    assert lobby_create.name == "create"
+    assert room_check.name == "check"
+    assert lobby_refresh.name == "rooms"
+    assert room_raise.name == "raise"
+    assert room_raise.args == ("1/2p",)
+    assert normalize_command(parse_command("s1"), "room").args == ("1",)
+    assert normalize_command(parse_command("muck"), "room").args == ("muck",)
+    assert any(spec.name == "raise" and "r" in spec.aliases for spec in command_specs("room"))
 
 
 def test_cli_entrypoint_options():

@@ -21,6 +21,7 @@ from cli.commands import (
     BetSizingContext,
     CommandParseError,
     CliCommand,
+    normalize_command,
     parse_command,
     resolve_bet_amount,
 )
@@ -307,46 +308,47 @@ class PokerCliController:
         command: CliCommand,
         rooms: Sequence[Dict[str, Any]],
     ) -> bool:
+        command = normalize_command(command, "lobby")
         name = command.name
         args = command.args
 
-        if name in {"q", "quit", "exit"}:
+        if name == "quit":
             self._output("再见！祝游戏愉快！")
             return False
-        if name in {"r", "refresh", "list", "rooms"}:
+        if name == "rooms":
             return True
-        if name in {"help", "h", "?"}:
+        if name == "help":
             self._output(self.renderer.render_help("lobby"), panel=True)
             return True
-        if name in {"users", "userlist"}:
+        if name == "users":
             await self._show_users()
             return True
-        if name in {"mode", "view"}:
+        if name == "mode":
             self._set_mode(args[0] if args else None)
             return True
         if name == "color":
             self._set_color(args[0] if args else None)
             return True
-        if name in {"user", "switch", "login", "logout"}:
+        if name == "user":
             self._end_tui()
             self.current_user = None
             self.auth_token = None
             self.default_username = None
             return await self.login_flow()
-        if name in {"create", "new", "c"}:
+        if name == "create":
             if args and args[0].lower() in {"help", "?"}:
                 self._output(self._render_create_help(), panel=True)
             else:
                 await self.create_room_flow(args)
             return True
-        if name in {"join", "j"}:
+        if name == "join":
             room_ref = args[0] if args else await self._async_input("房间序号或 ID: ")
             if self._stdin_closed:
                 return False
             if room_ref.strip():
                 await self.enter_room(self._resolve_room_ref(room_ref.strip(), rooms))
             return True
-        if name in {"info", "inspect", "show"}:
+        if name == "info":
             if not args:
                 self._output("用法: info <房间序号或 room_id>")
             else:
@@ -587,31 +589,32 @@ class PokerCliController:
                 self._output(self.renderer.c(f"命令执行失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _dispatch_room_command(self, command: CliCommand) -> None:
+        command = normalize_command(command, "room")
         name = command.name
         args = command.args
 
-        if name in {"leave", "back", "lobby", "exit"}:
+        if name == "leave":
             self._output("正在离开房间...")
             self._in_room = False
             return
-        if name in {"help", "h", "?"}:
+        if name == "help":
             self._print_in_game_help()
             return
-        if name in {"redraw", "clear", "cls", "refresh"}:
+        if name == "redraw":
             await self._redraw_room()
             return
-        if name in {"status", "info", "table"}:
+        if name == "status":
             if self.active_room_data:
                 self._output(self.renderer.render_room_details(self.active_room_data), panel=True)
             else:
                 self._output("尚未收到房间状态。")
             return
-        if name in {"history", "log"}:
+        if name == "history":
             limit = self._parse_positive_int(args[0], 10) if args else 10
             if self.active_room_data:
                 self._output(self.renderer.render_action_history(self.active_room_data, limit), panel=True)
             return
-        if name in {"mode", "view"}:
+        if name == "mode":
             self._set_mode(args[0] if args else None)
             if self.active_room_data:
                 await self._redraw_room()
@@ -619,22 +622,22 @@ class PokerCliController:
         if name == "color":
             self._set_color(args[0] if args else None)
             return
-        if name in {"reconnect", "retry"}:
+        if name == "reconnect":
             await self._reconnect_room()
             return
-        if name in {"ready", "rd"}:
+        if name == "ready":
             await self._send_ws("player_ready", True)
             return
-        if name in {"unready", "unrd"}:
+        if name == "unready":
             await self._send_ws("player_ready", False)
             return
-        if name in {"start", "begin"}:
+        if name == "start":
             await self._send_ws("start_game")
             return
-        if name in {"rebuy", "rb", "buyin"}:
+        if name == "rebuy":
             await self._send_ws("rebuy")
             return
-        if name in {"sit", "seat"}:
+        if name == "sit":
             if not args:
                 self._output("用法: sit <座位号>（从 0 开始）")
                 return
@@ -644,33 +647,33 @@ class PokerCliController:
                 return
             await self._send_ws("sit_down", seat)
             return
-        if name in {"stand", "standup"}:
+        if name == "stand":
             seat = self._get_my_seat_index()
             if seat is None:
                 self._output("你当前未入座。")
             else:
                 await self._send_ws("stand_up", seat)
             return
-        if name in {"bot", "addbot", "add_bot", "add-bot", "testbot"}:
+        if name == "bot":
             seat = self._parse_nonnegative_int(args[0]) if args else None
             await self._handle_add_bot(seat)
             return
 
         # Action aliases are intentionally checked before the generic utility
         # commands so ``r`` always means raise in a room; redraw is explicit.
-        if name in {"check", "call", "c"}:
+        if name == "check":
             await self._handle_check_or_call()
             return
-        if name in {"fold", "f"}:
+        if name == "fold":
             await self._send_action("FOLD", 0)
             return
-        if name in {"allin", "all-in", "ai", "a"}:
+        if name == "allin":
             await self._handle_all_in()
             return
-        if name in {"bet", "raise", "r", "b"}:
+        if name == "raise":
             await self._handle_raise_command([name, *args])
             return
-        if name in {"tc", "time", "timecard"}:
+        if name == "timecard":
             await self._send_ws("use_time_card")
             return
         if name == "rit":
@@ -680,19 +683,19 @@ class PokerCliController:
             else:
                 await self._send_ws("rit_choice", choice)
             return
-        if name in {"show", "showall", "s1", "s2", "sa", "muck", "hide"}:
+        if name == "show":
             await self._handle_show_command(name, list(args))
             return
-        if name in {"bill", "report", "settlement"}:
+        if name == "bill":
             await self._show_settlement()
             return
-        if name in {"end", "endroom"}:
+        if name == "end":
             await self._end_room()
             return
-        if name in {"delete", "del", "destroy"}:
+        if name == "delete":
             await self._delete_room()
             return
-        if name in {"export", "save"}:
+        if name == "export":
             await self._export_settlement(args[0] if args else None)
             return
 
