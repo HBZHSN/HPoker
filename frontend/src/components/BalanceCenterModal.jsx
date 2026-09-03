@@ -175,22 +175,12 @@ export default function BalanceCenterModal({
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 md:p-6 overflow-y-auto">
       <div className="relative w-full max-w-4xl bg-gradient-to-b from-slate-900 via-slate-950 to-black border border-amber-500/40 rounded-3xl p-5 md:p-7 shadow-2xl flex flex-col gap-5 max-h-[92vh] overflow-y-auto">
         {/* Top Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-              <Wallet className="w-6 h-6" />
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+              <Wallet className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-black text-white tracking-wide">账务中心与余额结算</h2>
-                <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
-                  记账对账
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">
-                支持对局自动记账、债务合并抵消与管理员一键结算
-              </p>
-            </div>
+            <h2 className="text-lg font-black text-white tracking-wide">账务中心</h2>
           </div>
 
           <div className="flex items-center gap-2">
@@ -198,7 +188,7 @@ export default function BalanceCenterModal({
               onClick={refreshAll}
               disabled={loading}
               className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
-              title="刷新账本"
+              title="刷新"
             >
               <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -215,7 +205,7 @@ export default function BalanceCenterModal({
         <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
           <button
             onClick={() => setActiveTab('my')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
               activeTab === 'my'
                 ? 'bg-amber-500 text-slate-950 shadow-glow-gold'
                 : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
@@ -227,14 +217,14 @@ export default function BalanceCenterModal({
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                 activeTab === 'my' ? 'bg-slate-950 text-amber-300' : 'bg-amber-950 text-amber-300'
               }`}>
-                {myBalance.unsettled_games_count} 局待结
+                {myBalance.unsettled_games_count}
               </span>
             )}
           </button>
 
           <button
             onClick={() => setActiveTab('history')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
               activeTab === 'history'
                 ? 'bg-amber-500 text-slate-950 shadow-glow-gold'
                 : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
@@ -254,19 +244,19 @@ export default function BalanceCenterModal({
           {currentUser?.is_admin && (
             <button
               onClick={() => setActiveTab('admin')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                 activeTab === 'admin'
                   ? 'bg-amber-500 text-slate-950 shadow-glow-gold'
                   : 'bg-amber-950/40 text-amber-300 border border-amber-500/30 hover:bg-amber-900/50'
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              对账管理（管理员）
+              对账管理
               {overview?.preview?.entry_count > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                   activeTab === 'admin' ? 'bg-slate-950 text-amber-300' : 'bg-amber-500 text-slate-950'
                 }`}>
-                  {overview.preview.entry_count} 待结
+                  {overview.preview.entry_count}
                 </span>
               )}
             </button>
@@ -292,8 +282,8 @@ export default function BalanceCenterModal({
           <div className="flex flex-col gap-4">
             {/* My Balance Summary Card */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 flex flex-col gap-1">
-                <span className="text-[11px] text-slate-400 font-medium">当前待结净金额</span>
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 flex flex-col gap-0.5">
+                <span className="text-[11px] text-slate-400 font-medium">待结金额</span>
                 <div className={`text-2xl font-black flex items-center gap-1 ${
                   (myBalance?.pending_net_cash || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
                 }`}>
@@ -305,33 +295,28 @@ export default function BalanceCenterModal({
                   {(myBalance?.pending_net_cash || 0) >= 0 ? '+' : ''}
                   ¥{(myBalance?.pending_net_cash || 0).toFixed(2)}
                 </div>
-                <span className="text-[10px] text-slate-500">
-                  {(myBalance?.pending_net_cash || 0) >= 0 ? '待应收账款' : '待应付账款'}
-                </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col gap-1">
-                <span className="text-[11px] text-slate-400 font-medium">待结筹码净额</span>
+              <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col gap-0.5">
+                <span className="text-[11px] text-slate-400 font-medium">待结筹码</span>
                 <div className="text-2xl font-black text-amber-300">
                   {(myBalance?.pending_net_chips || 0) >= 0 ? '+' : ''}
                   {myBalance?.pending_net_chips || 0}
                 </div>
-                <span className="text-[10px] text-slate-500">累计未结筹码</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col gap-1">
-                <span className="text-[11px] text-slate-400 font-medium">未结对局数</span>
+              <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col gap-0.5">
+                <span className="text-[11px] text-slate-400 font-medium">待结局数</span>
                 <div className="text-2xl font-black text-slate-200">
                   {myBalance?.unsettled_games_count || 0} 桌
                 </div>
-                <span className="text-[10px] text-slate-500">等待管理员统一结算</span>
               </div>
             </div>
 
             {/* My Match Ledger History */}
             <div className="flex flex-col gap-2">
               <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                我参与的对局账单流水
+                账单流水
               </h3>
               {(!myBalance?.records || myBalance.records.length === 0) ? (
                 <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
@@ -541,71 +526,59 @@ export default function BalanceCenterModal({
         {activeTab === 'admin' && currentUser?.is_admin && (
           <div className="flex flex-col gap-5">
             {/* Top Toolbar / Filter */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={includeTest}
-                    onChange={(e) => setIncludeTest(e.target.checked)}
-                    className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
-                  />
-                  <span>包含测试账号与机器人数据</span>
-                </label>
-                {!includeTest && (
-                  <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
-                    🛡️ 防污染模式生效中（仅统计真实玩家）
-                  </span>
-                )}
-              </div>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3 rounded-2xl bg-slate-900/80 border border-slate-800">
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={includeTest}
+                  onChange={(e) => setIncludeTest(e.target.checked)}
+                  className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                />
+                <span>包含测试数据</span>
+              </label>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleClearTestRecords}
-                  disabled={loading}
-                  className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 text-xs font-bold rounded-xl border border-red-500/40 transition flex items-center gap-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  清理测试对局流水
-                </button>
-              </div>
+              <button
+                onClick={handleClearTestRecords}
+                disabled={loading}
+                className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 text-xs font-bold rounded-xl border border-red-500/40 transition flex items-center gap-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                清理测试数据
+              </button>
             </div>
 
             {/* Overview Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col gap-1">
-                <span className="text-[11px] text-slate-400 font-medium">当前待结总局数</span>
+              <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col gap-0.5">
+                <span className="text-[11px] text-slate-400 font-medium">待结局数</span>
                 <div className="text-2xl font-black text-amber-400">
                   {overview?.preview?.entry_count || 0} 桌
                 </div>
-                <span className="text-[10px] text-slate-500">累计记账未结</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col gap-1">
-                <span className="text-[11px] text-slate-400 font-medium">涉及活跃玩家数</span>
+              <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col gap-0.5">
+                <span className="text-[11px] text-slate-400 font-medium">活跃玩家</span>
                 <div className="text-2xl font-black text-slate-200">
                   {overview?.user_balances?.length || 0} 人
                 </div>
-                <span className="text-[10px] text-slate-500">真实用户账单</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-950 border border-amber-500/40 flex flex-col gap-1">
-                <span className="text-[11px] text-amber-400 font-medium">若此时结算建议流转总额</span>
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-950 border border-amber-500/40 flex flex-col gap-0.5">
+                <span className="text-[11px] text-amber-400 font-medium">结算总额</span>
                 <div className="text-2xl font-black text-amber-400">
                   ¥{(overview?.preview?.total_transferred_cash || 0).toFixed(2)}
                 </div>
-                <span className="text-[10px] text-slate-400">经过多对多抵消后的最简支付</span>
               </div>
             </div>
 
             {/* User Balances Table */}
             <div className="flex flex-col gap-2">
               <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                各玩家当前待结净额清单
+                待结清单
               </h3>
               {(!overview?.user_balances || overview.user_balances.length === 0) ? (
                 <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
-                  当前暂无待结算的真实玩家账单
+                  暂无待结数据
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
@@ -614,9 +587,9 @@ export default function BalanceCenterModal({
                       <tr>
                         <th className="p-3">玩家</th>
                         <th className="p-3 text-center">待结局数</th>
-                        <th className="p-3 text-right">待结筹码净额</th>
-                        <th className="p-3 text-right">待结现金净额 (¥)</th>
-                        <th className="p-3 text-center">结算身份</th>
+                        <th className="p-3 text-right">待结筹码</th>
+                        <th className="p-3 text-right">待结金额 (¥)</th>
+                        <th className="p-3 text-center">状态</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
@@ -651,7 +624,7 @@ export default function BalanceCenterModal({
                                   ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
                                   : 'bg-red-950 text-red-300 border border-red-500/40'
                               }`}>
-                                {isProfit ? '应收款（赢家）' : '应付款（输家）'}
+                                {isProfit ? '应收' : '应付'}
                               </span>
                             </td>
                           </tr>
@@ -665,18 +638,13 @@ export default function BalanceCenterModal({
 
             {/* Minimal Debt Transfer Preview */}
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                  多局合并 · 最少笔数点对点转账方案预览
-                </h3>
-                <span className="text-[11px] text-slate-400">
-                  仅需 {overview?.preview?.transactions?.length || 0} 笔转账即可平账
-                </span>
-              </div>
+              <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                转账方案
+              </h3>
 
               {(!overview?.preview?.transactions || overview.preview.transactions.length === 0) ? (
                 <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
-                  当前无需要执行的转账
+                  无需转账
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -689,8 +657,7 @@ export default function BalanceCenterModal({
                         <span className="font-bold text-red-400 bg-red-950/80 px-2 py-1 rounded-lg border border-red-900/60">
                           {t.from_player_name}
                         </span>
-                        <span className="text-slate-400">应直接支付给</span>
-                        <ArrowRight className="w-4 h-4 text-amber-400" />
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
                         <span className="font-bold text-emerald-400 bg-emerald-950/80 px-2 py-1 rounded-lg border border-emerald-900/60">
                           {t.to_player_name}
                         </span>
@@ -709,14 +676,14 @@ export default function BalanceCenterModal({
               <button
                 disabled={loading || !overview?.preview?.entry_count}
                 onClick={() => setSettleConfirmOpen(true)}
-                className={`px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg transition active:scale-95 ${
+                className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg transition active:scale-95 ${
                   overview?.preview?.entry_count
                     ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 shadow-glow-gold hover:brightness-105 cursor-pointer'
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                立即执行一次性对账结算 ({overview?.preview?.entry_count || 0} 局)
+                一键结算 ({overview?.preview?.entry_count || 0} 局)
               </button>
             </div>
           </div>
@@ -725,28 +692,25 @@ export default function BalanceCenterModal({
         {/* Batch Settlement Confirmation Modal */}
         {settleConfirmOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="relative w-full max-w-lg bg-gradient-to-b from-slate-900 to-black border-2 border-amber-500/60 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                  <CheckCircle2 className="w-6 h-6" />
+            <div className="relative w-full max-w-md bg-gradient-to-b from-slate-900 to-black border border-amber-500/50 rounded-3xl p-5 shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <CheckCircle2 className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-black text-white">确认执行一次性批量结算？</h3>
-                  <p className="text-xs text-slate-400">将本周期所有待结算对局归档并生成正式批次</p>
-                </div>
+                <h3 className="text-base font-black text-white">确认结算？</h3>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs flex flex-col gap-2">
+              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs flex flex-col gap-2">
                 <div className="flex justify-between text-slate-300">
-                  <span>本次结算局数:</span>
+                  <span>结算局数:</span>
                   <span className="font-bold text-amber-400">{overview?.preview?.entry_count || 0} 局</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span>涉及真实玩家:</span>
+                  <span>涉及玩家:</span>
                   <span className="font-bold text-white">{overview?.user_balances?.length || 0} 位</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
-                  <span>最终流转支付总额:</span>
+                  <span>转账总额:</span>
                   <span className="font-black text-amber-400">¥{(overview?.preview?.total_transferred_cash || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
@@ -755,23 +719,19 @@ export default function BalanceCenterModal({
                 </div>
               </div>
 
-              <p className="text-xs text-amber-300/80">
-                确认结算后，所有参与玩家的待结余额将归零，并生成永久存档的结算批次清单，方便发送至群聊。
-              </p>
-
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2.5 pt-1">
                 <button
                   onClick={() => setSettleConfirmOpen(false)}
-                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition"
                 >
                   取消
                 </button>
                 <button
                   disabled={loading}
                   onClick={handleExecuteBatchSettle}
-                  className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-glow-gold transition flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-glow-gold transition flex items-center justify-center gap-1.5"
                 >
-                  {loading ? '正在处理...' : '确认结算并平账'}
+                  {loading ? '处理中...' : '确认结算'}
                 </button>
               </div>
             </div>

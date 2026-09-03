@@ -310,7 +310,7 @@ export default function PokerTable({
               onClick={handleAddTestBot}
               disabled={!canAddTestBot}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 shadow bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border-indigo-400/50 disabled:bg-slate-900/70 disabled:hover:bg-slate-900/70 disabled:text-slate-600 disabled:border-slate-800 disabled:cursor-not-allowed"
-              title={canAddTestBot ? '仅用于测试：添加一个随机行动机器人' : '只能在牌局开始前或结束后、且有空座时添加机器人'}
+              title={canAddTestBot ? '添加机器人' : '当前不可添加'}
             >
               <Bot className="w-3.5 h-3.5" />
               <span>机器人</span>

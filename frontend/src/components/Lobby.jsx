@@ -47,7 +47,7 @@ export default function Lobby({
           </div>
           <div>
             <h1 className="text-xl md:text-2xl font-black text-white tracking-wider flex items-center gap-2">
-              HPOKER 在线德州现金局
+              HPoker
             </h1>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function Lobby({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-amber-400" />
-            <h2 className="text-lg font-bold text-white tracking-wide">进行中的牌桌</h2>
+            <h2 className="text-lg font-bold text-white tracking-wide">牌桌列表</h2>
             <span className="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-medium">
               {rooms.length} 桌
             </span>
@@ -279,7 +279,7 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">大盲 (BB，自动)</label>
+                  <label className="text-slate-400 font-semibold block mb-1">大盲 (BB)</label>
                   <div className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-amber-300 font-black">
                     {Number(smallBlind) > 0 ? Number(smallBlind) * 2 : '—'}
                     <span className="ml-1 text-[10px] text-slate-500 font-medium">SB × 2</span>

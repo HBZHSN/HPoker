@@ -61,7 +61,7 @@ export default function LoginModal({ onLoginSuccess }) {
             <Lock className="w-6 h-6 text-slate-950" />
           </div>
           <h2 className="text-xl md:text-2xl font-black text-amber-400 tracking-wide mt-2">
-            HPoker 账号登录
+            登录
           </h2>
         </div>
 
