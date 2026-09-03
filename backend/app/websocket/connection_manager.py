@@ -72,6 +72,11 @@ class ConnectionManager:
 
     async def broadcast_room_state(self, room: Room) -> None:
         """Broadcast customized room snapshots to each connected client in the room."""
+        # Every state-changing WebSocket route finishes with a broadcast,
+        # including automated timeout and bot actions.
+        from backend.app.services.room_manager import room_manager
+        room_manager.checkpoint_room(room)
+
         room_id = room.room_id
         sockets = self.room_connections.get(room_id, set())
         for ws in list(sockets):

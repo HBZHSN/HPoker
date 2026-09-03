@@ -242,6 +242,7 @@ def end_room(room_id: str, requester_id: str):
     report = room.end_room(requester_id=requester_id)
     if not report:
         raise HTTPException(status_code=403, detail="Only host can end room or room already ended")
+    room_manager.checkpoint_room(room)
     return report.to_dict()
 
 
