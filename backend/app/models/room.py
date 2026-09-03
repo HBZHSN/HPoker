@@ -304,7 +304,12 @@ class Room:
                 self.historical_players[player_id]["total_buyin_chips"] += buyin
         return success
 
-    def end_room(self, requester_id: str, settlement_type: str = "balance") -> Optional[SettlementReport]:
+    def end_room(
+        self,
+        requester_id: str,
+        settlement_type: str = "balance",
+        record_to_balance: bool = True,
+    ) -> Optional[SettlementReport]:
         """Host ends the room and calculates final settlements."""
         if requester_id != self.host_player_id:
             return None
@@ -343,12 +348,13 @@ class Room:
         self.settlement_type = settlement_type
         self.settlement_report = report
 
-        # Automatically record into balance ledger
-        try:
-            from backend.app.services.balance_manager import balance_manager
-            balance_manager.record_settlement(report, settlement_type=settlement_type)
-        except Exception as e:
-            print(f"[Room.end_room] Warning: Failed to record settlement to balance_manager: {e}")
+        # Automatically record into balance ledger if enabled
+        if record_to_balance:
+            try:
+                from backend.app.services.balance_manager import balance_manager
+                balance_manager.record_settlement(report, settlement_type=settlement_type)
+            except Exception as e:
+                print(f"[Room.end_room] Warning: Failed to record settlement to balance_manager: {e}")
 
         return report
 

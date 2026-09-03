@@ -153,6 +153,37 @@ export default function BalanceCenterModal({
     }
   };
 
+  // Clear all balance records and restart
+  const handleClearAllRecords = async () => {
+    if (
+      !window.confirm(
+        '⚠️ 警告：确定要清空所有结算记录与账单数据吗？\n\n此操作将清除所有未结账单、已结账单及结算批次，所有玩家的余额将重置为 0，数据无法恢复！\n\n是否确认清空并重新开始？'
+      )
+    ) {
+      return;
+    }
+    setLoading(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      const res = await fetch(`/api/balance/all-records?admin_id=${currentUser.user_id}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || '清空失败');
+      }
+      const data = await res.json();
+      setSuccessMsg(data.message || '已成功清空所有结算与账单记录，重新开始计算！');
+      refreshAll();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const copyBatchText = (batch) => {
     if (!batch) return;
     const dateStr = new Date(batch.created_at * 1000).toLocaleString();
@@ -544,14 +575,25 @@ export default function BalanceCenterModal({
                 <span>包含测试数据</span>
               </label>
 
-              <button
-                onClick={handleClearTestRecords}
-                disabled={loading}
-                className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 text-xs font-bold rounded-xl border border-red-500/40 transition flex items-center gap-1"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                清理测试数据
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleClearTestRecords}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 text-xs font-bold rounded-xl border border-red-500/40 transition flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  清理测试数据
+                </button>
+                <button
+                  onClick={handleClearAllRecords}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-black rounded-xl shadow-lg transition flex items-center gap-1 active:scale-95 cursor-pointer"
+                  title="清空所有未结、已结账单及结算批次"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  一键清空所有数据
+                </button>
+              </div>
             </div>
 
             {/* Overview Stats */}

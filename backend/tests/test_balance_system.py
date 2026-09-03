@@ -205,3 +205,40 @@ def test_balance_rest_api(tmp_path):
     assert clear_ok.status_code == 200
     assert "deleted_count" in clear_ok.json()
 
+    # 7. Clear all balance records without admin should fail
+    clear_all_fail = client.delete("/api/balance/all-records?admin_id=u_fwd")
+    assert clear_all_fail.status_code == 403
+
+    # 8. Clear all balance records with admin should succeed
+    clear_all_ok = client.delete("/api/balance/all-records?admin_id=u_admin")
+    assert clear_all_ok.status_code == 200
+    assert "cleared_entries_count" in clear_all_ok.json()
+    assert "cleared_batches_count" in clear_all_ok.json()
+
+    # 9. POST alias for clear all should also succeed
+    post_clear_all_ok = client.post("/api/balance/clear-all?admin_id=u_admin")
+    assert post_clear_all_ok.status_code == 200
+
+
+def test_balance_manager_clear_all_records(balance_mgr, user_mgr):
+    participants = [
+        {"player_id": "u_fwd", "player_name": "fwd", "rebuy_count": 1, "total_buyin_chips": 1000, "final_chips": 1500},
+        {"player_id": "u_hx", "player_name": "hx", "rebuy_count": 1, "total_buyin_chips": 1000, "final_chips": 500},
+    ]
+    report = SettlementEngine.calculate_room_settlement(
+        room_id="room-clear-test",
+        room_name="Clear Test",
+        buyin_chips=1000,
+        cash_value=100.0,
+        player_data_list=participants,
+    )
+    balance_mgr.record_settlement(report, settlement_type="balance", u_mgr=user_mgr)
+    assert len(balance_mgr._entries) == 1
+
+    cleared_entries, cleared_batches = balance_mgr.clear_all_records()
+    assert cleared_entries == 1
+    assert cleared_batches == 0
+    assert len(balance_mgr._entries) == 0
+    assert len(balance_mgr._batches) == 0
+    assert len(balance_mgr.get_user_balances(include_test=True)) == 0
+

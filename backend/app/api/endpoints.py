@@ -419,3 +419,30 @@ def clear_test_records(
     deleted_count = balance_manager.clear_test_records()
     return {"deleted_count": deleted_count, "message": f"已清空 {deleted_count} 条测试账单记录"}
 
+
+@api_router.delete("/balance/all-records")
+def clear_all_balance_records(
+    admin_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    """Admin clears all ledger entries and settlement batches to restart balance accounting afresh."""
+    _verify_admin(authorization=authorization, token=token, admin_id=admin_id)
+
+    cleared_entries, cleared_batches = balance_manager.clear_all_records()
+    return {
+        "cleared_entries_count": cleared_entries,
+        "cleared_batches_count": cleared_batches,
+        "message": f"已成功清空所有结算记录（{cleared_entries} 条对局账单，{cleared_batches} 个对账批次），余额中心已重置。"
+    }
+
+
+@api_router.post("/balance/clear-all")
+def clear_all_balance_records_post(
+    admin_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    """Alias POST endpoint to clear all ledger entries and settlement batches."""
+    return clear_all_balance_records(admin_id=admin_id, authorization=authorization, token=token)
+

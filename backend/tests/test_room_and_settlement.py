@@ -117,7 +117,7 @@ def test_room_lifecycle_and_rebuy():
     assert room.is_ended is False
 
     # Host ends room
-    report = room.end_room(requester_id="host1")
+    report = room.end_room(requester_id="host1", record_to_balance=False)
     assert report is not None
     assert room.is_ended is True
     assert len(report.player_records) == 2
@@ -149,7 +149,7 @@ def test_ending_room_refunds_unsettled_hand_contributions():
     assert room.table.seats[0].chips == 95
     assert room.table.seats[1].chips == 90
 
-    report = room.end_room(requester_id="host1")
+    report = room.end_room(requester_id="host1", record_to_balance=False)
 
     assert report is not None
     assert report.is_balanced is True

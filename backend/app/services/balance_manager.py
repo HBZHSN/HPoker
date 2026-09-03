@@ -387,6 +387,20 @@ class BalanceManager:
             self.save_to_storage()
         return len(to_delete)
 
+    def clear_all_records(self) -> Tuple[int, int]:
+        """Purge all ledger entries and settlement batches to restart balance accounting afresh.
+
+        Returns:
+            Tuple of (cleared_entries_count, cleared_batches_count)
+        """
+        entries_count = len(self._entries)
+        batches_count = len(self._batches)
+
+        self._entries.clear()
+        self._batches.clear()
+        self.save_to_storage()
+        return entries_count, batches_count
+
 
 # Global singleton
 balance_manager = BalanceManager()
