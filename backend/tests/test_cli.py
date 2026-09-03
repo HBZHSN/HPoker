@@ -269,6 +269,42 @@ class TestPokerUiRenderer:
         assert "[████" in output
         assert all(display_width(line) == 98 for line in output.splitlines())
 
+    def test_render_table_dashboard_shows_bot_icon(self):
+        renderer = PokerUiRenderer(enable_color=False, mode="dashboard")
+        room_data = {
+            "room_id": "r_test",
+            "host_player_id": "u_admin",
+            "config": {"room_name": "测试桌", "small_blind": 5, "big_blind": 10, "action_timeout": 15},
+            "is_ended": False,
+            "table": {
+                "street": "IDLE",
+                "seats": [
+                    {
+                        "player_id": "bot_1",
+                        "name": "测试机器人 1",
+                        "is_bot": True,
+                        "chips": 1000,
+                        "rebuy_count": 0,
+                        "current_round_bet": 0,
+                        "is_folded": False,
+                        "is_all_in": False,
+                        "hole_cards": [],
+                        "shown_cards": [],
+                        "last_action": "",
+                    },
+                ],
+                "legal_actions": {},
+            },
+        }
+        output = renderer.render_table_dashboard(room_data, "u_admin")
+        assert "🤖测试机器人 1" in output
+
+    def test_render_help_contains_bot(self):
+        renderer = PokerUiRenderer(enable_color=False)
+        output = renderer.render_help("room")
+        assert "bot" in output
+        assert "测试机器人" in output
+
     def test_render_settlement_report(self):
         renderer = PokerUiRenderer(enable_color=False, mode="dashboard")
         report = {
@@ -345,7 +381,14 @@ class TestPokerApiClient:
             room = await client.create_room("u_fwd", "新房间")
             assert room["room_id"] == "rm_999"
 
+            # Mock add test bot
+            mock_post.return_value.json = MagicMock(return_value={"room_id": "rm_999", "bot_added": True})
+            bot_res = await client.add_test_bot("rm_999", "u_fwd", seat_index=2)
+            assert bot_res["bot_added"] is True
+            assert mock_post.call_args[1]["params"] == {"requester_id": "u_fwd", "seat_index": 2}
+
             await client.close()
+
 
 
 @pytest.mark.asyncio
@@ -377,6 +420,12 @@ class TestPokerWsClient:
         await ws_client.rit_choice(2)
         assert '"event": "RIT_CHOICE"' in mock_ws.send.call_args[0][0]
         assert '"choice": 2' in mock_ws.send.call_args[0][0]
+
+        mock_ws.reset_mock()
+        await ws_client.add_bot(3)
+        assert '"event": "ADD_TEST_BOT"' in mock_ws.send.call_args[0][0]
+        assert '"seat_index": 3' in mock_ws.send.call_args[0][0]
+
 
     async def test_ws_client_dispatches_room_events_and_sound_metadata(self):
         ws_client = PokerWsClient("ws://localhost:8000/ws/test/u1")
@@ -469,6 +518,52 @@ class TestPokerCliController:
             assert controller.current_user["username"] == "fwd"
             assert controller.auth_token == "test_token_123"
             controller.api.login.assert_called_once_with("fwd", "123")
+
+    async def test_add_bot_command_host_and_non_host(self):
+        """Test host can add test bot via CLI and non-host cannot."""
+        controller = PokerCliController(enable_color=False)
+        controller.current_user = {"user_id": "u_host", "username": "host"}
+        controller.active_room_id = "r_test"
+        controller.active_room_data = {
+            "host_player_id": "u_host",
+            "table": {
+                "street": "IDLE",
+                "seats": [None, None, None, None, None, None],
+            },
+        }
+        mock_ws = AsyncMock()
+        mock_ws.is_connected = True
+        controller.ws_client = mock_ws
+
+        # Host can add bot (no seat specified)
+        cmd = parse_command("bot")
+        assert cmd is not None
+        await controller._dispatch_room_command(cmd)
+        mock_ws.add_bot.assert_called_with(seat_index=None)
+
+        # Host can add bot specifying seat
+        mock_ws.reset_mock()
+        cmd = parse_command("bot 2")
+        assert cmd is not None
+        await controller._dispatch_room_command(cmd)
+        mock_ws.add_bot.assert_called_with(seat_index=2)
+
+        # Non-host cannot add bot
+        mock_ws.reset_mock()
+        controller.current_user = {"user_id": "u_guest", "username": "guest"}
+        cmd = parse_command("bot")
+        assert cmd is not None
+        await controller._dispatch_room_command(cmd)
+        mock_ws.add_bot.assert_not_called()
+
+        # Cannot add bot during active hand
+        controller.current_user = {"user_id": "u_host", "username": "host"}
+        controller.active_room_data["table"]["street"] = "FLOP"
+        mock_ws.reset_mock()
+        cmd = parse_command("addbot")
+        assert cmd is not None
+        await controller._dispatch_room_command(cmd)
+        mock_ws.add_bot.assert_not_called()
 
     async def test_full_cli_game_flow(self):
         """End-to-end integration test of room creation, playing hand, and settlement."""

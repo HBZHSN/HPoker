@@ -420,6 +420,8 @@ class PokerUiRenderer:
                 name_disp += " (你)"
             if p_id == host_id:
                 name_disp += "👑"
+            if s.get("is_bot") and not name_disp.startswith("🤖"):
+                name_disp = f"🤖{name_disp}"
             if self._display_width(name_disp) > 16:
                 name_disp = f"{clip_display(name_disp, 14)}.."
 
@@ -750,6 +752,7 @@ class PokerUiRenderer:
                 "  sit <座位> / stand            入座 / 起立（座位从 0 开始）",
                 "  ready / unready               准备或取消准备",
                 "  start                         房主开始下一手",
+                "  bot [座位] / addbot           （房主）添加测试机器人",
                 "  rebuy                         筹码为 0 时补码",
                 "  tc                            使用 1 张时间卡 (+30s)",
                 "  rit 1 / rit 2                 全下后选择发 1 次或 2 次",

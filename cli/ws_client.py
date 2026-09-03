@@ -260,3 +260,10 @@ class PokerWsClient:
 
     async def delete_room(self) -> None:
         await self.send_event("DELETE_ROOM", {})
+
+    async def add_bot(self, seat_index: Optional[int] = None) -> None:
+        payload: Dict[str, Any] = {}
+        if seat_index is not None:
+            payload["seat_index"] = seat_index
+        await self.send_event("ADD_TEST_BOT", payload)
+

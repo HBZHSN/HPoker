@@ -651,6 +651,10 @@ class PokerCliController:
             else:
                 await self._send_ws("stand_up", seat)
             return
+        if name in {"bot", "addbot", "add_bot", "add-bot", "testbot"}:
+            seat = self._parse_nonnegative_int(args[0]) if args else None
+            await self._handle_add_bot(seat)
+            return
 
         # Action aliases are intentionally checked before the generic utility
         # commands so ``r`` always means raise in a room; redraw is explicit.
@@ -822,6 +826,49 @@ class PokerCliController:
             self._output("用法: show 1 | show 2 | show all | show toggle 1 | muck")
 
     # ------------------ Room Lifecycle / Settlement ------------------
+
+    async def _handle_add_bot(self, seat_index: Optional[int] = None) -> None:
+        if not self._is_host():
+            self._output("只有房主可以添加测试机器人。")
+            return
+        if self.active_room_data:
+            table = self.active_room_data.get("table", {})
+            street = table.get("street")
+            if street not in ("IDLE", "HAND_END"):
+                self._output("只能在手牌间隙（未开局或手牌结束时）添加机器人。")
+                return
+            seats = table.get("seats", [])
+            if seat_index is not None:
+                if seat_index < 0 or seat_index >= len(seats):
+                    self._output(f"座位号超出范围（0 - {len(seats) - 1}）。")
+                    return
+                if seats[seat_index] is not None:
+                    self._output(f"座位 {seat_index} 已有玩家。")
+                    return
+            else:
+                if all(s is not None for s in seats):
+                    self._output("牌桌已满，无法添加机器人。")
+                    return
+
+        if self.ws_client and self.ws_client.is_connected:
+            ok = await self._send_ws("add_bot", seat_index=seat_index)
+            if ok:
+                seat_str = f" 到座位 {seat_index}" if seat_index is not None else ""
+                self._output(f"已请求添加测试机器人{seat_str}。")
+            return
+
+        try:
+            room = await self.api.add_test_bot(
+                self.active_room_id or "",
+                requester_id=self._current_user_id(),
+                seat_index=seat_index,
+            )
+            self.active_room_data = room
+            self._output("✓ 已成功添加测试机器人。")
+            if self.renderer.mode == "dashboard":
+                await self._redraw_room()
+        except Exception as exc:
+            self._output(self.renderer.c(f"添加机器人失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
 
     async def _end_room(self) -> None:
         if not self._is_host():

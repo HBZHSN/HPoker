@@ -149,3 +149,22 @@ class PokerApiClient:
         )
         self._raise_for_status(response)
         return response.json()
+
+    async def add_test_bot(
+        self,
+        room_id: str,
+        requester_id: str,
+        seat_index: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Add a virtual test bot to the room through REST."""
+
+        params: Dict[str, Any] = {"requester_id": requester_id}
+        if seat_index is not None:
+            params["seat_index"] = seat_index
+        response = await self.client.post(
+            f"/api/rooms/{room_id}/test-bots",
+            params=params,
+        )
+        self._raise_for_status(response)
+        return response.json()
+
