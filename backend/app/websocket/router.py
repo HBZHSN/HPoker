@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Optional
@@ -18,7 +19,18 @@ from backend.app.engine.state_machine import ActionType, Street
 
 logger = logging.getLogger("poker.router")
 ws_router = APIRouter()
-BOT_ACTION_DELAY_SECONDS = 0.2
+BOT_ACTION_DELAY_MIN: float = 3.0
+BOT_ACTION_DELAY_MAX: float = 5.0
+BOT_ACTION_DELAY_SECONDS: float = 3.0
+
+
+def get_bot_action_delay() -> float:
+    """Return a randomized bot decision delay between 3 and 5 seconds."""
+    low = min(BOT_ACTION_DELAY_MIN, BOT_ACTION_DELAY_MAX)
+    high = max(BOT_ACTION_DELAY_MIN, BOT_ACTION_DELAY_MAX)
+    if low >= high:
+        return low
+    return round(low + (secrets.randbelow(int((high - low) * 1000) + 1) / 1000.0), 2)
 
 
 async def start_all_in_slow_dealing(room_id: str):
@@ -100,7 +112,7 @@ async def trigger_room_after_action(room_id: str):
 
             timeout_manager.start_bot_action_task(
                 room_id,
-                BOT_ACTION_DELAY_SECONDS,
+                get_bot_action_delay(),
                 _on_bot_rit_choice,
             )
 
@@ -223,7 +235,7 @@ async def trigger_room_turn_timer(room_id: str):
 
         timeout_manager.start_bot_action_task(
             room_id,
-            BOT_ACTION_DELAY_SECONDS,
+            get_bot_action_delay(),
             _on_bot_action,
         )
         return
@@ -376,13 +388,17 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
 
             elif event == EventType.START_GAME:
                 # Only room host can trigger start of next hand when idle / hand_end
-                if user_id == room.host_player_id and room.table.can_start_hand():
-                    timeout_manager.cancel_all_timers(room_id)
-                    ok = room.table.start_new_hand()
-                    if ok:
-                        await ws_manager.broadcast_sound(room_id, "deal")
-                        await ws_manager.broadcast_room_state(room)
-                        await trigger_room_after_action(room_id)
+                if user_id == room.host_player_id:
+                    for seat in room.table.seats:
+                        if seat and seat.is_bot and seat.chips <= 0:
+                            room.rebuy_player(seat.player_id)
+                    if room.table.can_start_hand():
+                        timeout_manager.cancel_all_timers(room_id)
+                        ok = room.table.start_new_hand()
+                        if ok:
+                            await ws_manager.broadcast_sound(room_id, "deal")
+                            await ws_manager.broadcast_room_state(room)
+                            await trigger_room_after_action(room_id)
 
             elif event in (EventType.ADD_TEST_BOT, EventType.ADD_BOT):
                 # Test bots are intentionally a host-only room control. They
@@ -399,6 +415,24 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     if bot:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
+                    else:
+                        await ws_manager.send_personal_message(
+                            websocket,
+                            make_message(
+                                EventType.ERROR_MESSAGE,
+                                {"message": "添加机器人失败：仅能在手牌间隙且有空座时添加"},
+                                room_id=room_id,
+                            ),
+                        )
+                else:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"message": "只有房主才能添加测试机器人"},
+                            room_id=room_id,
+                        ),
+                    )
 
             elif event == EventType.PLAYER_ACTION:
                 action_str = payload.get("action")
