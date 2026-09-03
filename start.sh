@@ -82,7 +82,7 @@ check_and_init_env() {
     # 2. 检查后端依赖。仅检查 uvicorn 会让旧虚拟环境继续使用不兼容的
     # FastAPI/Starlette 组合，最终使 TestClient 请求永久等待。
     if [ ! -f "$PROJECT_ROOT/.venv/bin/uvicorn" ] || ! "$PROJECT_ROOT/.venv/bin/python" -c \
-        'from importlib.metadata import version; expected = {"fastapi": "0.115.6", "starlette": "0.41.3", "httpx": "0.28.1", "anyio": "4.8.0", "httpcore": "1.0.7"}; actual = {name: version(name) for name in expected}; raise SystemExit(0 if actual == expected else 1)' 2>/dev/null; then
+        'from importlib.metadata import version; expected = {"fastapi": "0.115.6", "starlette": "0.41.3", "httpx": "0.28.1", "anyio": "4.8.0", "httpcore": "1.0.7", "textual": "1.0.0"}; actual = {name: version(name) for name in expected}; raise SystemExit(0 if actual == expected else 1)' 2>/dev/null; then
         echo -e "${YELLOW}  [!] 正在安装/修复后端依赖 (backend/requirements.txt)...${NC}"
         "$PROJECT_ROOT/.venv/bin/pip" install --upgrade pip >/dev/null 2>&1 || true
         "$PROJECT_ROOT/.venv/bin/pip" install -r "$PROJECT_ROOT/backend/requirements.txt"

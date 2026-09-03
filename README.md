@@ -53,7 +53,7 @@
 
 - 🌐 本地桌面访问：`http://localhost:5173`
 - 📱 局域网/手机访问：`http://<局域网IP>:5173`（脚本启动时会自动显示对应 IP）
-- 💻 **轻量 CLI 终端客户端**：`./start.sh cli` 或 `.venv/bin/python poker_cli.py`
+- 💻 **Textual TUI 终端客户端**：`./start.sh cli` 或 `.venv/bin/python poker_cli.py`
 - 📖 后端 API 文档：`http://localhost:8000/docs`
 - 🛑 按 `Ctrl + C` 即可一键安全停止所有服务。
 
@@ -68,9 +68,9 @@
 
 ---
 
-### 💻 轻量 CLI 终端客户端
+### 💻 Textual TUI 终端客户端
 
-CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模式（`dashboard` 仪表盘 / `stream` 事件流）。默认 `dashboard` 是固定屏幕 TUI：画面在备用终端区域内持续刷新，命令结果显示在底部状态栏，不会不断向上滚动；需要日志流时再切换到 `stream`。测试或 CLI 启动不会检查前端 `node_modules`，可直接使用：
+CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模式（`dashboard` TUI / `stream` 事件流）。默认 `dashboard` 基于 Textual：宽屏时左侧展示牌桌、公共牌与手牌，右侧展示当前可执行操作、下注尺度和最近动态；窄终端自动切换为上下布局。底部输入框固定显示，`↑` / `↓` 可浏览命令历史。需要纯日志输出时使用 `stream`。CLI 启动不会检查前端 `node_modules`。
 
 ```bash
 # 交互式登录并进入大厅
@@ -88,7 +88,7 @@ CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模�
 - `--server URL`：后端地址，也可设置 `POKER_SERVER_URL`。
 - `--user NAME`、`--password PASSWORD`：自动登录；不提供时交互登录。
 - `--room ROOM_ID`：登录后直接进入指定房间。
-- `--mode dashboard|stream`：选择牌桌显示模式，也可设置 `POKER_CLI_MODE`。
+- `--mode dashboard|stream`：选择 Textual TUI 或纯事件流，也可设置 `POKER_CLI_MODE`。
 - `--no-color`：关闭 ANSI 颜色，适合日志重定向。
 - `--http-timeout SECONDS`、`--reconnect-attempts N`：控制请求超时和自动重连次数。
 
@@ -98,6 +98,8 @@ CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模�
 - `create "房间名"`：交互创建房间；也支持 `create "现金桌" --buyin 2000 --cash 200 --sb 10 --timeout 20 --seats 6`。
 - `users`：查看预置用户；`info ROOM_ID`：查看房间详情。
 - `mode`、`color`、`help`、`quit`：切换显示、查看帮助或退出。
+
+命令别名由大厅与牌桌共用的命令注册表维护，但会按场景解析：大厅中 `c` / `r` 表示创建 / 刷新，牌桌中则表示过牌或跟注 / 加注。右侧操作栏和 `help` 均从同一注册表生成。
 
 牌桌常用命令：
 
