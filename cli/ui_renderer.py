@@ -1111,3 +1111,22 @@ class PokerUiRenderer:
         lines.append("")
 
         return "\n".join(lines)
+
+    def render_settlement_sidebar(self, report: Dict[str, Any]) -> str:
+        """Render actions and summary for the dedicated settlement page."""
+
+        players = report.get("player_records") or report.get("player_settlements", [])
+        transfers = report.get("transactions") or report.get("transfers", [])
+        lines = [
+            self.c("结算完成", Colors.BOLD + Colors.BRIGHT_GREEN),
+            f"  玩家    {len(players)} 人",
+            f"  转账    {len(transfers)} 笔",
+            "",
+            self.c("可用操作", Colors.BOLD + Colors.BRIGHT_CYAN),
+            "  export [路径]  导出账单",
+            "  q              返回牌桌",
+            "  leave          返回大厅",
+            "",
+            self.c("Ctrl+C 退出程序", Colors.DIM),
+        ]
+        return "\n".join(lines)

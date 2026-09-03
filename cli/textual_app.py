@@ -324,7 +324,7 @@ class PokerTextualApp(App[int]):
 
         if panel_open:
             main = fallback_frame
-            main_title = "详情"
+            main_title = controller._tui_panel_title or "详情"
         elif view == "room" and controller.active_room_data:
             main = renderer.render_table_main(
                 controller.active_room_data,
@@ -339,7 +339,11 @@ class PokerTextualApp(App[int]):
             main = fallback_frame
             main_title = "HPoker"
 
-        if view == "room":
+        if controller._tui_panel_kind == "settlement":
+            report = (controller.active_room_data or {}).get("settlement_report") or {}
+            sidebar = renderer.render_settlement_sidebar(report)
+            title = "HPoker  ·  终局结算"
+        elif view == "room":
             sidebar = renderer.render_table_sidebar(
                 controller.active_room_data or {},
                 controller._current_user_id(),

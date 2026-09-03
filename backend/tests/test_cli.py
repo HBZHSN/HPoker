@@ -547,6 +547,73 @@ class TestPokerUiRenderer:
         assert "-100.00" in output
         assert "输家小李  ── 应转账 ──▶  ¥ 100.00 (折合1000筹码) ──▶  赢家小王" in output
 
+        sidebar = renderer.render_settlement_sidebar(report)
+        assert "结算完成" in sidebar
+        assert "玩家    2 人" in sidebar
+        assert "转账    1 笔" in sidebar
+        assert "q              返回牌桌" in sidebar
+
+
+@pytest.mark.asyncio
+async def test_ended_room_state_automatically_opens_settlement_page():
+    controller = PokerCliController(enable_color=False)
+    controller.tui.active = True
+    controller._in_room = True
+    controller._tui_view = "room"
+    controller._refresh_tui = MagicMock()
+    report = {
+        "room_id": "r_done",
+        "room_name": "终局桌",
+        "player_records": [],
+        "transactions": [],
+    }
+
+    try:
+        await controller._on_ws_room_state({
+            "room_id": "r_done",
+            "is_ended": True,
+            "settlement_report": report,
+            "table": {},
+        })
+
+        assert controller._tui_panel_kind == "settlement"
+        assert controller._tui_panel_title == "终局结算"
+        assert "战局终局结算报表: 终局桌" in controller._tui_panel
+        controller._refresh_tui.assert_called()
+    finally:
+        await controller.api.close()
+
+
+@pytest.mark.asyncio
+async def test_textual_settlement_page_has_own_title_and_actions():
+    controller = PokerCliController(enable_color=False)
+    controller.current_user = {"user_id": "u_me", "nickname": "Hero"}
+    controller.active_room_data = {
+        "room_id": "r_done",
+        "is_ended": True,
+        "settlement_report": {
+            "room_id": "r_done",
+            "room_name": "终局桌",
+            "player_records": [{"player_name": "Hero"}],
+            "transactions": [],
+        },
+        "table": {},
+    }
+    controller._tui_view = "room"
+    app = PokerTextualApp(controller, autostart=False)
+
+    try:
+        async with app.run_test(size=(120, 36)) as pilot:
+            controller._open_settlement_page(controller.active_room_data["settlement_report"])
+            await pilot.pause()
+
+            assert app.query_one("#main-panel").border_title == "终局结算"
+            assert "终局结算" in str(app.query_one("#topbar").renderable)
+            assert "export [路径]" in str(app.query_one("#side-panel").renderable)
+            assert app.bridge.prompt == "结算> "
+    finally:
+        await controller.api.close()
+
 
 @pytest.mark.asyncio
 class TestPokerApiClient:

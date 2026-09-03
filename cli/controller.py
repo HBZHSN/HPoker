@@ -76,6 +76,8 @@ class PokerCliController:
         self._tui_view: Optional[str] = None
         self._tui_notice = ""
         self._tui_panel: Optional[str] = None
+        self._tui_panel_title = ""
+        self._tui_panel_kind: Optional[str] = None
         self._tui_prompt = ""
         self._tui_timer_task: Optional[asyncio.Task] = None
 
@@ -91,6 +93,8 @@ class PokerCliController:
         if self._tui_view != view:
             self._tui_prompt = ""
             self._tui_panel = None
+            self._tui_panel_title = ""
+            self._tui_panel_kind = None
             self.tui.clear_input()
         self._tui_view = view
         if view == "room":
@@ -109,6 +113,8 @@ class PokerCliController:
         self._tui_view = None
         self._tui_notice = ""
         self._tui_panel = None
+        self._tui_panel_title = ""
+        self._tui_panel_kind = None
         self._tui_prompt = ""
 
     def _start_tui_timer(self) -> None:
@@ -167,7 +173,9 @@ class PokerCliController:
         else:
             frame = "HPoker\n\n正在加载……"
 
-        if self._tui_view == "room":
+        if self._tui_panel_kind == "settlement":
+            prompt = "结算> "
+        elif self._tui_view == "room":
             prompt = "断线> " if not self.ws_client or not self.ws_client.is_connected else "牌桌> "
         else:
             prompt = "大厅> "
@@ -175,7 +183,7 @@ class PokerCliController:
             prompt = self._tui_prompt
         footer = self._tui_notice
         if self._tui_panel:
-            panel_hint = "输入命令后返回主画面；方向键 ↑/↓ 可浏览历史命令"
+            panel_hint = "输入 q 返回上一页；方向键 ↑/↓ 可浏览历史命令"
             footer = f"{footer}\n{panel_hint}" if footer else panel_hint
         self.tui.draw(
             frame,
@@ -184,7 +192,14 @@ class PokerCliController:
             footer=footer,
         )
 
-    def _output(self, message: Any = "", *, panel: bool = False) -> None:
+    def _output(
+        self,
+        message: Any = "",
+        *,
+        panel: bool = False,
+        panel_title: str = "详情",
+        panel_kind: str = "details",
+    ) -> None:
         """Send user feedback to the footer instead of scrolling the TUI."""
 
         if not self.tui.active:
@@ -193,6 +208,8 @@ class PokerCliController:
         text = str(message)
         if panel or "\n" in text.strip("\n"):
             self._tui_panel = text.strip("\n")
+            self._tui_panel_title = panel_title
+            self._tui_panel_kind = panel_kind
         else:
             self._tui_notice = text
         self._refresh_tui()
@@ -918,7 +935,7 @@ class PokerCliController:
     async def _show_settlement(self) -> None:
         report = self.active_room_data.get("settlement_report") if self.active_room_data else None
         if report:
-            self._output(self.renderer.render_settlement_report(report), panel=True)
+            self._open_settlement_page(report)
             return
         if not self.active_room_id:
             self._output("当前没有房间结算清单。")
@@ -928,7 +945,7 @@ class PokerCliController:
             report = room.get("settlement_report")
             if report:
                 self.active_room_data = room
-                self._output(self.renderer.render_settlement_report(report), panel=True)
+                self._open_settlement_page(report)
             else:
                 self._output("当前房间尚未结束；房主输入 end 后才会生成结算清单。")
         except Exception as exc:
@@ -953,21 +970,42 @@ class PokerCliController:
             self.active_room_data["settlement_report"] = report
             self.active_room_data["is_ended"] = True
 
+    def _open_settlement_page(self, report: Dict[str, Any]) -> None:
+        """Open the final bill as a first-class CLI page."""
+
+        self._output(
+            self.renderer.render_settlement_report(report),
+            panel=True,
+            panel_title="终局结算",
+            panel_kind="settlement",
+        )
+
     # ------------------ WebSocket Event Handlers ------------------
 
     async def _on_ws_room_state(self, data: Dict[str, Any]) -> None:
         self.active_room_data = data
+        report = data.get("settlement_report") if data.get("is_ended") else None
         async with self._render_lock:
             if self.tui.active:
-                self._tui_panel = None
-                self._refresh_tui()
+                if isinstance(report, dict):
+                    self._open_settlement_page(report)
+                else:
+                    self._tui_panel = None
+                    self._tui_panel_title = ""
+                    self._tui_panel_kind = None
+                    self._refresh_tui()
             elif self.renderer.mode == "dashboard":
                 self.renderer.clear_screen()
-                self._output(self.renderer.render_table_dashboard(data, self._current_user_id()))
+                if isinstance(report, dict):
+                    self._output(self.renderer.render_settlement_report(report), panel=True)
+                else:
+                    self._output(self.renderer.render_table_dashboard(data, self._current_user_id()))
             else:
                 stream_log = self.renderer.render_stream_event("ROOM_STATE", data, self._current_user_id())
                 if stream_log:
                     self._output("\n" + stream_log)
+                if isinstance(report, dict):
+                    self._output("\n" + self.renderer.render_settlement_report(report), panel=True)
             if self._in_room and not self._closing_room and not self.tui.active:
                 self._write_prompt("牌桌> ")
 
@@ -1009,7 +1047,7 @@ class PokerCliController:
                 self._output("\n" + self.renderer.render_settlement_report(report), panel=True)
                 self._write_prompt("牌桌> ")
             elif self.tui.active:
-                self._output("结算报表已更新，输入 bill 查看完整清单。")
+                self._open_settlement_page(report)
 
     async def _on_ws_room_deleted(self, data: Dict[str, Any]) -> None:
         message = data.get("message", "房间已被解散") if isinstance(data, dict) else "房间已被解散"
