@@ -506,6 +506,46 @@ html,
   pointer-events: none;
 }
 
+@keyframes seat-side-emoji-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.45) translateY(6px);
+  }
+  16%, 82% {
+    opacity: 1;
+    transform: scale(1.1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.85) translateY(-14px);
+  }
+}
+
+.poker-seat-side-emoji {
+  animation: seat-side-emoji-pop 4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes seat-side-chat-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85) translateY(4px);
+  }
+  14%, 84% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.92) translateY(-10px);
+  }
+}
+
+.poker-seat-side-chat {
+  animation: seat-side-chat-pop 5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
 .poker-chat-messages {
   user-select: text;
   -webkit-user-select: text;

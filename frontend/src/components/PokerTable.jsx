@@ -570,11 +570,16 @@ export default function PokerTable({
                 const isSB = table?.sb_seat === seatIdx;
                 const isBB = table?.bb_seat === seatIdx;
                 const payout = table?.payouts?.find((p) => p.player_id === seatData?.player_id);
+                const socialBubble = seatSocialBubbles[seatData?.player_id] || null;
+                const seatLeftPercent = parseFloat(pos.left);
+                const bubblePlacement = seatLeftPercent > 50 ? 'left' : 'right';
 
                 return (
                   <div
                     key={screenIdx}
-                    className="poker-table-seat-anchor absolute -translate-x-1/2 -translate-y-1/2 z-20"
+                    className={`poker-table-seat-anchor absolute -translate-x-1/2 -translate-y-1/2 ${
+                      socialBubble ? 'z-35' : 'z-20'
+                    }`}
                     data-screen-position={screenIdx}
                     style={{ top: pos.top, left: pos.left }}
                   >
@@ -594,7 +599,8 @@ export default function PokerTable({
                       street={table?.street || 'IDLE'}
                       turnCount={table?.turn_count || 0}
                       actionHistoryLength={table?.action_history?.length || 0}
-                      socialBubble={seatSocialBubbles[seatData?.player_id] || null}
+                      socialBubble={socialBubble}
+                      bubblePlacement={bubblePlacement}
                     />
                   </div>
                 );

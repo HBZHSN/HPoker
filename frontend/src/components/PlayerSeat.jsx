@@ -20,6 +20,7 @@ export default function PlayerSeat({
   turnCount = 0,
   actionHistoryLength = 0,
   socialBubble = null,
+  bubblePlacement = 'right',
 }) {
   const baseTimeout = (isCurrentTurn && isUsingTimeBank)
     ? (currentTurnDuration || 30)
@@ -73,23 +74,49 @@ export default function PlayerSeat({
     <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
       {/* Anchor Container for Avatar Card & Floating Badges */}
       <div className="relative w-full h-full flex flex-col items-center justify-center">
+        {/* === SOCIAL REACTION / CHAT BUBBLE (Displayed beside avatar, not blocking top status) === */}
         {socialBubble?.type === 'emoji' ? (
           <div
             key={socialBubble.activity_id}
-            className="poker-seat-emoji absolute -top-14 left-1/2 z-40 text-4xl md:-top-16 md:text-5xl"
-            role="status"
-            aria-label={`${seatData.name} 发送了表情 ${socialBubble.emoji}`}
+            className={`poker-seat-bubble-anchor absolute top-1/2 -translate-y-1/2 z-40 pointer-events-none ${
+              bubblePlacement === 'left'
+                ? 'right-[calc(100%+8px)] md:right-[calc(100%+12px)] flex justify-end'
+                : 'left-[calc(100%+8px)] md:left-[calc(100%+12px)] flex justify-start'
+            }`}
           >
-            {socialBubble.emoji}
+            <div
+              className="poker-seat-side-emoji text-3xl md:text-4xl lg:text-5xl select-none filter drop-shadow-[0_4px_10px_rgba(0,0,0,0.85)]"
+              role="status"
+              aria-label={`${seatData.name} 发送了表情 ${socialBubble.emoji}`}
+            >
+              {socialBubble.emoji}
+            </div>
           </div>
         ) : socialBubble?.type === 'chat' ? (
           <div
             key={socialBubble.activity_id}
-            className="poker-seat-chat absolute bottom-[calc(100%+12px)] left-1/2 z-40 w-max max-w-[180px] break-words rounded-2xl rounded-bl-sm border border-amber-400/60 bg-slate-950/95 px-3 py-2 text-[11px] font-bold leading-relaxed text-slate-100 shadow-2xl md:max-w-[220px] md:text-xs"
-            role="status"
-            aria-label={`${seatData.name} 说：${socialBubble.message}`}
+            className={`poker-seat-bubble-anchor absolute top-1/2 -translate-y-1/2 z-40 pointer-events-none flex ${
+              bubblePlacement === 'left'
+                ? 'right-[calc(100%+8px)] md:right-[calc(100%+12px)] justify-end'
+                : 'left-[calc(100%+8px)] md:left-[calc(100%+12px)] justify-start'
+            }`}
           >
-            {socialBubble.message}
+            <div
+              className={`poker-seat-side-chat relative w-max max-w-[130px] sm:max-w-[170px] md:max-w-[210px] break-words rounded-2xl border border-amber-400/80 bg-slate-950/95 px-2.5 py-1.5 md:px-3 md:py-2 text-[11px] md:text-xs font-bold leading-relaxed text-slate-100 shadow-[0_8px_25px_rgba(0,0,0,0.85)] backdrop-blur-md ${
+                bubblePlacement === 'left' ? 'rounded-tr-sm' : 'rounded-tl-sm'
+              }`}
+              role="status"
+              aria-label={`${seatData.name} 说：${socialBubble.message}`}
+            >
+              <span
+                className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 border-y-[5px] border-y-transparent ${
+                  bubblePlacement === 'left'
+                    ? '-right-[5px] border-l-[5px] border-l-amber-400/80'
+                    : '-left-[5px] border-r-[5px] border-r-amber-400/80'
+                }`}
+              />
+              {socialBubble.message}
+            </div>
           </div>
         ) : null}
 

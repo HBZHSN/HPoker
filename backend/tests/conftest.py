@@ -18,7 +18,7 @@ def isolate_persisted_storage():
     test1, test2, and test3. No real accounts (admin, fwd, hx, yy) exist in memory.
     """
     original_room_path = room_manager.storage_path
-    original_rooms = copy.deepcopy(room_manager._rooms)
+    original_rooms = dict(room_manager._rooms)
 
     original_bal_path = balance_manager.storage_path
     original_bal_entries = copy.deepcopy(balance_manager._entries)
