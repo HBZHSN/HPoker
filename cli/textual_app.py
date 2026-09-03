@@ -343,6 +343,13 @@ class PokerTextualApp(App[int]):
             report = (controller.active_room_data or {}).get("settlement_report") or {}
             sidebar = renderer.render_settlement_sidebar(report)
             title = "HPoker  ·  终局结算"
+        elif controller._tui_panel_kind == "hand_result":
+            sidebar = renderer.render_hand_result_sidebar(
+                controller.active_room_data or {},
+                controller._current_user_id(),
+            )
+            hand_number = (controller.active_room_data or {}).get("table", {}).get("hand_number", 0)
+            title = f"HPoker  ·  第 {hand_number} 手结算"
         elif view == "room":
             sidebar = renderer.render_table_sidebar(
                 controller.active_room_data or {},

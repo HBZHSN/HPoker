@@ -586,6 +586,88 @@ class TestPokerUiRenderer:
         assert "转账    1 笔" in sidebar
         assert "q              返回牌桌" in sidebar
 
+    def test_render_hand_result_matches_web_summary_content(self):
+        renderer = PokerUiRenderer(enable_color=False)
+        table = {
+            "hand_number": 12,
+            "total_pot": 300,
+            "board_cards": [
+                {"rank_symbol": "A", "suit_symbol": "♠"},
+                {"rank_symbol": "K", "suit_symbol": "♥"},
+            ],
+            "rit_enabled": True,
+            "board_cards_2": [{"rank_symbol": "Q", "suit_symbol": "♦"}],
+            "hand_results": [{
+                "player_id": "u_me",
+                "name": "Hero",
+                "total_bet": 100,
+                "payout_amount": 250,
+                "payout_board_1": 150,
+                "payout_board_2": 100,
+                "net_profit": 150,
+                "chips": 1150,
+                "is_winner": True,
+                "hand_desc": "两对 A 和 K",
+                "hand_desc_2": "一对 Q",
+                "hole_cards": [
+                    {"rank_symbol": "A", "suit_symbol": "♣"},
+                    {"rank_symbol": "K", "suit_symbol": "♦"},
+                ],
+                "shown_cards": [],
+                "is_ready": True,
+            }],
+        }
+
+        output = renderer.render_hand_result(table, "u_me")
+        assert "第 12 手 · 牌局结果" in output
+        assert "公共牌  [A♠] [K♥]" in output
+        assert "第二板  [Q♦]" in output
+        assert "Hero [赢家 / 你 / 已准备]" in output
+        assert "手牌    [A♣] [K♦]" in output
+        assert "牌型    两对 A 和 K" in output
+        assert "第二板  一对 Q" in output
+        assert "投入 100" in output
+        assert "返还 250" in output
+        assert "盈亏 +150" in output
+        assert "余额 1150" in output
+
+
+@pytest.mark.asyncio
+async def test_hand_end_opens_once_and_result_command_reopens_page():
+    controller = PokerCliController(enable_color=False)
+    controller.current_user = {"user_id": "u_me"}
+    controller.tui.active = True
+    controller._in_room = True
+    controller._tui_view = "room"
+    controller._refresh_tui = MagicMock()
+    state = {
+        "room_id": "r1",
+        "table": {
+            "street": "HAND_END",
+            "hand_number": 3,
+            "hand_results": [{"player_id": "u_me", "name": "Hero", "net_profit": 20}],
+        },
+    }
+
+    try:
+        await controller._on_ws_room_state(state)
+        assert controller._tui_panel_kind == "hand_result"
+        assert controller._tui_panel_title == "第 3 手结算"
+
+        await controller._dispatch_room_command(parse_command("q"))
+        assert controller._tui_panel is None
+        assert controller._dismissed_hand_result_number == 3
+        assert controller._in_room is True
+
+        await controller._on_ws_room_state(state)
+        assert controller._tui_panel is None
+
+        await controller._dispatch_room_command(parse_command("result"))
+        assert controller._tui_panel_kind == "hand_result"
+        assert controller._in_room is True
+    finally:
+        await controller.api.close()
+
 
 @pytest.mark.asyncio
 async def test_ended_room_state_automatically_opens_settlement_page():

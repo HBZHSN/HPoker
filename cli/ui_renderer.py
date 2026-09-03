@@ -414,6 +414,7 @@ class PokerUiRenderer:
                 lines.append("  start    开始下一手")
             lines.extend(["  rebuy    补码", "  leave    返回大厅"])
             if street in {"HAND_END", "SHOWDOWN"}:
+                lines.append("  result    查看本手结算")
                 lines.append("  show all / muck")
         elif is_my_turn:
             duration = max(1, self._int(table.get("current_turn_duration", cfg.get("action_timeout", 15)), 15))
@@ -1112,6 +1113,93 @@ class PokerUiRenderer:
         lines.append(self.c("  (注: 纯纯现金局结算账单，输家按上述清单直接向赢家微信/支付宝转账即可)", Colors.DIM))
         lines.append("")
 
+        return "\n".join(lines)
+
+    def render_hand_result(self, table: Dict[str, Any], current_user_id: str) -> str:
+        """Render one completed hand with boards, cards, and chip deltas."""
+
+        hand_number = self._int(table.get("hand_number", 0))
+        results = table.get("hand_results") or []
+        board = table.get("board_cards_full") or table.get("board_cards") or []
+        board_2 = table.get("board_cards_2_full") or table.get("board_cards_2") or []
+        has_two_boards = bool(table.get("rit_enabled") or board_2)
+        pot = self._int(table.get("total_pot", 0))
+        lines = [
+            self.c(f"第 {hand_number} 手 · 牌局结果", Colors.BOLD + Colors.BRIGHT_YELLOW),
+            f"总底池  {pot}",
+            "",
+            f"公共牌  {self.format_cards(board)}",
+        ]
+        if has_two_boards:
+            lines.append(f"第二板  {self.format_cards(board_2)}")
+        lines.extend(["", self.c("玩家结果", Colors.BOLD + Colors.BRIGHT_CYAN)])
+
+        for result in results:
+            is_me = result.get("player_id") == current_user_id
+            is_winner = bool(result.get("is_winner"))
+            tags = []
+            if is_winner:
+                tags.append("赢家")
+            if is_me:
+                tags.append("你")
+            if result.get("is_ready"):
+                tags.append("已准备")
+            tag_text = f" [{' / '.join(tags)}]" if tags else ""
+            name = self._text(result.get("name"), "玩家")
+            cards = result.get("hole_cards") if is_me else result.get("shown_cards")
+            cards_text = self.format_cards(cards or []) if cards else (
+                "已弃牌" if result.get("is_folded") else "未亮牌"
+            )
+            net = self._int(result.get("net_profit", 0))
+            net_text = f"+{net}" if net > 0 else str(net)
+            net_color = Colors.BRIGHT_GREEN if net > 0 else Colors.BRIGHT_RED if net < 0 else Colors.DIM
+            lines.extend([
+                "",
+                self.c(f"{name}{tag_text}", Colors.BOLD + (Colors.BRIGHT_GREEN if is_winner else Colors.WHITE)),
+                f"  手牌    {cards_text}",
+                f"  牌型    {self._text(result.get('hand_desc'), '未知牌型')}",
+            ])
+            if has_two_boards:
+                lines.append(
+                    f"  第二板  {self._text(result.get('hand_desc_2'), '未知')}"
+                    f"  ·  分池 +{self._int(result.get('payout_board_2', 0))}"
+                )
+                lines.append(f"  第一板分池 +{self._int(result.get('payout_board_1', 0))}")
+            lines.append(
+                "  筹码    "
+                f"投入 {self._int(result.get('total_bet', 0))}  ·  "
+                f"返还 {self._int(result.get('payout_amount', 0))}  ·  "
+                f"盈亏 {self.c(net_text, net_color)}  ·  "
+                f"余额 {self._int(result.get('chips', 0))}"
+            )
+
+        return "\n".join(lines)
+
+    def render_hand_result_sidebar(self, room: Dict[str, Any], current_user_id: str) -> str:
+        """Render the actions available beside a completed-hand result page."""
+
+        table = room.get("table", {})
+        ready_ids = table.get("ready_player_ids") or []
+        lines = [
+            self.c("本手已结束", Colors.BOLD + Colors.BRIGHT_GREEN),
+            "",
+            self.c("亮牌", Colors.BOLD + Colors.BRIGHT_CYAN),
+            "  show 1 / show 2",
+            "  show all / muck",
+            "",
+            self.c("下一手", Colors.BOLD + Colors.BRIGHT_CYAN),
+            "  unready" if current_user_id in ready_ids else "  ready",
+            "  rebuy",
+        ]
+        if current_user_id == room.get("host_player_id"):
+            lines.append("  start")
+        lines.extend([
+            "",
+            "  q       返回牌桌",
+            "  leave   返回大厅",
+            "",
+            self.c("Ctrl+C 退出程序", Colors.DIM),
+        ])
         return "\n".join(lines)
 
     def render_settlement_sidebar(self, report: Dict[str, Any]) -> str:

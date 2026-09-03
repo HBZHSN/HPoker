@@ -79,6 +79,8 @@ class PokerCliController:
         self._tui_panel_kind: Optional[str] = None
         self._tui_prompt = ""
         self._tui_timer_task: Optional[asyncio.Task] = None
+        self._dismissed_hand_result_number: Optional[int] = None
+        self._last_stream_hand_result_number: Optional[int] = None
 
     # ------------------ Fixed-screen TUI ------------------
 
@@ -174,6 +176,8 @@ class PokerCliController:
 
         if self._tui_panel_kind == "settlement":
             prompt = "结算> "
+        elif self._tui_panel_kind == "hand_result":
+            prompt = "本手结算> "
         elif self._tui_view == "room":
             prompt = "断线> " if not self.ws_client or not self.ws_client.is_connected else "牌桌> "
         else:
@@ -218,6 +222,10 @@ class PokerCliController:
 
         if self._tui_panel is None:
             return False
+        if self._tui_panel_kind == "hand_result" and self.active_room_data:
+            hand_number = self.active_room_data.get("table", {}).get("hand_number")
+            if isinstance(hand_number, int):
+                self._dismissed_hand_result_number = hand_number
         self._tui_panel = None
         self._tui_panel_title = ""
         self._tui_panel_kind = None
@@ -668,6 +676,9 @@ class PokerCliController:
             if self.active_room_data:
                 self._output(self.renderer.render_action_history(self.active_room_data, limit), panel=True)
             return
+        if name == "result":
+            self._show_hand_result()
+            return
         if name == "reconnect":
             await self._reconnect_room()
             return
@@ -996,15 +1007,43 @@ class PokerCliController:
             panel_kind="settlement",
         )
 
+    def _show_hand_result(self) -> None:
+        table = self.active_room_data.get("table", {}) if self.active_room_data else {}
+        if table.get("street") != "HAND_END" or not table.get("hand_results"):
+            self._output("当前没有可查看的本手结算。")
+            return
+        self._dismissed_hand_result_number = None
+        self._open_hand_result_page(table)
+
+    def _open_hand_result_page(self, table: Dict[str, Any]) -> None:
+        """Open the completed hand summary with cards and chip profit/loss."""
+
+        hand_number = self._as_int(table.get("hand_number"))
+        self._output(
+            self.renderer.render_hand_result(table, self._current_user_id()),
+            panel=True,
+            panel_title=f"第 {hand_number} 手结算",
+            panel_kind="hand_result",
+        )
+
     # ------------------ WebSocket Event Handlers ------------------
 
     async def _on_ws_room_state(self, data: Dict[str, Any]) -> None:
         self.active_room_data = data
         report = data.get("settlement_report") if data.get("is_ended") else None
+        table = data.get("table", {})
+        hand_number = table.get("hand_number")
+        has_hand_result = (
+            table.get("street") == "HAND_END"
+            and bool(table.get("hand_results"))
+            and hand_number != self._dismissed_hand_result_number
+        )
         async with self._render_lock:
             if self.tui.active:
                 if isinstance(report, dict):
                     self._open_settlement_page(report)
+                elif has_hand_result:
+                    self._open_hand_result_page(table)
                 else:
                     self._tui_panel = None
                     self._tui_panel_title = ""
@@ -1014,6 +1053,8 @@ class PokerCliController:
                 self.renderer.clear_screen()
                 if isinstance(report, dict):
                     self._output(self.renderer.render_settlement_report(report), panel=True)
+                elif has_hand_result:
+                    self._output(self.renderer.render_hand_result(table, self._current_user_id()), panel=True)
                 else:
                     self._output(self.renderer.render_table_dashboard(data, self._current_user_id()))
             else:
@@ -1022,6 +1063,9 @@ class PokerCliController:
                     self._output("\n" + stream_log)
                 if isinstance(report, dict):
                     self._output("\n" + self.renderer.render_settlement_report(report), panel=True)
+                elif has_hand_result and hand_number != self._last_stream_hand_result_number:
+                    self._output("\n" + self.renderer.render_hand_result(table, self._current_user_id()), panel=True)
+                    self._last_stream_hand_result_number = hand_number
             if self._in_room and not self._closing_room and not self.tui.active:
                 self._write_prompt("牌桌> ")
 

@@ -87,6 +87,7 @@ ROOM_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("rit", (), "rit <1|2>", "选择发牌次数", "牌局"),
     CommandSpec("show", ("showall", "s1", "s2", "sa", "muck", "hide"), "show <1|2|all|muck>", "亮牌 / 盖牌", "牌局"),
     CommandSpec("history", ("log",), "history [数量]", "最近动态", "查看"),
+    CommandSpec("result", ("hand", "handresult"), "result", "本手结算", "查看", True),
     CommandSpec("bill", ("report", "settlement"), "bill", "结算账单", "查看"),
     CommandSpec("export", ("save",), "export [路径]", "导出账单", "查看"),
     CommandSpec("reconnect", ("retry",), "reconnect", "重新连接", "连接"),
