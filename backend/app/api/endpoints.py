@@ -543,3 +543,65 @@ def clear_all_balance_records_post(
 ):
     """Alias POST endpoint to clear all ledger entries and settlement batches."""
     return clear_all_balance_records(admin_id=admin_id, authorization=authorization, token=token)
+
+
+# ----------------- Equity Calculation Endpoint -----------------
+
+class EquityCardRequest(BaseModel):
+    """A single card, described by either notation ('As') or rank+suit."""
+    notation: Optional[str] = None
+    rank: Optional[int] = None
+    suit: Optional[str] = None
+
+
+class EquityRequest(BaseModel):
+    hero_cards: List[EquityCardRequest]
+    board_cards: List[EquityCardRequest] = Field(default_factory=list)
+    num_opponents: int = Field(default=1, ge=1, le=8)
+    pot_size: Optional[int] = Field(default=None, ge=0)
+    to_call: Optional[int] = Field(default=None, ge=0)
+
+
+@api_router.post("/equity")
+async def calculate_equity(req: EquityRequest):
+    """Compute poker equity, drawing probabilities, and hand strength.
+
+    Accepts 2 hero hole cards and 0..5 board cards (as notation strings or
+    rank+suit pairs). Returns win/tie/lose rates, drawing outcome
+    distribution, and projected equity at future streets.
+
+    Runs in a thread pool so CPU-heavy Monte Carlo simulation does not
+    block other WebSocket / REST requests.
+    """
+    import asyncio
+    from fastapi.concurrency import run_in_threadpool
+    from backend.app.engine.card import Card, Rank, Suit
+
+    def _compute_sync():
+        from backend.app.engine.equity import compute_equity
+
+        def _parse(c: EquityCardRequest) -> Card:
+            if c.notation:
+                return Card.from_str(c.notation)
+            if c.rank is not None and c.suit:
+                return Card(rank=Rank(c.rank), suit=Suit(c.suit))
+            raise ValueError(f"Invalid card: {c}")
+
+        hero = [_parse(c) for c in req.hero_cards]
+        board = [_parse(c) for c in req.board_cards]
+        if len(hero) != 2:
+            raise ValueError("hero_cards must have exactly 2 cards")
+        if len(board) > 5:
+            raise ValueError("board_cards must have at most 5 cards")
+        return compute_equity(hero, board, req.num_opponents, req.pot_size, req.to_call)
+
+    try:
+        result = await run_in_threadpool(_compute_sync)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"计算错误: {e}")
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
