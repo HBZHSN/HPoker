@@ -102,6 +102,11 @@ export default function PokerTable({
     !room?.is_ended &&
     ['IDLE', 'HAND_END'].includes(table?.street) &&
     (table?.seats || []).some((seat) => !seat);
+  const canRebuy = Boolean(
+    selfSeat &&
+    selfSeat.chips === 0 &&
+    ['IDLE', 'HAND_END'].includes(table?.street)
+  );
 
   // Handle Settlement report prompt
   useEffect(() => {
@@ -272,7 +277,7 @@ export default function PokerTable({
           </button>
 
           {/* Rebuy Button (only when all chips are lost, chips === 0) */}
-          {selfSeat && selfSeat.chips === 0 && (
+          {canRebuy && (
             <button
               onClick={handleRebuy}
               className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-glow-gold transition active:scale-95 cursor-pointer animate-pulse"
@@ -634,6 +639,7 @@ export default function PokerTable({
             onAction={handlePlayerAction}
             selfSeat={selfSeat}
             onRebuy={handleRebuy}
+            canRebuy={canRebuy}
             currentTurnPlayer={currentTurnPlayer}
             isMyTurn={isMyTurn}
             street={table?.street || 'IDLE'}

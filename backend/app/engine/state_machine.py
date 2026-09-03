@@ -292,6 +292,8 @@ class TableStateMachine:
         return contributions
 
     def rebuy(self, player_id: str, additional_chips: int) -> bool:
+        if self.street not in (Street.IDLE, Street.HAND_END):
+            return False
         for player in self.active_seated_players:
             if player.player_id == player_id:
                 if player.chips > 0:

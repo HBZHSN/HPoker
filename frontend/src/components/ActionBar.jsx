@@ -20,6 +20,7 @@ export default function ActionBar({
   disabled = false,
   selfSeat = null,
   onRebuy,
+  canRebuy = false,
   currentTurnPlayer = null,
   isMyTurn = false,
   street = 'IDLE',
@@ -318,7 +319,7 @@ export default function ActionBar({
       </div>
 
       {/* 2. Rebuy Alert Card (Only when player has 0 chips) */}
-      {selfSeat && selfSeat.chips === 0 && (
+      {canRebuy && (
         <div className="poker-action-rebuy bg-gradient-to-r from-red-950/90 via-amber-950/90 to-red-950/90 border border-amber-500/80 lg:border-2 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex items-center justify-between shadow-glow-gold">
           <div className="flex flex-col gap-0.5">
             <span className="text-[11px] lg:text-xs font-black text-amber-300 flex items-center gap-1">

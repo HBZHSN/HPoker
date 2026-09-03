@@ -99,6 +99,12 @@ def test_room_lifecycle_and_rebuy():
     # Bob cannot rebuy when chips > 0
     assert room.rebuy_player("user2") is False
 
+    # Even a zero-chip seat cannot buy back in before the current hand ends.
+    assert room.table.start_new_hand() is True
+    room.table.seats[1].chips = 0
+    assert room.rebuy_player("user2") is False
+    room.table.refund_unsettled_hand()
+
     # Bob loses all chips (chips == 0)
     room.table.seats[1].chips = 0
     assert room.rebuy_player("user2") is True

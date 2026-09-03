@@ -293,7 +293,7 @@ class Room:
 
     def rebuy_player(self, player_id: str) -> bool:
         """Process rebuy for a seated player."""
-        if self.is_ended:
+        if self.is_ended or self.table.street not in (Street.IDLE, Street.HAND_END):
             return False
         buyin = self.config.buyin_chips
         success = self.table.rebuy(player_id, buyin)
