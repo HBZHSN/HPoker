@@ -273,7 +273,7 @@ class PokerTextualApp(App[int]):
         try:
             if self.room_id:
                 await self.controller.enter_room(self.room_id)
-            else:
+            if not self.controller._stdin_closed:
                 await self.controller.run_lobby_loop()
         finally:
             self.exit(0)

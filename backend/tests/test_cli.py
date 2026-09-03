@@ -7,7 +7,7 @@ import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from cli.api_client import PokerApiClient
-from cli.main import parse_args
+from cli.main import main_async, parse_args
 from cli.ws_client import PokerWsClient
 from cli.ui_renderer import PokerUiRenderer, Colors
 from cli.controller import PokerCliController
@@ -83,7 +83,7 @@ def test_cli_commands_use_one_scope_aware_registry():
     for scope in ("lobby", "room"):
         assert command_alias_conflicts(scope) == {}
         for token in ("q", "quit", "exit"):
-            assert normalize_command(parse_command(token), scope).name == "quit"
+            assert normalize_command(parse_command(token), scope).name == "back"
         for token in ("h", "help", "?"):
             assert normalize_command(parse_command(token), scope).name == "help"
         assert normalize_command(parse_command("view"), scope).name == "mode"
@@ -91,9 +91,9 @@ def test_cli_commands_use_one_scope_aware_registry():
         assert normalize_command(parse_command("redraw"), scope).name == "refresh"
         assert normalize_command(parse_command("userlist"), scope).name == "users"
 
-    for token in ("leave", "back", "lobby"):
+    for token in ("leave", "lobby"):
         assert normalize_command(parse_command(token), "room").name == "leave"
-    assert normalize_command(parse_command("exit"), "room").name != "leave"
+    assert normalize_command(parse_command("back"), "room").name == "back"
 
     lobby_tokens = {token: spec.name for spec in command_specs("lobby") for token in spec.tokens}
     room_tokens = {token: spec.name for spec in command_specs("room") for token in spec.tokens}
@@ -108,7 +108,7 @@ def test_cli_commands_use_one_scope_aware_registry():
 
 
 @pytest.mark.asyncio
-async def test_global_quit_has_same_semantics_in_lobby_and_room():
+async def test_q_returns_from_current_page_without_quitting_program():
     lobby = PokerCliController(enable_color=False)
     lobby._output = MagicMock()
     room = PokerCliController(enable_color=False)
@@ -117,17 +117,20 @@ async def test_global_quit_has_same_semantics_in_lobby_and_room():
 
     try:
         should_continue = await lobby._dispatch_lobby_command(parse_command("q"), [])
-        await room._dispatch_room_command(parse_command("exit"))
+        await room._dispatch_room_command(parse_command("q"))
 
-        assert should_continue is False
-        assert lobby._quit_requested is True
-        assert room._quit_requested is True
+        assert should_continue is True
         assert room._in_room is False
 
-        room._quit_requested = False
         room._in_room = True
-        await room._dispatch_room_command(parse_command("back"))
-        assert room._quit_requested is False
+        room._tui_panel = "帮助内容"
+        room._tui_panel_title = "帮助"
+        room._tui_panel_kind = "details"
+        await room._dispatch_room_command(parse_command("q"))
+        assert room._tui_panel is None
+        assert room._in_room is True
+
+        await room._dispatch_room_command(parse_command("leave"))
         assert room._in_room is False
     finally:
         await lobby.api.close()
@@ -197,6 +200,18 @@ def test_terminal_tui_replaces_frame_instead_of_appending_lines():
 
 
 @pytest.mark.asyncio
+async def test_ctrl_c_interrupts_terminal_tui_input():
+    tui = TerminalTui(input_stream=io.StringIO(), output_stream=io.StringIO())
+    tui.active = True
+    tui._read_future = asyncio.get_running_loop().create_future()
+
+    tui._handle_character("\x03")
+
+    with pytest.raises(KeyboardInterrupt):
+        await tui._read_future
+
+
+@pytest.mark.asyncio
 async def test_tui_empty_enter_is_not_eof_but_ctrl_d_is():
     tui = TerminalTui(input_stream=io.StringIO(), output_stream=io.StringIO())
     tui.active = True
@@ -223,6 +238,24 @@ async def test_controller_empty_command_returns_to_prompt():
 
     assert command is not None
     assert command.raw == ""
+
+
+@pytest.mark.asyncio
+async def test_direct_room_entry_returns_to_lobby_after_leaving_room():
+    controller = MagicMock()
+    controller.login_flow = AsyncMock(return_value=True)
+    controller.enter_room = AsyncMock()
+    controller.run_lobby_loop = AsyncMock()
+    controller.api.close = AsyncMock()
+    controller._stdin_closed = False
+
+    with patch("cli.main.PokerCliController", return_value=controller):
+        status = await main_async(["--user", "fwd", "--room", "r1", "--mode", "stream"])
+
+    assert status == 0
+    controller.enter_room.assert_awaited_once_with("r1")
+    controller.run_lobby_loop.assert_awaited_once()
+    controller.api.close.assert_awaited_once()
 
 
 def test_controller_routes_tui_feedback_to_fixed_footer():
@@ -599,6 +632,7 @@ async def test_textual_settlement_page_has_own_title_and_actions():
         },
         "table": {},
     }
+    controller._in_room = True
     controller._tui_view = "room"
     app = PokerTextualApp(controller, autostart=False)
 
@@ -611,6 +645,15 @@ async def test_textual_settlement_page_has_own_title_and_actions():
             assert "终局结算" in str(app.query_one("#topbar").renderable)
             assert "export [路径]" in str(app.query_one("#side-panel").renderable)
             assert app.bridge.prompt == "结算> "
+
+            room_read = asyncio.create_task(app.bridge.read_line("结算> ", []))
+            await pilot.pause()
+            await pilot.press("q", "enter")
+            command = parse_command(await asyncio.wait_for(room_read, timeout=1))
+            await controller._dispatch_room_command(command)
+            await pilot.pause()
+            assert controller._tui_panel is None
+            assert controller._in_room is True
     finally:
         await controller.api.close()
 

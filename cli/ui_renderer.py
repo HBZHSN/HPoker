@@ -489,7 +489,7 @@ class PokerUiRenderer:
         if not compact:
             lines.extend(["", self.c("快捷命令", Colors.BOLD + Colors.BRIGHT_CYAN)])
             for spec in command_specs("room"):
-                if spec.sidebar and spec.name in {"info", "history", "help", "leave", "quit"}:
+                if spec.sidebar and spec.name in {"info", "history", "help", "leave", "back"}:
                     lines.append(f"  {spec.usage:<14} {spec.description}")
             lines.append(self.c("  ↑ / ↓  历史命令", Colors.DIM))
         return "\n".join(lines)
@@ -570,7 +570,8 @@ class PokerUiRenderer:
         lines.append("    • " + self.c("mode [dashboard|stream]", Colors.CYAN) + " : 切换显示模式")
         lines.append("    • " + self.c("user / logout", Colors.BRIGHT_MAGENTA) + " : 切换用户登录")
         lines.append("    • " + self.c("help", Colors.BRIGHT_WHITE) + "             : 查看大厅帮助")
-        lines.append("    • " + self.c("quit", Colors.BRIGHT_RED) + " 或 " + self.c("q", Colors.BRIGHT_RED) + " : 退出程序")
+        lines.append("    • " + self.c("q", Colors.BRIGHT_YELLOW) + " : 关闭当前页面（大厅首页不退出程序）")
+        lines.append("    • " + self.c("Ctrl+C", Colors.BRIGHT_RED) + " : 退出程序")
         if is_admin:
             lines.append("    • 管理员可通过牌桌内 " + self.c("delete", Colors.BRIGHT_RED) + " 解散房间")
         lines.append("")
@@ -1045,6 +1046,7 @@ class PokerUiRenderer:
             ])
         elif scope == "lobby":
             lines.extend(["", "  也可直接输入房间序号快速加入。"])
+        lines.append("  Ctrl+C                         退出程序")
         return "\n".join(lines)
 
     # Compatibility alias for integrations that used the old naming.

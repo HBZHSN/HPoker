@@ -63,7 +63,6 @@ class PokerCliController:
         self._closing_room = False
         self._connection_lost = False
         self._room_deleted = False
-        self._quit_requested = False
         self._stdin_closed = False
         self._prompt_displayed = False
         self._render_lock = asyncio.Lock()
@@ -214,6 +213,18 @@ class PokerCliController:
             self._tui_notice = text
         self._refresh_tui()
 
+    def _close_tui_panel(self) -> bool:
+        """Close the current detail/settlement page without leaving its parent."""
+
+        if self._tui_panel is None:
+            return False
+        self._tui_panel = None
+        self._tui_panel_title = ""
+        self._tui_panel_kind = None
+        self._tui_notice = ""
+        self._refresh_tui()
+        return True
+
     async def _dispatch_global_command(
         self,
         command: CliCommand,
@@ -224,11 +235,15 @@ class PokerCliController:
 
         name = command.name
         args = command.args
-        if name == "quit":
-            self._quit_requested = True
-            self._in_room = False
-            self._output("再见！祝游戏愉快！")
-            return False
+        if name == "back":
+            if self._close_tui_panel():
+                return True
+            if scope == "room":
+                self._output("正在离开房间...")
+                self._in_room = False
+            else:
+                self._output("当前已是大厅首页；按 Ctrl+C 可退出程序。")
+            return True
         if name == "help":
             self._output(self.renderer.render_help(scope), panel=True)
             return True
@@ -299,13 +314,14 @@ class PokerCliController:
             self._output(self.renderer.c("  HPoker 终端客户端 - 用户登录", Colors.BOLD + Colors.BRIGHT_WHITE))
             self._output(self.renderer.c("=" * 60, Colors.CYAN))
 
-            username = (await self._async_input("用户名（输入 users 查看账号，q 退出）: ")).strip()
+            username = (await self._async_input("用户名（输入 users 查看账号，Ctrl+C 退出）: ")).strip()
             if self._stdin_closed:
                 return False
             if not username:
                 continue
-            if is_global_command(username, "quit"):
-                return False
+            if is_global_command(username, "back"):
+                self._output("当前已是登录页；按 Ctrl+C 可退出程序。")
+                continue
             if username.lower() in {"users", "list"}:
                 await self._show_users()
                 continue
@@ -336,11 +352,11 @@ class PokerCliController:
             return self.rooms
 
     async def run_lobby_loop(self) -> None:
-        """Run the lobby until logout or EOF/quit."""
+        """Run the lobby until logout, EOF, or an external interrupt."""
 
         self._begin_tui("lobby")
         try:
-            while self.current_user and not self._quit_requested:
+            while self.current_user:
                 self._begin_tui("lobby")
                 rooms = await self._fetch_rooms()
                 if self.tui.active:
@@ -1075,8 +1091,8 @@ class PokerCliController:
             self._output("尚未收到房间状态。")
             return
         if self.tui.active:
-            self._tui_panel = None
-            self._refresh_tui()
+            if not self._close_tui_panel():
+                self._refresh_tui()
             return
         if self.renderer.mode == "dashboard":
             self.renderer.clear_screen()
@@ -1149,7 +1165,6 @@ class PokerCliController:
                 self.tui.clear_input()
             if getattr(self.tui, "eof_requested", False):
                 self._stdin_closed = True
-            self._tui_panel = None
             self._refresh_tui()
             return line
 

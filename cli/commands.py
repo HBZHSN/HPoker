@@ -60,7 +60,7 @@ GLOBAL_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("mode", ("view",), "mode <dashboard|stream>", "切换视图", "全局"),
     CommandSpec("color", (), "color <on|off>", "切换颜色", "全局"),
     CommandSpec("help", ("h", "?"), "help", "完整帮助", "全局", True),
-    CommandSpec("quit", ("q", "exit"), "quit", "退出程序", "全局", True),
+    CommandSpec("back", ("q", "quit", "exit"), "q", "返回当前页面", "全局", True),
 )
 
 
@@ -92,7 +92,7 @@ ROOM_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("reconnect", ("retry",), "reconnect", "重新连接", "连接"),
     CommandSpec("end", ("endroom",), "end", "结束并结算", "管理"),
     CommandSpec("delete", ("del", "destroy"), "delete", "解散房间", "管理"),
-    CommandSpec("leave", ("back", "lobby"), "leave", "返回大厅", "通用", True),
+    CommandSpec("leave", ("lobby",), "leave", "返回大厅", "通用", True),
 )
 
 
