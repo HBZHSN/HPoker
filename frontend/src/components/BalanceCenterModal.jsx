@@ -180,7 +180,7 @@ export default function BalanceCenterModal({
             <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
               <Wallet className="w-5 h-5" />
             </div>
-            <h2 className="text-lg font-black text-white tracking-wide">账务中心</h2>
+            <h2 className="text-lg font-black text-white tracking-wide">余额</h2>
           </div>
 
           <div className="flex items-center gap-2">
@@ -212,7 +212,7 @@ export default function BalanceCenterModal({
             }`}
           >
             <Wallet className="w-3.5 h-3.5" />
-            我的账户
+            我的
             {myBalance && myBalance.unsettled_games_count > 0 && (
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                 activeTab === 'my' ? 'bg-slate-950 text-amber-300' : 'bg-amber-950 text-amber-300'
@@ -231,7 +231,7 @@ export default function BalanceCenterModal({
             }`}
           >
             <History className="w-3.5 h-3.5" />
-            结算记录
+            记录
             {batches.length > 0 && (
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                 activeTab === 'history' ? 'bg-slate-950 text-amber-300' : 'bg-slate-800 text-slate-400'
@@ -251,7 +251,7 @@ export default function BalanceCenterModal({
               }`}
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              对账管理
+              对账
               {overview?.preview?.entry_count > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
                   activeTab === 'admin' ? 'bg-slate-950 text-amber-300' : 'bg-amber-500 text-slate-950'
@@ -395,15 +395,13 @@ export default function BalanceCenterModal({
         {/* Tab 2: Settlement Batches History */}
         {activeTab === 'history' && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                历史统一结算批次 ({batches.length})
-              </h3>
-            </div>
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+              结算记录
+            </h3>
 
             {batches.length === 0 ? (
               <div className="p-8 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
-                暂无历史结算批次记录。当管理员进行一键对账结算后，批次将在此存档。
+                暂无记录
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -422,9 +420,9 @@ export default function BalanceCenterModal({
                           </span>
                           <div>
                             <div className="text-xs font-bold text-white flex items-center gap-2">
-                              <span>操作员: {batch.operator_name}</span>
+                              <span>{batch.operator_name}</span>
                               <span className="text-slate-500">·</span>
-                              <span className="text-slate-400">{batch.entry_ids?.length || 0} 局合并结算</span>
+                              <span className="text-slate-400">{batch.entry_ids?.length || 0} 局</span>
                             </div>
                             <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -444,14 +442,14 @@ export default function BalanceCenterModal({
                             onClick={() => setSelectedBatch(isExpanded ? null : batch)}
                             className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition"
                           >
-                            {isExpanded ? '收起详情' : '查看明细'}
+                            {isExpanded ? '收起' : '明细'}
                           </button>
                           <button
                             onClick={() => copyBatchText(batch)}
                             className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow transition flex items-center gap-1"
                           >
                             <Copy className="w-3 h-3" />
-                            复制结算单
+                            复制
                           </button>
                         </div>
                       </div>
@@ -461,7 +459,7 @@ export default function BalanceCenterModal({
                         <div className="border-t border-slate-800/80 pt-3 flex flex-col gap-3">
                           {/* User Summaries in this batch */}
                           <div className="flex flex-col gap-1.5">
-                            <span className="text-[11px] font-bold text-slate-400">各玩家本批次结算净额</span>
+                            <span className="text-[11px] font-bold text-slate-400">净额</span>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                               {(batch.user_summaries || []).map((u, i) => {
                                 const isPos = u.net_cash >= 0;
@@ -482,7 +480,7 @@ export default function BalanceCenterModal({
 
                           {/* Minimal Transfers in this batch */}
                           <div className="flex flex-col gap-1.5">
-                            <span className="text-[11px] font-bold text-slate-400">最终点对点转账清单</span>
+                            <span className="text-[11px] font-bold text-slate-400">转账</span>
                             {(!batch.transactions || batch.transactions.length === 0) ? (
                               <div className="p-2.5 rounded-xl bg-slate-900/50 text-center text-slate-400 text-xs">
                                 无需转账
@@ -498,8 +496,7 @@ export default function BalanceCenterModal({
                                       <span className="font-bold text-red-400 bg-red-950/80 px-2 py-0.5 rounded border border-red-900/60">
                                         {t.from_player_name}
                                       </span>
-                                      <span className="text-slate-500">应付给</span>
-                                      <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                                      <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
                                       <span className="font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-900/60">
                                         {t.to_player_name}
                                       </span>

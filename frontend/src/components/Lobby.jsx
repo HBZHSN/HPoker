@@ -73,14 +73,13 @@ export default function Lobby({
           </div>
 
           <div className="flex items-center gap-1.5 ml-2">
-            {/* Balance & Ledger Button */}
+            {/* Balance Button */}
             <button
               onClick={onOpenBalance}
               className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1"
-              title="账务中心"
             >
               <Wallet className="w-3.5 h-3.5" />
-              账务中心
+              余额
             </button>
 
             {/* Edit Profile Button */}

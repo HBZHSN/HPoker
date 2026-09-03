@@ -46,7 +46,7 @@ export default function SettlementModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-white tracking-wide">结算清单</h2>
+                <h2 className="text-lg font-black text-white tracking-wide">结算</h2>
                 <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
                   isBalanceMode
                     ? 'bg-amber-950 text-amber-300 border-amber-500/50'
@@ -56,7 +56,7 @@ export default function SettlementModal({
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                {report.room_name} · 买入: {report.buyin_chips}筹码 = ¥{report.cash_value}
+                {report.room_name}
               </p>
             </div>
           </div>
@@ -176,16 +176,16 @@ export default function SettlementModal({
         <div className="flex gap-3 pt-2">
           <button
             onClick={copySettlementText}
-            className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition flex items-center justify-center gap-1.5"
+            className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl shadow-lg transition flex items-center justify-center gap-1.5 text-xs"
           >
             {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            {copied ? "已复制" : "复制结算清单"}
+            {copied ? "已复制" : "复制"}
           </button>
           <button
             onClick={onClose}
-            className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 transition"
+            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 transition text-xs"
           >
-            返回大厅
+            返回
           </button>
         </div>
       </div>
