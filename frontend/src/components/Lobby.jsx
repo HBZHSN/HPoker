@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2, Wallet } from 'lucide-react';
+import { filterVisibleLobbyUsers } from '../utils/lobbyUsers';
 
 export default function Lobby({
   currentUser,
@@ -24,12 +25,14 @@ export default function Lobby({
   const [maxSeats, setMaxSeats] = useState(6);
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'online'
 
+  const visibleUsers = useMemo(() => filterVisibleLobbyUsers(users), [users]);
+
   const onlineCount = useMemo(() => {
-    return (users || []).filter((u) => u.is_online).length;
-  }, [users]);
+    return visibleUsers.filter((u) => u.is_online).length;
+  }, [visibleUsers]);
 
   const sortedUsers = useMemo(() => {
-    const list = [...(users || [])];
+    const list = [...visibleUsers];
     list.sort((a, b) => {
       const aSelf = a.user_id === currentUser?.user_id;
       const bSelf = b.user_id === currentUser?.user_id;
@@ -44,7 +47,7 @@ export default function Lobby({
       return nameA.localeCompare(nameB, 'zh-Hans-CN');
     });
     return list;
-  }, [users, currentUser?.user_id]);
+  }, [visibleUsers, currentUser?.user_id]);
 
   const displayedUsers = useMemo(() => {
     if (userFilter === 'online') {
@@ -296,7 +299,7 @@ export default function Lobby({
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                全部 ({users.length})
+                全部 ({visibleUsers.length})
               </button>
             </div>
           </div>
