@@ -306,12 +306,79 @@ async def add_test_bot(
     return room.to_dict()
 
 
+@api_router.post("/rooms/{room_id}/leave")
+@api_router.post("/rooms/{room_id}/stand-up")
+async def leave_room(room_id: str, requester_id: str = Query(...)):
+    """Explicitly leave a seat and keep the cash-out in room settlement staging."""
+    room = room_manager.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+
+    departed = room.leave_player(requester_id)
+    if not departed:
+        raise HTTPException(
+            status_code=409,
+            detail="当前无法离开：请确认你已入座，且全下牌局已结束",
+        )
+
+    await ws_manager.broadcast_room_state(room)
+    from backend.app.websocket.router import trigger_room_after_action
+    await trigger_room_after_action(room_id)
+    return {"success": True, **room.to_dict(viewer_player_id=requester_id)}
+
+
+@api_router.post("/rooms/{room_id}/kick")
+async def kick_room_player(
+    room_id: str,
+    requester_id: str = Query(...),
+    target_player_id: str = Query(...),
+):
+    """Let the room host remove one seated player from the table."""
+    room = room_manager.get_room(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    if requester_id != room.host_player_id:
+        raise HTTPException(status_code=403, detail="Only the room host can kick a player")
+    if target_player_id == requester_id:
+        raise HTTPException(status_code=400, detail="房主不能踢出自己")
+
+    kicked = room.kick_player(target_player_id)
+    if not kicked:
+        raise HTTPException(
+            status_code=409,
+            detail="当前无法踢出该玩家：请确认玩家已入座，且全下牌局已结束",
+        )
+
+    await ws_manager.close_user_connections(
+        room_id,
+        target_player_id,
+        reason="Removed by room host",
+        message=make_message(
+            EventType.PLAYER_KICKED,
+            {
+                "room_id": room_id,
+                "message": "你已被房主移出房间",
+                "kicked_by": requester_id,
+            },
+            room_id=room_id,
+        ),
+    )
+    await ws_manager.broadcast_room_state(room)
+    from backend.app.websocket.router import broadcast_lobby_online_users, trigger_room_after_action
+    await trigger_room_after_action(room_id)
+    await broadcast_lobby_online_users()
+    return {"success": True, **room.to_dict(viewer_player_id=requester_id)}
+
+
 @api_router.post("/rooms/{room_id}/end")
 def end_room(room_id: str, requester_id: str = Query(...), settlement_type: str = Query("balance")):
     room = room_manager.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    report = room.end_room(requester_id=requester_id, settlement_type=settlement_type)
+    try:
+        report = room.end_room(requester_id=requester_id, settlement_type=settlement_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     if not report:
         raise HTTPException(status_code=403, detail="Only host can end room or room already ended")
     timeout_manager.cancel_all_timers(room_id)
@@ -476,4 +543,3 @@ def clear_all_balance_records_post(
 ):
     """Alias POST endpoint to clear all ledger entries and settlement batches."""
     return clear_all_balance_records(admin_id=admin_id, authorization=authorization, token=token)
-

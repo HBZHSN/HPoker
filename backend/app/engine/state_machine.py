@@ -256,6 +256,44 @@ class TableStateMachine:
                 count += 1
         return count
 
+    def stand_up(self, seat_index: int) -> Optional[PlayerSeat]:
+        """Remove a player from the table after folding any live hand.
+
+        A player who is already all-in cannot leave while the hand is running:
+        their chips are still part of the pot and removing their seat would
+        make the side-pot eligibility and showdown state impossible to audit.
+        Other live players fold first, then leave with their uncommitted stack.
+        """
+        if not isinstance(seat_index, int) or isinstance(seat_index, bool):
+            return None
+        if not (0 <= seat_index < self.max_seats):
+            return None
+
+        player = self.seats[seat_index]
+        if player is None:
+            return None
+
+        hand_is_running = self.street not in (Street.IDLE, Street.HAND_END)
+        if hand_is_running:
+            if player.is_all_in or self.street in (Street.RIT_DECISION, Street.SHOWDOWN):
+                return None
+
+            if not player.is_folded:
+                if self.current_turn_seat == seat_index:
+                    if not self.handle_action(player.player_id, ActionType.FOLD):
+                        return None
+                else:
+                    player.is_folded = True
+                    player.has_acted_this_round = True
+                    player.last_action = "Fold (Stand up)"
+                    self.pot_manager.record_fold(player.player_id)
+                    self._log_action(player.player_id, ActionType.FOLD, 0)
+                    self._check_round_completion()
+
+        self.ready_player_ids.discard(player.player_id)
+        self.seats[seat_index] = None
+        return player
+
     def refund_unsettled_hand(self) -> Dict[str, int]:
         """Return every chip committed to a hand that has not been settled.
 

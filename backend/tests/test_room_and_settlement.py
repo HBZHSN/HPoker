@@ -3,6 +3,7 @@ from backend.app.engine.state_machine import ActionType, Street
 from backend.app.models.room import Room, RoomConfig
 from backend.app.services.room_manager import RoomManager
 from backend.app.services.settlement import SettlementEngine, PaymentTransaction
+from backend.app.services.balance_manager import balance_manager
 
 
 def test_settlement_engine_minimal_transfers():
@@ -160,6 +161,105 @@ def test_ending_room_refunds_unsettled_hand_contributions():
     assert room.table.seats[0].chips == 100
     assert room.table.seats[1].chips == 100
     assert all(record.net_chips == 0 for record in report.player_records)
+
+
+def test_player_leave_stages_cash_out_until_host_chooses_settlement():
+    room = Room(
+        host_player_id="host1",
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
+    )
+    assert room.sit_down_player("host1", "Alice", seat_index=0)
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    room.table.seats[0].chips = 140
+    room.table.seats[1].chips = 60
+
+    departed = room.leave_player("user2")
+
+    assert departed is not None
+    assert room.table.seats[1] is None
+    assert room.historical_players["user2"]["final_chips"] == 60
+    assert room.pending_settlements[0]["reason"] == "leave"
+    assert room.pending_settlements[0]["status"] == "pending"
+    assert room.pending_settlement_report is not None
+    assert room.pending_settlement_report.settlement_type == "pending"
+    assert balance_manager._entries == {}
+
+    report = room.end_room(requester_id="host1", settlement_type="balance")
+    records = {record.player_id: record for record in report.player_records}
+
+    assert report.is_balanced is True
+    assert records["user2"].final_chips == 60
+    assert records["host1"].final_chips == 140
+    assert room.pending_settlements[0]["status"] == "resolved"
+    assert room.pending_settlements[0]["settlement_type"] == "balance"
+    assert len(balance_manager._entries) == 1
+    assert next(iter(balance_manager._entries.values())).status == "unsettled"
+
+
+def test_player_can_buy_in_again_without_losing_previous_cash_out():
+    room = Room(
+        host_player_id="host1",
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
+    )
+    assert room.sit_down_player("host1", "Alice", seat_index=0)
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    room.table.seats[0].chips = 140
+    room.table.seats[1].chips = 60
+    assert room.leave_player("user2") is not None
+
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    assert room.historical_players["user2"]["total_buyin_chips"] == 200
+    assert room.historical_players["user2"]["rebuy_count"] == 2
+
+    report = room.end_room(requester_id="host1", record_to_balance=False)
+    records = {record.player_id: record for record in report.player_records}
+
+    assert report.is_balanced is True
+    assert records["user2"].final_chips == 160
+    assert records["user2"].net_chips == -40
+    assert records["host1"].final_chips == 140
+
+
+def test_all_in_player_cannot_leave_before_hand_end():
+    room = Room(
+        host_player_id="host1",
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
+    )
+    assert room.sit_down_player("host1", "Alice", seat_index=0)
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    assert room.table.start_new_hand()
+    current_player = room.table.seats[room.table.current_turn_seat]
+    assert current_player is not None
+    assert room.table.handle_action(current_player.player_id, ActionType.ALL_IN)
+
+    assert room.leave_player(current_player.player_id) is None
+    assert room.table.seats[current_player.seat_index] is current_player
+
+
+def test_pending_departure_and_kick_survive_room_checkpoint(tmp_path):
+    storage_path = tmp_path / "rooms.json"
+    manager = RoomManager(storage_path=str(storage_path))
+    room = manager.create_room(
+        host_player_id="host1",
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
+        room_id="departure1",
+    )
+    assert room.sit_down_player("host1", "Alice", seat_index=0)
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    room.table.seats[0].chips = 140
+    room.table.seats[1].chips = 60
+    assert room.leave_player("user2") is not None
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    assert room.kick_player("user2") is not None
+
+    manager.checkpoint_room(room)
+    restored = RoomManager(storage_path=str(storage_path)).get_room("departure1")
+
+    assert restored is not None
+    assert restored.table.seats[1] is None
+    assert [item["reason"] for item in restored.pending_settlements] == ["leave", "kick"]
+    assert restored.is_player_kicked("user2") is True
+    assert restored.sit_down_player("user2", "Bob", seat_index=1) is False
 
 
 def test_room_checkpoint_restores_completed_hand_ledger(tmp_path):

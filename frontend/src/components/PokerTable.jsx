@@ -58,6 +58,7 @@ export default function PokerTable({
   const [endRoomConfirmOpen, setEndRoomConfirmOpen] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
+  const [leaveRequested, setLeaveRequested] = useState(false);
 
   const table = room?.table;
   const isHost = room?.host_player_id === currentUser?.user_id;
@@ -89,6 +90,13 @@ export default function PokerTable({
   }, [table?.seats, currentUser?.user_id]);
 
   const selfSeat = selfSeatIndex >= 0 ? table.seats[selfSeatIndex] : null;
+  const pendingSettlements = room?.pending_settlements || [];
+  const pendingSettlementCount = new Set(
+    pendingSettlements
+      .filter((item) => (item.status || 'pending') === 'pending')
+      .map((item) => item.player_id)
+      .filter(Boolean)
+  ).size;
   const orderedHoleCards = useMemo(
     () => sortCardsLowToHigh(selfSeat?.hole_cards || []),
     [selfSeat?.hole_cards]
@@ -140,6 +148,27 @@ export default function PokerTable({
     onSendWsEvent('SIT_DOWN', { seat_index: seatIndex });
   };
 
+  const handleLeaveTable = () => {
+    if (!selfSeat) {
+      onLeaveRoom({ notifyServer: false });
+      return;
+    }
+    if (
+      !['IDLE', 'HAND_END'].includes(table?.street) &&
+      (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
+    ) {
+      return;
+    }
+    setLeaveRequested(true);
+    onSendWsEvent('STAND_UP', {});
+  };
+
+  useEffect(() => {
+    if (leaveRequested && !selfSeat) {
+      onLeaveRoom({ notifyServer: false });
+    }
+  }, [leaveRequested, selfSeat, onLeaveRoom]);
+
   const handleRebuy = () => {
     onSendWsEvent('REBUY', {});
   };
@@ -176,6 +205,13 @@ export default function PokerTable({
   const handleConfirmEndRoom = (settlementType) => {
     setEndRoomConfirmOpen(false);
     onSendWsEvent('END_ROOM', { settlement_type: settlementType });
+  };
+
+  const handleKickPlayer = (playerId, playerName) => {
+    if (!isHost || playerId === currentUser?.user_id) return;
+    if (window.confirm(`确定要将 ${playerName || '该玩家'} 移出房间吗？`)) {
+      onSendWsEvent('KICK_PLAYER', { target_player_id: playerId });
+    }
   };
 
   const handleDeleteRoom = () => {
@@ -258,8 +294,20 @@ export default function PokerTable({
       <header className="poker-table-header flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
         <div className="flex items-center gap-3">
           <button
-            onClick={onLeaveRoom}
-            className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
+            onClick={handleLeaveTable}
+            disabled={Boolean(
+              selfSeat &&
+              !['IDLE', 'HAND_END'].includes(table?.street) &&
+              (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
+            )}
+            className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
+            title={
+              selfSeat &&
+              !['IDLE', 'HAND_END'].includes(table?.street) &&
+              (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
+                ? '全下牌局结束后才能离开'
+                : '离开牌桌并暂存结算'
+            }
           >
             <LogOut className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">大厅</span>
@@ -278,6 +326,11 @@ export default function PokerTable({
             <span className="poker-table-room-buyin text-[11px] text-slate-400">
               买入: ${room?.config?.buyin_chips} = ¥{room?.config?.cash_value} · 超时: {room?.config?.action_timeout}s
             </span>
+            {pendingSettlementCount > 0 && (
+              <span className="mt-1 inline-flex w-fit items-center rounded-full border border-amber-500/50 bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                待房主选择结算 · {pendingSettlementCount} 人
+              </span>
+            )}
           </div>
         </div>
 
@@ -591,6 +644,17 @@ export default function PokerTable({
                       isSB={isSB}
                       isBB={isBB}
                       onSitDown={handleSitDown}
+                      isHost={isHost}
+                      onKick={handleKickPlayer}
+                      canKick={Boolean(
+                        isHost &&
+                        seatData &&
+                        seatData.player_id !== currentUser?.user_id &&
+                        (
+                          ['IDLE', 'HAND_END'].includes(table?.street) ||
+                          !seatData.is_all_in
+                        )
+                      )}
                       currentUserId={currentUser?.user_id}
                       actionTimeout={room?.config?.action_timeout || 15}
                       currentTurnDuration={table?.current_turn_duration || room?.config?.action_timeout || 15}
@@ -723,6 +787,7 @@ export default function PokerTable({
         <EndRoomConfirmModal
           isOpen={endRoomConfirmOpen}
           hasTestAccount={hasTestAccountInRoom}
+          pendingSettlementCount={pendingSettlementCount}
           onConfirm={handleConfirmEndRoom}
           onClose={() => setEndRoomConfirmOpen(false)}
         />
@@ -734,7 +799,7 @@ export default function PokerTable({
           report={room?.settlement_report}
           onClose={() => {
             setSettlementOpen(false);
-            onLeaveRoom();
+            onLeaveRoom({ notifyServer: false });
           }}
         />
       )}

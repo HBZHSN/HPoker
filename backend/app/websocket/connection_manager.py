@@ -67,6 +67,34 @@ class ConnectionManager:
                 pass
         self.room_connections.pop(room_id, None)
 
+    async def close_user_connections(
+        self,
+        room_id: str,
+        user_id: str,
+        reason: str = "Removed from room",
+        message: Optional[dict] = None,
+    ) -> None:
+        """Notify and close one user's connections in a specific room."""
+        sockets = [
+            ws for ws in self.get_room_connections(room_id)
+            if self.socket_info.get(ws, (None, None))[1] == user_id
+        ]
+        for ws in sockets:
+            if message:
+                try:
+                    await ws.send_text(json.dumps(message))
+                except Exception:
+                    pass
+            self.socket_info.pop(ws, None)
+            if room_id in self.room_connections:
+                self.room_connections[room_id].discard(ws)
+            try:
+                await ws.close(reason=reason)
+            except Exception:
+                pass
+        if room_id in self.room_connections and not self.room_connections[room_id]:
+            self.room_connections.pop(room_id, None)
+
     def disconnect(self, websocket: WebSocket) -> tuple[Optional[str], Optional[str]]:
         info = self.socket_info.pop(websocket, None)
         if info:

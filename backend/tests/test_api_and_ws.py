@@ -196,6 +196,54 @@ def test_websocket_chat_and_emoji_broadcast():
                 assert message["payload"]["reaction_id"]
 
 
+def test_websocket_leave_and_host_kick_stage_settlement():
+    client = TestClient(app)
+    response = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Leave and Kick Room",
+        "max_seats": 3,
+    })
+    room_id = response.json()["room_id"]
+
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws_host:
+        ws_host.receive_json()
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws_guest:
+            ws_host.receive_json()
+            ws_guest.receive_json()
+
+            ws_guest.send_json({"event": EventType.STAND_UP.value, "payload": {}})
+            host_state = ws_host.receive_json()
+            guest_state = ws_guest.receive_json()
+            assert host_state["event"] == EventType.ROOM_STATE.value
+            assert host_state["payload"]["table"]["seats"][1] is None
+            assert host_state["payload"]["pending_settlements"][0]["reason"] == "leave"
+            assert guest_state["payload"]["table"]["seats"][1] is None
+
+        # Rejoin to verify the host can remove a currently seated player.
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws_guest:
+            host_rejoin_state = ws_host.receive_json()
+            if host_rejoin_state["payload"]["table"]["seats"][1] is None:
+                host_rejoin_state = ws_host.receive_json()
+            assert host_rejoin_state["payload"]["table"]["seats"][1]["player_id"] == "u_test2"
+            ws_guest.receive_json()
+
+            ws_host.send_json({
+                "event": EventType.KICK_PLAYER.value,
+                "payload": {"target_player_id": "u_test2"},
+            })
+            kicked = ws_guest.receive_json()
+            host_after_kick = ws_host.receive_json()
+
+            assert kicked["event"] == EventType.PLAYER_KICKED.value
+            assert host_after_kick["event"] == EventType.ROOM_STATE.value
+            assert host_after_kick["payload"]["table"]["seats"][1] is None
+            assert host_after_kick["payload"]["pending_settlements"][-1]["reason"] == "kick"
+
+            with client.websocket_connect(f"/ws/{room_id}/u_test2") as rejected_guest:
+                rejected = rejected_guest.receive_json()
+                assert rejected["event"] == EventType.PLAYER_KICKED.value
+
+
 def test_websocket_rejects_invalid_social_content():
     client = TestClient(app)
     response = client.post("/api/rooms", json={
@@ -585,5 +633,3 @@ def test_lobby_online_users_and_websocket_lifecycle():
     final_map = {u["user_id"]: u for u in resp_all_offline.json()}
     assert final_map["u_test1"]["is_online"] is False
     assert final_map["u_test2"]["is_online"] is False
-
-

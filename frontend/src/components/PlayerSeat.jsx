@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CardView from './CardView';
 import { sortCardsLowToHigh } from '../utils/cards';
-import { Bot, Crown, RefreshCw, UserPlus, Clock } from 'lucide-react';
+import { Bot, Crown, RefreshCw, UserPlus, Clock, UserX } from 'lucide-react';
 
 export default function PlayerSeat({
   seatIndex,
@@ -11,6 +11,9 @@ export default function PlayerSeat({
   isSB,
   isBB,
   onSitDown,
+  isHost = false,
+  onKick,
+  canKick = false,
   currentUserId,
   actionTimeout = 15,
   currentTurnDuration = 15,
@@ -172,6 +175,21 @@ export default function PlayerSeat({
           <div className="absolute -top-10 md:-top-14 left-1/2 -translate-x-1/2 text-amber-400 z-30 animate-bounce">
             <Crown className="w-4 h-4 md:w-5 md:h-5 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
           </div>
+        )}
+
+        {isHost && canKick && !isSelf && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onKick?.(seatData.player_id, seatData.name);
+            }}
+            className="absolute -top-2 -right-2 z-40 flex h-5 w-5 items-center justify-center rounded-full border border-red-400/80 bg-red-950/95 text-red-300 shadow-lg transition hover:bg-red-800 hover:text-white active:scale-90"
+            title="房主移出玩家"
+            aria-label={`将 ${seatData.name} 移出房间`}
+          >
+            <UserX className="h-3 w-3" />
+          </button>
         )}
 
         {/* === TOP-LEFT CORNER: Buy-in Count Badge & Bot Indicator (买入次数与机器人标识) === */}

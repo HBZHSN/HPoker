@@ -4,6 +4,7 @@ import { Award, CheckCircle2, DollarSign, X, AlertCircle } from 'lucide-react';
 export default function EndRoomConfirmModal({
   isOpen,
   hasTestAccount = false,
+  pendingSettlementCount = 0,
   onConfirm,
   onClose,
 }) {
@@ -29,6 +30,12 @@ export default function EndRoomConfirmModal({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {pendingSettlementCount > 0 && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs font-bold text-amber-300">
+            本次将一并处理 {pendingSettlementCount} 名已离场玩家的待结算筹码。
+          </div>
+        )}
 
         {/* Options */}
         <div className="flex flex-col gap-2.5">

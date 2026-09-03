@@ -9,6 +9,7 @@ class EventType(str, Enum):
     # Client -> Server
     JOIN_ROOM = "JOIN_ROOM"
     SIT_DOWN = "SIT_DOWN"
+    STAND_UP = "STAND_UP"
     START_GAME = "START_GAME"
     PLAYER_ACTION = "PLAYER_ACTION"
     REBUY = "REBUY"
@@ -18,6 +19,7 @@ class EventType(str, Enum):
     RIT_CHOICE = "RIT_CHOICE"
     USE_TIME_CARD = "USE_TIME_CARD"
     END_ROOM = "END_ROOM"
+    KICK_PLAYER = "KICK_PLAYER"
     DELETE_ROOM = "DELETE_ROOM"
     ADD_TEST_BOT = "ADD_TEST_BOT"
     # Short alias retained for lightweight clients that call it ADD_BOT.
@@ -32,6 +34,7 @@ class EventType(str, Enum):
     SOUND_EFFECT = "SOUND_EFFECT"
     SETTLEMENT_REPORT = "SETTLEMENT_REPORT"
     ROOM_DELETED = "ROOM_DELETED"
+    PLAYER_KICKED = "PLAYER_KICKED"
     ONLINE_USERS_UPDATE = "ONLINE_USERS_UPDATE"
     ERROR_MESSAGE = "ERROR_MESSAGE"
     PONG = "PONG"

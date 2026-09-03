@@ -155,7 +155,16 @@ export default function App() {
     setConnectionStatus('connecting');
   }, [currentUser?.user_id]);
 
-  const handleLeaveRoom = useCallback(() => {
+  const handleLeaveRoom = useCallback((options = {}) => {
+    const notifyServer = options.notifyServer !== false;
+    if (
+      notifyServer &&
+      activeRoomId &&
+      wsRef.current &&
+      wsRef.current.readyState === WebSocket.OPEN
+    ) {
+      wsRef.current.send(JSON.stringify({ event: 'STAND_UP', payload: {} }));
+    }
     if (currentUser?.user_id) {
       localStorage.removeItem(lastRoomStorageKey(currentUser.user_id));
     }
@@ -163,7 +172,7 @@ export default function App() {
     setRoomData(null);
     setConnectionStatus('idle');
     fetchLobbyData();
-  }, [currentUser?.user_id, fetchLobbyData]);
+  }, [activeRoomId, currentUser?.user_id, fetchLobbyData]);
 
   // Keep reconnecting after mobile background suspension. Returning to the
   // foreground triggers an immediate attempt instead of waiting for backoff.
@@ -273,18 +282,27 @@ export default function App() {
               type: 'emoji',
               timestamp: msg.timestamp,
             });
+          } else if (msg.event === 'PLAYER_KICKED') {
+            if (activeRoomId) {
+              terminalClose = true;
+              alert(msg.payload?.message || '你已被房主移出房间');
+              handleLeaveRoom({ notifyServer: false });
+            }
           } else if (msg.event === 'ROOM_DELETED') {
             if (activeRoomId) {
               terminalClose = true;
               alert(msg.payload?.message || '房间已被房主解散');
-              handleLeaveRoom();
+              handleLeaveRoom({ notifyServer: false });
             } else {
               fetchLobbyData();
             }
-          } else if (msg.event === 'ERROR_MESSAGE' && msg.payload?.message === 'Room not found') {
-            if (activeRoomId) {
+          } else if (msg.event === 'ERROR_MESSAGE') {
+            if (msg.payload?.message && msg.payload.message !== 'Room not found') {
+              alert(msg.payload.message);
+            }
+            if (msg.payload?.message === 'Room not found' && activeRoomId) {
               terminalClose = true;
-              handleLeaveRoom();
+              handleLeaveRoom({ notifyServer: false });
             }
           }
         } catch (err) {
@@ -365,7 +383,7 @@ export default function App() {
       });
       if (res.ok) {
         if (activeRoomId === roomId) {
-          handleLeaveRoom();
+          handleLeaveRoom({ notifyServer: false });
         } else {
           fetchLobbyData();
         }

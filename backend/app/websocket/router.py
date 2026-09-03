@@ -383,6 +383,16 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
         await websocket.close()
         return
 
+    if room.is_player_kicked(user_id):
+        await websocket.accept()
+        await websocket.send_text(json.dumps(make_message(
+            EventType.PLAYER_KICKED,
+            {"room_id": room_id, "message": "你已被房主移出房间"},
+            room_id=room_id,
+        )))
+        await websocket.close(reason="Removed by room host")
+        return
+
     user = user_manager.get_user(user_id)
     nickname = user.nickname if user else f"Player_{user_id[-4:]}"
     avatar = user.avatar if user else "👤"
@@ -478,6 +488,25 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
+
+            elif event == EventType.STAND_UP:
+                departed = room.leave_player(user_id)
+                if departed:
+                    await ws_manager.broadcast_room_state(room)
+                    await trigger_room_after_action(room_id)
+                    await broadcast_lobby_online_users()
+                else:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {
+                                "action": EventType.STAND_UP.value,
+                                "message": "当前无法离开：全下牌局请等待本手结束",
+                            },
+                            room_id=room_id,
+                        ),
+                    )
 
             elif event == EventType.REBUY:
                 ok = room.rebuy_player(user_id)
@@ -626,9 +655,72 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                             await ws_manager.broadcast_room_state(room)
                             await trigger_room_turn_timer(room_id)
 
+            elif event == EventType.KICK_PLAYER:
+                target_player_id = payload.get("target_player_id")
+                if user_id != room.host_player_id:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"action": EventType.KICK_PLAYER.value, "message": "只有房主才能踢人"},
+                            room_id=room_id,
+                        ),
+                    )
+                    continue
+                if not isinstance(target_player_id, str) or target_player_id == user_id:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"action": EventType.KICK_PLAYER.value, "message": "无法踢出该玩家"},
+                            room_id=room_id,
+                        ),
+                    )
+                    continue
+
+                kicked = room.kick_player(target_player_id)
+                if not kicked:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {
+                                "action": EventType.KICK_PLAYER.value,
+                                "message": "当前无法踢出该玩家：全下牌局请等待本手结束",
+                            },
+                            room_id=room_id,
+                        ),
+                    )
+                    continue
+
+                await ws_manager.close_user_connections(
+                    room_id,
+                    target_player_id,
+                    reason="Removed by room host",
+                    message=make_message(
+                        EventType.PLAYER_KICKED,
+                        {
+                            "room_id": room_id,
+                            "message": "你已被房主移出房间",
+                            "kicked_by": user_id,
+                        },
+                        room_id=room_id,
+                    ),
+                )
+                await ws_manager.broadcast_room_state(room)
+                await trigger_room_after_action(room_id)
+                await broadcast_lobby_online_users()
+
             elif event == EventType.END_ROOM:
                 settlement_type = payload.get("settlement_type", "balance")
-                report = room.end_room(requester_id=user_id, settlement_type=settlement_type)
+                try:
+                    report = room.end_room(requester_id=user_id, settlement_type=settlement_type)
+                except ValueError as exc:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(EventType.ERROR_MESSAGE, {"message": str(exc)}, room_id=room_id),
+                    )
+                    continue
                 if report:
                     timeout_manager.cancel_all_timers(room_id)
                     await ws_manager.broadcast_sound(room_id, "win_pot")
