@@ -498,18 +498,36 @@ export default function ActionBar({
           <span className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider">
             下注额
           </span>
-          <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 lg:px-2.5 rounded-lg border border-amber-500/40">
-            <span className="text-amber-400 font-black text-xs lg:text-sm">$</span>
-            <input
-              type="number"
-              min={sizingMin}
-              max={sizingMax}
-              step={blindUnit}
-              value={currentAmount}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => adjustBB(-1)}
               disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-              onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
-              className="w-14 lg:w-16 bg-transparent text-right font-black text-amber-300 text-xs lg:text-sm focus:outline-none"
-            />
+              className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
+              title="-1 BB"
+            >
+              -1BB
+            </button>
+            <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 lg:px-2.5 rounded-lg border border-amber-500/40">
+              <span className="text-amber-400 font-black text-xs lg:text-sm">$</span>
+              <input
+                type="number"
+                min={sizingMin}
+                max={sizingMax}
+                step={blindUnit}
+                value={currentAmount}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+                onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
+                className="w-14 lg:w-16 bg-transparent text-right font-black text-amber-300 text-xs lg:text-sm focus:outline-none"
+              />
+            </div>
+            <button
+              onClick={() => adjustBB(1)}
+              disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+              className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
+              title="+1 BB"
+            >
+              +1BB
+            </button>
           </div>
         </div>
 
@@ -575,38 +593,6 @@ export default function ActionBar({
               </button>
             );
           })}
-        </div>
-
-        {/* Slider & Stepper Controls */}
-        <div className="flex items-center gap-1.5 lg:gap-2 mt-1">
-          <button
-            onClick={() => adjustBB(-1)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow"
-            title="-1 BB"
-          >
-            -1BB
-          </button>
-
-          <input
-            type="range"
-            min={sizingMin}
-            max={sizingMax}
-            step={blindUnit}
-            value={currentAmount}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
-            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400 disabled:opacity-40 lg:h-2.5"
-          />
-
-          <button
-            onClick={() => adjustBB(1)}
-            disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow"
-            title="+1 BB"
-          >
-            +1BB
-          </button>
         </div>
       </div>
 
