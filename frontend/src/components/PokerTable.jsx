@@ -76,6 +76,14 @@ export default function PokerTable({
     [selfSeat?.hole_cards]
   );
   const botCount = (table?.seats || []).filter((seat) => seat?.is_bot).length;
+  const showPotBreakdown = useMemo(() => {
+    const inHandSeats = (table?.seats || []).filter(
+      (seat) => seat?.has_cards && !seat.is_folded && !seat.is_sitting_out
+    );
+    const hasAllInPlayer = inHandSeats.some((seat) => seat.is_all_in);
+    const hasPlayerStillBetting = inHandSeats.some((seat) => !seat.is_all_in);
+    return (table?.pots?.length || 0) > 1 && hasAllInPlayer && hasPlayerStillBetting;
+  }, [table?.pots, table?.seats]);
   const canAddTestBot =
     isHost &&
     !room?.is_ended &&
@@ -373,8 +381,9 @@ export default function PokerTable({
                     </span>
                   </div>
 
-                  {/* Side Pots display if multiple pots exist */}
-                  {table?.pots && table.pots.length > 1 && (
+                  {/* Pot tiers only matter while an all-in player is capped and
+                      at least one other contender can keep betting. */}
+                  {showPotBreakdown && (
                     <div className="poker-table-side-pots flex items-center gap-2">
                       {table.pots.map((p, i) => (
                         <span
