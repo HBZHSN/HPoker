@@ -156,6 +156,10 @@ def test_allin_fast_forward():
     # Contenders have hole cards revealed
     assert len(table.seats[0].shown_cards) == 2
     assert len(table.seats[1].shown_cards) == 2
+    voting_state = table.get_table_state(viewer_player_id="p1")
+    assert len(voting_state["seats"][0]["shown_cards"]) == 2
+    assert len(voting_state["seats"][1]["shown_cards"]) == 2
+    assert voting_state["seats"][1]["hole_cards"] == []
 
     # One vote cannot start the runout while the other contender is undecided.
     status, is_tw = table.vote_rit("p1", 1)

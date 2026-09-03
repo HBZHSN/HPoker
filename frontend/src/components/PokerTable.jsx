@@ -470,16 +470,24 @@ export default function PokerTable({
                       所有玩家均选 <strong className="text-purple-300">2 次</strong> 才平分底池；任一玩家选 <strong className="text-amber-300">1 次</strong> 则发 1 次。
                     </p>
 
-                    {/* Contender Votes Progress */}
-                    <div className="flex flex-wrap items-center justify-center gap-2 bg-black/50 p-2.5 rounded-2xl border border-slate-800">
+                    {/* Contender cards and vote progress stay visible together so
+                        players can make an informed runout choice. */}
+                    <div className="grid grid-cols-2 gap-2 bg-black/50 p-2.5 rounded-2xl border border-slate-800 max-h-48 overflow-y-auto">
                       {(table?.rit_voters || []).map((voterId) => {
                         const voterSeat = table?.seats?.find((s) => s && s.player_id === voterId);
                         const voterName = voterSeat ? voterSeat.name : voterId;
                         const vote = table?.rit_votes?.[voterId];
+                        const visibleCards = sortCardsLowToHigh(
+                          voterSeat?.shown_cards?.length
+                            ? voterSeat.shown_cards
+                            : voterSeat?.player_id === selfSeat?.player_id
+                            ? voterSeat?.hole_cards || []
+                            : []
+                        );
                         return (
-                          <span
+                          <div
                             key={voterId}
-                            className={`text-xs font-black px-3 py-1 rounded-xl border flex items-center gap-1.5 ${
+                            className={`min-w-0 px-2.5 py-2 rounded-xl border flex flex-col items-center gap-1.5 ${
                               vote === 2
                                 ? 'bg-purple-950/90 text-purple-300 border-purple-500/60 shadow'
                                 : vote === 1
@@ -487,11 +495,21 @@ export default function PokerTable({
                                 : 'bg-slate-900 text-slate-400 border-slate-700 animate-pulse'
                             }`}
                           >
-                            <span>{voterName}:</span>
-                            <span>
+                            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                              <span className="text-base leading-none flex-shrink-0">{voterSeat?.avatar || '👤'}</span>
+                              <span className="text-xs font-black truncate">{voterName}</span>
+                            </div>
+                            <div className="flex -space-x-2 min-h-[42px] items-center" aria-label={`${voterName}的手牌`}>
+                              {visibleCards.length > 0 ? visibleCards.map((card, cardIndex) => (
+                                <CardView key={cardIndex} card={card} size="xs" className="shadow-lg" />
+                              )) : (
+                                <span className="text-[10px] text-slate-500">等待亮牌</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold">
                               {vote === 2 ? '发 2 次' : vote === 1 ? '发 1 次' : '未选择'}
                             </span>
-                          </span>
+                          </div>
                         );
                       })}
                     </div>
