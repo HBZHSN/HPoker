@@ -577,7 +577,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                             await trigger_room_turn_timer(room_id)
 
             elif event == EventType.END_ROOM:
-                report = room.end_room(requester_id=user_id)
+                settlement_type = payload.get("settlement_type", "balance")
+                report = room.end_room(requester_id=user_id, settlement_type=settlement_type)
                 if report:
                     timeout_manager.cancel_all_timers(room_id)
                     await ws_manager.broadcast_sound(room_id, "win_pot")

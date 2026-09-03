@@ -60,6 +60,7 @@ class Room:
         self.created_at = time.time()
         self.is_ended = False
         self.settlement_report: Optional[SettlementReport] = None
+        self.settlement_type: str = "balance"
 
         # Table state machine
         self.table = TableStateMachine(
@@ -303,7 +304,7 @@ class Room:
                 self.historical_players[player_id]["total_buyin_chips"] += buyin
         return success
 
-    def end_room(self, requester_id: str) -> Optional[SettlementReport]:
+    def end_room(self, requester_id: str, settlement_type: str = "balance") -> Optional[SettlementReport]:
         """Host ends the room and calculates final settlements."""
         if requester_id != self.host_player_id:
             return None
@@ -335,10 +336,20 @@ class Room:
             buyin_chips=self.config.buyin_chips,
             cash_value=self.config.cash_value,
             player_data_list=participant_data,
+            settlement_type=settlement_type,
         )
 
         self.is_ended = True
+        self.settlement_type = settlement_type
         self.settlement_report = report
+
+        # Automatically record into balance ledger
+        try:
+            from backend.app.services.balance_manager import balance_manager
+            balance_manager.record_settlement(report, settlement_type=settlement_type)
+        except Exception as e:
+            print(f"[Room.end_room] Warning: Failed to record settlement to balance_manager: {e}")
+
         return report
 
     def to_dict(self, viewer_player_id: Optional[str] = None) -> dict:
@@ -347,6 +358,7 @@ class Room:
             "host_player_id": self.host_player_id,
             "config": self.config.to_dict(),
             "is_ended": self.is_ended,
+            "settlement_type": getattr(self, "settlement_type", "balance"),
             "table": self.table.get_table_state(viewer_player_id),
             "settlement_report": self.settlement_report.to_dict() if self.settlement_report else None,
             "recorded_hand_count": len(self.hand_records),

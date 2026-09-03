@@ -7,6 +7,7 @@ from typing import List, Optional
 
 from backend.app.services.user_manager import user_manager
 from backend.app.services.room_manager import room_manager
+from backend.app.services.balance_manager import balance_manager
 from backend.app.services.timeout_manager import timeout_manager
 from backend.app.websocket.connection_manager import ws_manager
 from backend.app.websocket.protocol import EventType, make_message
@@ -237,11 +238,11 @@ async def add_test_bot(
 
 
 @api_router.post("/rooms/{room_id}/end")
-def end_room(room_id: str, requester_id: str):
+def end_room(room_id: str, requester_id: str = Query(...), settlement_type: str = Query("balance")):
     room = room_manager.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    report = room.end_room(requester_id=requester_id)
+    report = room.end_room(requester_id=requester_id, settlement_type=settlement_type)
     if not report:
         raise HTTPException(status_code=403, detail="Only host can end room or room already ended")
     room_manager.checkpoint_room(room)
@@ -277,3 +278,102 @@ async def delete_room(room_id: str, requester_id: str = Query(...)):
     room_manager.delete_room(room_id)
     await ws_manager.close_room_connections(room_id, reason="Room deleted by host")
     return {"success": True, "message": "房间已成功删除"}
+
+
+# ----------------- Balance & Ledger Endpoints -----------------
+
+class SettleBatchRequest(BaseModel):
+    operator_id: str
+    include_test: bool = False
+    entry_ids: Optional[List[str]] = None
+
+
+@api_router.get("/balance/overview")
+def get_balance_overview(include_test: bool = Query(False)):
+    """Get aggregated unsettled user balances and preview of minimal peer-to-peer transfers."""
+    balances = balance_manager.get_user_balances(include_test=include_test)
+    preview = balance_manager.preview_batch_settlement(include_test=include_test)
+    return {
+        "user_balances": [b.to_dict() for b in balances],
+        "preview": preview,
+    }
+
+
+@api_router.get("/balance/my")
+def get_my_balance(user_id: str = Query(...), include_settled: bool = Query(True)):
+    """Get a user's pending balance and their match history ledger records."""
+    user = user_manager.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    # Find this user's summary in pending balances
+    balances = balance_manager.get_user_balances(include_test=user.is_test_account)
+    summary = next((b for b in balances if b.user_id == user_id), None)
+    records = balance_manager.get_user_records(user_id, include_settled=include_settled)
+
+    return {
+        "user_id": user_id,
+        "username": user.username,
+        "nickname": user.nickname,
+        "avatar": user.avatar,
+        "is_test": user.is_test_account,
+        "pending_net_cash": summary.net_cash if summary else 0.0,
+        "pending_net_chips": summary.net_chips if summary else 0,
+        "unsettled_games_count": summary.unsettled_games_count if summary else 0,
+        "records": records,
+    }
+
+
+@api_router.get("/balance/records")
+def list_balance_records(
+    include_test: bool = Query(True),
+    status: Optional[str] = Query(None),
+):
+    """List game ledger records with optional filters."""
+    return balance_manager.list_entries(include_test=include_test, status=status)
+
+
+@api_router.get("/balance/batches")
+def list_settlement_batches():
+    """List all historical one-time batch settlements."""
+    return balance_manager.list_batches()
+
+
+@api_router.get("/balance/batches/{batch_id}")
+def get_settlement_batch(batch_id: str):
+    """Get details of a settlement batch."""
+    batch = balance_manager.get_batch(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="结算批次不存在")
+    return batch
+
+
+@api_router.post("/balance/settle-batch")
+def settle_batch(req: SettleBatchRequest):
+    """Admin executes one-time consolidated debt settlement."""
+    operator = user_manager.get_user(req.operator_id)
+    if not operator or not operator.is_admin:
+        raise HTTPException(status_code=403, detail="仅管理员有权限执行统一结算对账")
+
+    try:
+        batch = balance_manager.settle_batch(
+            operator_id=req.operator_id,
+            operator_name=operator.nickname or operator.username,
+            include_test=req.include_test,
+            entry_ids=req.entry_ids,
+        )
+        return batch.to_dict()
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+
+@api_router.delete("/balance/test-records")
+def clear_test_records(admin_id: str = Query(...)):
+    """Admin purges test game records to keep the production ledger clean."""
+    admin = user_manager.get_user(admin_id)
+    if not admin or not admin.is_admin:
+        raise HTTPException(status_code=403, detail="仅管理员有权限清空测试数据")
+
+    deleted_count = balance_manager.clear_test_records()
+    return {"deleted_count": deleted_count, "message": f"已清空 {deleted_count} 条测试账单记录"}
+

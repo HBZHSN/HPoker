@@ -70,6 +70,7 @@ class SettlementReport:
     transactions: List[PaymentTransaction]
     total_chips_in_game: int
     is_balanced: bool
+    settlement_type: str = "balance"
 
     def to_dict(self) -> dict:
         return {
@@ -82,6 +83,7 @@ class SettlementReport:
             "transactions": [t.to_dict() for t in self.transactions],
             "total_chips_in_game": self.total_chips_in_game,
             "is_balanced": self.is_balanced,
+            "settlement_type": self.settlement_type,
         }
 
 
@@ -152,6 +154,7 @@ class SettlementEngine:
         buyin_chips: int,
         cash_value: float,
         player_data_list: List[dict],
+        settlement_type: str = "balance",
     ) -> SettlementReport:
         """Calculate complete settlement report for a cash game room.
         
@@ -219,4 +222,5 @@ class SettlementEngine:
             transactions=transactions,
             total_chips_in_game=total_buyins,
             is_balanced=is_balanced,
+            settlement_type=settlement_type,
         )
