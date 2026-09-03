@@ -30,6 +30,19 @@ const STREET_LABELS = {
   HAND_END: '牌局结束',
 };
 
+const buildSeatPositions = (seatCount) => {
+  const count = Math.max(2, Math.min(9, Number(seatCount) || 6));
+  const horizontalRadius = 42;
+  const verticalRadius = 42;
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (Math.PI / 2) + ((Math.PI * 2 * index) / count);
+    return {
+      top: `${50 + (verticalRadius * Math.sin(angle))}%`,
+      left: `${50 + (horizontalRadius * Math.cos(angle))}%`,
+    };
+  });
+};
+
 export default function PokerTable({
   room,
   currentUser,
@@ -97,32 +110,11 @@ export default function PokerTable({
     }
   }, [room?.is_ended, room?.settlement_report]);
 
-  // Visual Screen Positions (Clockwise starting from 0 = Bottom Center User Position)
-  const maxSeats = room?.config?.max_seats || 6;
-  const visualScreenPositions = useMemo(() => {
-    if (maxSeats === 6) {
-      return [
-        { top: '92%', left: '50%' },    // Screen Pos 0 (Bottom Center - Hero)
-        { top: '68%', left: '15%' },  // Screen Pos 1 (Bottom Left)
-        { top: '24%', left: '15%' },  // Screen Pos 2 (Top Left)
-        { top: '11%', left: '50%' }, // Screen Pos 3 (Top Center)
-        { top: '24%', left: '85%' },   // Screen Pos 4 (Top Right)
-        { top: '68%', left: '85%' },   // Screen Pos 5 (Bottom Right)
-      ];
-    }
-    // 9 Seats layout
-    return [
-      { top: '93%', left: '50%' },    // 0 Bottom (Hero)
-      { top: '76%', left: '16%' },  // 1 Bottom Left
-      { top: '48%', left: '9%' },   // 2 Mid Left
-      { top: '20%', left: '16%' }, // 3 Top Left
-      { top: '10%', left: '37%' }, // 4 Top Left-Center
-      { top: '10%', left: '63%' }, // 5 Top Right-Center
-      { top: '20%', left: '84%' }, // 6 Top Right
-      { top: '48%', left: '91%' },   // 7 Mid Right
-      { top: '76%', left: '84%' },   // 8 Bottom Right
-    ];
-  }, [maxSeats]);
+  // Visual positions are generated for every supported table size. Position 0
+  // remains bottom-center so rotating the real seats always keeps the viewer's
+  // own seat in the familiar hero position.
+  const maxSeats = Math.max(2, Math.min(9, Number(room?.config?.max_seats) || 6));
+  const visualScreenPositions = useMemo(() => buildSeatPositions(maxSeats), [maxSeats]);
 
   // Map visual screen position (0..maxSeats-1) to actual table seat index
   // If user is seated, visual position 0 always maps to selfSeatIndex (perspective rotation)

@@ -285,14 +285,15 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">座位上限</label>
+                  <label className="text-slate-400 font-semibold block mb-1">房间人数</label>
                   <select
                     value={maxSeats}
                     onChange={(e) => setMaxSeats(Number(e.target.value))}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
                   >
-                    <option value={6}>6 人桌</option>
-                    <option value={9}>9 人桌</option>
+                    {Array.from({ length: 8 }, (_, index) => index + 2).map((seatCount) => (
+                      <option key={seatCount} value={seatCount}>{seatCount} 人桌</option>
+                    ))}
                   </select>
                 </div>
               </div>

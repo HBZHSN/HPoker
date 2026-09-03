@@ -62,6 +62,21 @@ def test_settlement_multi_party_transfer():
     assert total_transferred == 150.0  # 1500 chips * 0.1
 
 
+@pytest.mark.parametrize("max_seats", range(2, 10))
+def test_room_config_supports_every_table_size(max_seats):
+    config = RoomConfig(max_seats=max_seats)
+    room = Room(host_player_id="host", config=config)
+
+    assert config.max_seats == max_seats
+    assert len(room.table.seats) == max_seats
+
+
+@pytest.mark.parametrize("max_seats", [1, 10])
+def test_room_config_rejects_unsupported_table_size(max_seats):
+    with pytest.raises(ValueError, match="max_seats"):
+        RoomConfig(max_seats=max_seats)
+
+
 def test_room_lifecycle_and_rebuy():
     rm = RoomManager()
     cfg = RoomConfig(

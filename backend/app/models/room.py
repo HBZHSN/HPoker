@@ -29,6 +29,8 @@ class RoomConfig:
     def __post_init__(self) -> None:
         if self.small_blind < 1:
             raise ValueError("small_blind must be at least 1")
+        if not 2 <= self.max_seats <= 9:
+            raise ValueError("max_seats must be between 2 and 9")
         self.big_blind = self.small_blind * 2
 
     def to_dict(self) -> dict:
