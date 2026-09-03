@@ -29,23 +29,23 @@ export default function App() {
   });
   const [roomData, setRoomData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState(activeRoomId ? 'connecting' : 'idle');
-  const [chatMessages, setChatMessages] = useState([]);
-  const [emojiReactions, setEmojiReactions] = useState({});
+  const [socialHistory, setSocialHistory] = useState([]);
+  const [seatSocialBubbles, setSeatSocialBubbles] = useState({});
 
   // Modals
   const [profileOpen, setProfileOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
 
   const wsRef = useRef(null);
-  const emojiTimersRef = useRef(new Map());
+  const socialBubbleTimersRef = useRef(new Map());
 
   useEffect(() => {
-    setChatMessages([]);
-    setEmojiReactions({});
-    for (const timer of emojiTimersRef.current.values()) {
+    setSocialHistory([]);
+    setSeatSocialBubbles({});
+    for (const timer of socialBubbleTimersRef.current.values()) {
       window.clearTimeout(timer);
     }
-    emojiTimersRef.current.clear();
+    socialBubbleTimersRef.current.clear();
   }, [activeRoomId]);
 
   // Verify stored token on startup
@@ -184,6 +184,32 @@ export default function App() {
       heartbeatTimer = null;
     };
 
+    const showSeatSocialBubble = (activity) => {
+      setSeatSocialBubbles((bubbles) => ({
+        ...bubbles,
+        [activity.player_id]: activity,
+      }));
+      const previousTimer = socialBubbleTimersRef.current.get(activity.player_id);
+      if (previousTimer) window.clearTimeout(previousTimer);
+      const timer = window.setTimeout(() => {
+        setSeatSocialBubbles((bubbles) => {
+          if (bubbles[activity.player_id]?.activity_id !== activity.activity_id) {
+            return bubbles;
+          }
+          const next = { ...bubbles };
+          delete next[activity.player_id];
+          return next;
+        });
+        socialBubbleTimersRef.current.delete(activity.player_id);
+      }, 5000);
+      socialBubbleTimersRef.current.set(activity.player_id, timer);
+    };
+
+    const appendSocialActivity = (activity) => {
+      setSocialHistory((history) => [...history, activity].slice(-80));
+      showSeatSocialBubble(activity);
+    };
+
     const connect = () => {
       if (disposed || terminalClose) return;
       setConnectionStatus(retryCount > 0 ? 'retrying' : 'connecting');
@@ -213,33 +239,19 @@ export default function App() {
           } else if (msg.event === 'SOUND_EFFECT') {
             soundEngine.play(msg.payload.sound);
           } else if (msg.event === 'CHAT_MESSAGE') {
-            setChatMessages((messages) => [...messages, {
+            appendSocialActivity({
               ...msg.payload,
+              activity_id: msg.payload.message_id,
+              type: 'chat',
               timestamp: msg.timestamp,
-            }].slice(-80));
+            });
           } else if (msg.event === 'EMOJI_REACTION') {
-            const reaction = {
+            appendSocialActivity({
               ...msg.payload,
+              activity_id: msg.payload.reaction_id,
+              type: 'emoji',
               timestamp: msg.timestamp,
-            };
-            setEmojiReactions((reactions) => ({
-              ...reactions,
-              [reaction.player_id]: reaction,
-            }));
-            const previousTimer = emojiTimersRef.current.get(reaction.player_id);
-            if (previousTimer) window.clearTimeout(previousTimer);
-            const timer = window.setTimeout(() => {
-              setEmojiReactions((reactions) => {
-                if (reactions[reaction.player_id]?.reaction_id !== reaction.reaction_id) {
-                  return reactions;
-                }
-                const next = { ...reactions };
-                delete next[reaction.player_id];
-                return next;
-              });
-              emojiTimersRef.current.delete(reaction.player_id);
-            }, 4000);
-            emojiTimersRef.current.set(reaction.player_id, timer);
+            });
           } else if (msg.event === 'ROOM_DELETED') {
             terminalClose = true;
             alert(msg.payload?.message || '房间已被房主解散');
@@ -359,8 +371,8 @@ export default function App() {
         <PokerTable
           room={roomData}
           currentUser={currentUser}
-          chatMessages={chatMessages}
-          emojiReactions={emojiReactions}
+          socialHistory={socialHistory}
+          seatSocialBubbles={seatSocialBubbles}
           onSendWsEvent={sendWsEvent}
           onLeaveRoom={handleLeaveRoom}
         />

@@ -492,6 +492,12 @@ html,
   pointer-events: none;
 }
 
+.poker-seat-chat {
+  animation: seat-emoji-pop 5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+}
+
 .poker-chat-messages {
   user-select: text;
   -webkit-user-select: text;

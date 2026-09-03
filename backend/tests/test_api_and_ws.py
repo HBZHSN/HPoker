@@ -202,6 +202,8 @@ def test_websocket_chat_and_emoji_broadcast():
             for message in (ws_host.receive_json(), ws_guest.receive_json()):
                 assert message["event"] == EventType.EMOJI_REACTION.value
                 assert message["payload"]["player_id"] == "u_fwd"
+                assert message["payload"]["name"] == "fwd"
+                assert message["payload"]["avatar"] == "🦈"
                 assert message["payload"]["emoji"] == "🔥"
                 assert message["payload"]["reaction_id"]
 

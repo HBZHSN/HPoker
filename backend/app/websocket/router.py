@@ -415,6 +415,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     {
                         "reaction_id": secrets.token_hex(8),
                         "player_id": user_id,
+                        "name": nickname,
+                        "avatar": avatar,
                         "emoji": emoji,
                     },
                 )

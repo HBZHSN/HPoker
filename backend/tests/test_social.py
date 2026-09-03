@@ -1,4 +1,6 @@
 import json
+import re
+from pathlib import Path
 
 import pytest
 
@@ -32,6 +34,25 @@ def test_reaction_allowlist_is_fixed_and_unique():
     assert "🔥" in ALLOWED_EMOJI_REACTIONS
     assert "not-an-emoji" not in ALLOWED_EMOJI_REACTIONS
     assert len(ALLOWED_EMOJI_REACTIONS) == len(set(ALLOWED_EMOJI_REACTIONS))
+    assert len(ALLOWED_EMOJI_REACTIONS) >= 60
+
+
+def test_frontend_emoji_picker_matches_server_allowlist():
+    source = (
+        Path(__file__).parents[2]
+        / "frontend"
+        / "src"
+        / "components"
+        / "TableSocialControls.jsx"
+    ).read_text(encoding="utf-8")
+    array_source = re.search(
+        r"export const TABLE_EMOJIS = \[(.*?)\];",
+        source,
+        flags=re.DOTALL,
+    )
+    assert array_source is not None
+    frontend_emojis = tuple(re.findall(r"'([^']+)'", array_source.group(1)))
+    assert frontend_emojis == ALLOWED_EMOJI_REACTIONS
 
 
 @pytest.mark.asyncio

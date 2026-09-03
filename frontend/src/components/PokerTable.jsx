@@ -47,8 +47,8 @@ const buildSeatPositions = (seatCount) => {
 export default function PokerTable({
   room,
   currentUser,
-  chatMessages = [],
-  emojiReactions = {},
+  socialHistory = [],
+  seatSocialBubbles = {},
   onSendWsEvent,
   onLeaveRoom,
 }) {
@@ -582,7 +582,7 @@ export default function PokerTable({
                       street={table?.street || 'IDLE'}
                       turnCount={table?.turn_count || 0}
                       actionHistoryLength={table?.action_history?.length || 0}
-                      emojiReaction={emojiReactions[seatData?.player_id] || null}
+                      socialBubble={seatSocialBubbles[seatData?.player_id] || null}
                     />
                   </div>
                 );
@@ -660,7 +660,7 @@ export default function PokerTable({
       </div>
 
       <TableSocialControls
-        messages={chatMessages}
+        activities={socialHistory}
         currentUserId={currentUser?.user_id}
         canReact={Boolean(selfSeat)}
         onSendChat={(message) => onSendWsEvent('CHAT_MESSAGE', { message })}

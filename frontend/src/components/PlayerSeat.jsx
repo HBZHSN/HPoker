@@ -19,7 +19,7 @@ export default function PlayerSeat({
   street = 'IDLE',
   turnCount = 0,
   actionHistoryLength = 0,
-  emojiReaction = null,
+  socialBubble = null,
 }) {
   const baseTimeout = (isCurrentTurn && isUsingTimeBank)
     ? (currentTurnDuration || 30)
@@ -73,16 +73,25 @@ export default function PlayerSeat({
     <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
       {/* Anchor Container for Avatar Card & Floating Badges */}
       <div className="relative w-full h-full flex flex-col items-center justify-center">
-        {emojiReaction && (
+        {socialBubble?.type === 'emoji' ? (
           <div
-            key={emojiReaction.reaction_id}
-            className="poker-seat-emoji absolute -top-14 left-1/2 z-40 -translate-x-1/2 text-4xl md:-top-16 md:text-5xl"
+            key={socialBubble.activity_id}
+            className="poker-seat-emoji absolute -top-14 left-1/2 z-40 text-4xl md:-top-16 md:text-5xl"
             role="status"
-            aria-label={`${seatData.name} 发送了表情 ${emojiReaction.emoji}`}
+            aria-label={`${seatData.name} 发送了表情 ${socialBubble.emoji}`}
           >
-            {emojiReaction.emoji}
+            {socialBubble.emoji}
           </div>
-        )}
+        ) : socialBubble?.type === 'chat' ? (
+          <div
+            key={socialBubble.activity_id}
+            className="poker-seat-chat absolute bottom-[calc(100%+12px)] left-1/2 z-40 w-max max-w-[180px] break-words rounded-2xl rounded-bl-sm border border-amber-400/60 bg-slate-950/95 px-3 py-2 text-[11px] font-bold leading-relaxed text-slate-100 shadow-2xl md:max-w-[220px] md:text-xs"
+            role="status"
+            aria-label={`${seatData.name} 说：${socialBubble.message}`}
+          >
+            {socialBubble.message}
+          </div>
+        ) : null}
 
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {isCurrentTurn ? (
