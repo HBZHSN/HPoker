@@ -144,3 +144,64 @@ def test_batch_settlement_and_balance_reset(balance_mgr, user_mgr):
     batches = balance_mgr.list_batches()
     assert len(batches) == 1
     assert batches[0]["batch_id"] == batch.batch_id
+
+
+def test_preset_test_accounts(user_mgr):
+    # Verify test1, test2, test3 exist by default
+    test1 = user_mgr.get_user("u_test1")
+    test2 = user_mgr.get_user("u_test2")
+    test3 = user_mgr.get_user("u_test3")
+
+    assert test1 is not None and test1.username == "test1" and test1.is_test_account is True
+    assert test2 is not None and test2.username == "test2" and test2.is_test_account is True
+    assert test3 is not None and test3.username == "test3" and test3.is_test_account is True
+
+    # Verify password '123'
+    u, token = user_mgr.authenticate("test1", "123")
+    assert u is not None and u.user_id == "u_test1"
+    u2, _ = user_mgr.authenticate("test2", "123")
+    assert u2 is not None and u2.user_id == "u_test2"
+    u3, _ = user_mgr.authenticate("test3", "123")
+    assert u3 is not None and u3.user_id == "u_test3"
+
+
+def test_balance_rest_api(tmp_path):
+    from fastapi.testclient import TestClient
+    from backend.main import app
+    from backend.app.services.balance_manager import balance_manager
+    from backend.app.services.room_manager import room_manager
+    from backend.app.models.room import RoomConfig
+
+    client = TestClient(app)
+
+    # 1. Login test1
+    login_res = client.post("/api/auth/login", json={"username": "test1", "password": "123"})
+    assert login_res.status_code == 200
+    assert login_res.json()["user"]["is_test"] is True
+
+    # 2. Query my balance
+    my_res = client.get("/api/balance/my?user_id=u_admin")
+    assert my_res.status_code == 200
+    data = my_res.json()
+    assert "pending_net_cash" in data
+    assert "records" in data
+
+    # 3. Query overview
+    overview_res = client.get("/api/balance/overview?include_test=false")
+    assert overview_res.status_code == 200
+    assert "user_balances" in overview_res.json()
+    assert "preview" in overview_res.json()
+
+    # 4. Settle batch without admin permission should fail
+    fail_res = client.post("/api/balance/settle-batch", json={"operator_id": "u_fwd"})
+    assert fail_res.status_code == 403
+
+    # 5. Clear test records without admin should fail
+    clear_fail = client.delete("/api/balance/test-records?admin_id=u_fwd")
+    assert clear_fail.status_code == 403
+
+    # 6. Clear test records with admin
+    clear_ok = client.delete("/api/balance/test-records?admin_id=u_admin")
+    assert clear_ok.status_code == 200
+    assert "deleted_count" in clear_ok.json()
+
