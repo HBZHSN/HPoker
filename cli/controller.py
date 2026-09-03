@@ -21,6 +21,7 @@ from cli.commands import (
     BetSizingContext,
     CommandParseError,
     CliCommand,
+    is_global_command,
     normalize_command,
     parse_command,
     resolve_bet_amount,
@@ -62,6 +63,7 @@ class PokerCliController:
         self._closing_room = False
         self._connection_lost = False
         self._room_deleted = False
+        self._quit_requested = False
         self._stdin_closed = False
         self._prompt_displayed = False
         self._render_lock = asyncio.Lock()
@@ -195,6 +197,52 @@ class PokerCliController:
             self._tui_notice = text
         self._refresh_tui()
 
+    async def _dispatch_global_command(
+        self,
+        command: CliCommand,
+        scope: str,
+        rooms: Sequence[Dict[str, Any]] = (),
+    ) -> Optional[bool]:
+        """Handle commands whose aliases and meaning are identical everywhere."""
+
+        name = command.name
+        args = command.args
+        if name == "quit":
+            self._quit_requested = True
+            self._in_room = False
+            self._output("再见！祝游戏愉快！")
+            return False
+        if name == "help":
+            self._output(self.renderer.render_help(scope), panel=True)
+            return True
+        if name == "users":
+            await self._show_users()
+            return True
+        if name == "info":
+            if scope == "lobby":
+                if not args:
+                    self._output("用法: info <房间序号或 room_id>")
+                else:
+                    await self._show_room_info(self._resolve_room_ref(args[0], rooms))
+            elif self.active_room_data:
+                self._output(self.renderer.render_room_details(self.active_room_data), panel=True)
+            else:
+                self._output("尚未收到房间状态。")
+            return True
+        if name == "refresh":
+            if scope == "room":
+                await self._redraw_room()
+            return True
+        if name == "mode":
+            self._set_mode(args[0] if args else None)
+            if scope == "room" and self.active_room_data:
+                await self._redraw_room()
+            return True
+        if name == "color":
+            self._set_color(args[0] if args else None)
+            return True
+        return None
+
     # ------------------ Authentication Flow ------------------
 
     async def _try_login(self, username: str, password: str) -> bool:
@@ -239,7 +287,7 @@ class PokerCliController:
                 return False
             if not username:
                 continue
-            if username.lower() in {"q", "quit", "exit"}:
+            if is_global_command(username, "quit"):
                 return False
             if username.lower() in {"users", "list"}:
                 await self._show_users()
@@ -275,7 +323,7 @@ class PokerCliController:
 
         self._begin_tui("lobby")
         try:
-            while self.current_user:
+            while self.current_user and not self._quit_requested:
                 self._begin_tui("lobby")
                 rooms = await self._fetch_rooms()
                 if self.tui.active:
@@ -312,22 +360,10 @@ class PokerCliController:
         name = command.name
         args = command.args
 
-        if name == "quit":
-            self._output("再见！祝游戏愉快！")
-            return False
+        global_result = await self._dispatch_global_command(command, "lobby", rooms)
+        if global_result is not None:
+            return global_result
         if name == "rooms":
-            return True
-        if name == "help":
-            self._output(self.renderer.render_help("lobby"), panel=True)
-            return True
-        if name == "users":
-            await self._show_users()
-            return True
-        if name == "mode":
-            self._set_mode(args[0] if args else None)
-            return True
-        if name == "color":
-            self._set_color(args[0] if args else None)
             return True
         if name == "user":
             self._end_tui()
@@ -347,12 +383,6 @@ class PokerCliController:
                 return False
             if room_ref.strip():
                 await self.enter_room(self._resolve_room_ref(room_ref.strip(), rooms))
-            return True
-        if name == "info":
-            if not args:
-                self._output("用法: info <房间序号或 room_id>")
-            else:
-                await self._show_room_info(self._resolve_room_ref(args[0], rooms))
             return True
         if name.isdigit():
             index = int(name)
@@ -593,34 +623,17 @@ class PokerCliController:
         name = command.name
         args = command.args
 
+        global_result = await self._dispatch_global_command(command, "room")
+        if global_result is not None:
+            return
         if name == "leave":
             self._output("正在离开房间...")
             self._in_room = False
-            return
-        if name == "help":
-            self._print_in_game_help()
-            return
-        if name == "redraw":
-            await self._redraw_room()
-            return
-        if name == "status":
-            if self.active_room_data:
-                self._output(self.renderer.render_room_details(self.active_room_data), panel=True)
-            else:
-                self._output("尚未收到房间状态。")
             return
         if name == "history":
             limit = self._parse_positive_int(args[0], 10) if args else 10
             if self.active_room_data:
                 self._output(self.renderer.render_action_history(self.active_room_data, limit), panel=True)
-            return
-        if name == "mode":
-            self._set_mode(args[0] if args else None)
-            if self.active_room_data:
-                await self._redraw_room()
-            return
-        if name == "color":
-            self._set_color(args[0] if args else None)
             return
         if name == "reconnect":
             await self._reconnect_room()
@@ -1238,6 +1251,3 @@ class PokerCliController:
         if isinstance(exc, (ConnectionError, OSError, TimeoutError)):
             return "网络连接失败，请检查服务地址或输入 reconnect 重试"
         return str(exc) or exc.__class__.__name__
-
-    def _print_in_game_help(self) -> None:
-        self._output(self.renderer.render_help("room"), panel=True)

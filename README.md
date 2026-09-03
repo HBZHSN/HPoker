@@ -97,7 +97,8 @@ CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模�
 - `rooms` / `refresh`：刷新活跃房间；输入房间编号或 ID 直接加入。
 - `create "房间名"`：交互创建房间；也支持 `create "现金桌" --buyin 2000 --cash 200 --sb 10 --timeout 20 --seats 6`。
 - `users`：查看预置用户；`info ROOM_ID`：查看房间详情。
-- `mode`、`color`、`help`、`quit`：切换显示、查看帮助或退出。
+- `info`、`refresh`、`users`、`mode`、`color`、`help` 在大厅和牌桌中均可使用，并作用于当前上下文。
+- `q` / `quit` / `exit`：在任意界面退出程序。
 
 命令别名由大厅与牌桌共用的命令注册表维护，但会按场景解析：大厅中 `c` / `r` 表示创建 / 刷新，牌桌中则表示过牌或跟注 / 加注。右侧操作栏和 `help` 均从同一注册表生成。
 
@@ -111,6 +112,7 @@ CLI 支持大厅、实时牌桌、断线重连、结算报表和两套视图模�
 - `show 1` / `show 2` / `show all` / `muck`：摊牌时秀牌或盖牌；`rit 1` / `rit 2`：Run It Twice 投票。
 - `reconnect`：手动重连；`status`、`history`、`redraw`：查看状态、行动记录或重绘。`r` 专用于下注，不再作为重绘别名。
 - `bill` / `export settlement.txt`：查看或导出结算报表；房主使用 `end` 结束房间，`delete` 删除已结束房间。
+- `leave` / `back` / `lobby`：仅返回大厅；`q` / `quit` / `exit` 在任何界面都退出程序。
 
 ---
 

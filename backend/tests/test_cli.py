@@ -17,6 +17,7 @@ from cli.text_utils import display_width
 from cli.commands import (
     BetSizingContext,
     CommandParseError,
+    command_alias_conflicts,
     command_specs,
     normalize_command,
     parse_command,
@@ -77,6 +78,82 @@ def test_cli_commands_use_one_scope_aware_registry():
     assert normalize_command(parse_command("s1"), "room").args == ("1",)
     assert normalize_command(parse_command("muck"), "room").args == ("muck",)
     assert any(spec.name == "raise" and "r" in spec.aliases for spec in command_specs("room"))
+
+    for scope in ("lobby", "room"):
+        assert command_alias_conflicts(scope) == {}
+        for token in ("q", "quit", "exit"):
+            assert normalize_command(parse_command(token), scope).name == "quit"
+        for token in ("h", "help", "?"):
+            assert normalize_command(parse_command(token), scope).name == "help"
+        assert normalize_command(parse_command("view"), scope).name == "mode"
+        assert normalize_command(parse_command("status"), scope).name == "info"
+        assert normalize_command(parse_command("redraw"), scope).name == "refresh"
+        assert normalize_command(parse_command("userlist"), scope).name == "users"
+
+    for token in ("leave", "back", "lobby"):
+        assert normalize_command(parse_command(token), "room").name == "leave"
+    assert normalize_command(parse_command("exit"), "room").name != "leave"
+
+    lobby_tokens = {token: spec.name for spec in command_specs("lobby") for token in spec.tokens}
+    room_tokens = {token: spec.name for spec in command_specs("room") for token in spec.tokens}
+    semantic_mismatches = {
+        token: (lobby_tokens[token], room_tokens[token])
+        for token in lobby_tokens.keys() & room_tokens.keys()
+        if lobby_tokens[token] != room_tokens[token]
+    }
+    assert semantic_mismatches == {"c": ("create", "check"), "r": ("rooms", "raise")}
+    assert normalize_command(parse_command("show"), "lobby").name == "show"
+    assert normalize_command(parse_command("show"), "room").name == "show"
+
+
+@pytest.mark.asyncio
+async def test_global_quit_has_same_semantics_in_lobby_and_room():
+    lobby = PokerCliController(enable_color=False)
+    lobby._output = MagicMock()
+    room = PokerCliController(enable_color=False)
+    room._output = MagicMock()
+    room._in_room = True
+
+    try:
+        should_continue = await lobby._dispatch_lobby_command(parse_command("q"), [])
+        await room._dispatch_room_command(parse_command("exit"))
+
+        assert should_continue is False
+        assert lobby._quit_requested is True
+        assert room._quit_requested is True
+        assert room._in_room is False
+
+        room._quit_requested = False
+        room._in_room = True
+        await room._dispatch_room_command(parse_command("back"))
+        assert room._quit_requested is False
+        assert room._in_room is False
+    finally:
+        await lobby.api.close()
+        await room.api.close()
+
+
+@pytest.mark.asyncio
+async def test_global_context_commands_work_in_lobby_and_room():
+    controller = PokerCliController(enable_color=False)
+    controller._show_users = AsyncMock()
+    controller._show_room_info = AsyncMock()
+    controller._redraw_room = AsyncMock()
+    controller._output = MagicMock()
+    controller.active_room_data = {"room_id": "r1", "table": {}}
+    rooms = [{"room_id": "r1"}]
+
+    try:
+        await controller._dispatch_lobby_command(parse_command("status 1"), rooms)
+        controller._show_room_info.assert_awaited_once_with("r1")
+
+        await controller._dispatch_room_command(parse_command("users"))
+        controller._show_users.assert_awaited_once()
+
+        await controller._dispatch_room_command(parse_command("clear"))
+        controller._redraw_room.assert_awaited_once()
+    finally:
+        await controller.api.close()
 
 
 def test_cli_entrypoint_options():

@@ -53,17 +53,22 @@ class CommandSpec:
         return (self.name, *self.aliases)
 
 
+GLOBAL_COMMANDS: tuple[CommandSpec, ...] = (
+    CommandSpec("info", ("status", "inspect", "table"), "info [目标]", "查看当前上下文详情", "全局"),
+    CommandSpec("refresh", ("redraw", "clear", "cls"), "refresh", "刷新当前界面", "全局"),
+    CommandSpec("users", ("userlist",), "users", "查看用户", "全局"),
+    CommandSpec("mode", ("view",), "mode <dashboard|stream>", "切换视图", "全局"),
+    CommandSpec("color", (), "color <on|off>", "切换颜色", "全局"),
+    CommandSpec("help", ("h", "?"), "help", "完整帮助", "全局", True),
+    CommandSpec("quit", ("q", "exit"), "quit", "退出程序", "全局", True),
+)
+
+
 LOBBY_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("join", ("j",), "join <序号|ID>", "加入房间", "房间", True),
     CommandSpec("create", ("new", "c"), "create [选项]", "创建房间", "房间", True),
-    CommandSpec("rooms", ("refresh", "list", "r"), "rooms", "刷新房间", "房间", True),
-    CommandSpec("info", ("inspect", "show"), "info <序号|ID>", "查看详情", "房间"),
-    CommandSpec("users", ("userlist",), "users", "查看用户", "账户"),
+    CommandSpec("rooms", ("list", "r"), "rooms", "刷新房间", "房间", True),
     CommandSpec("user", ("switch", "login", "logout"), "user", "切换账号", "账户"),
-    CommandSpec("mode", ("view",), "mode <dashboard|stream>", "切换视图", "设置"),
-    CommandSpec("color", (), "color <on|off>", "切换颜色", "设置"),
-    CommandSpec("help", ("h", "?"), "help", "完整帮助", "通用", True),
-    CommandSpec("quit", ("q", "exit"), "quit", "退出程序", "通用", True),
 )
 
 
@@ -82,18 +87,13 @@ ROOM_COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("bot", ("addbot", "add_bot", "add-bot", "testbot"), "bot [座位]", "添加测试机器人", "管理"),
     CommandSpec("rit", (), "rit <1|2>", "选择发牌次数", "牌局"),
     CommandSpec("show", ("showall", "s1", "s2", "sa", "muck", "hide"), "show <1|2|all|muck>", "亮牌 / 盖牌", "牌局"),
-    CommandSpec("status", ("info", "table"), "status", "牌桌详情", "查看"),
     CommandSpec("history", ("log",), "history [数量]", "最近动态", "查看"),
     CommandSpec("bill", ("report", "settlement"), "bill", "结算账单", "查看"),
     CommandSpec("export", ("save",), "export [路径]", "导出账单", "查看"),
     CommandSpec("reconnect", ("retry",), "reconnect", "重新连接", "连接"),
-    CommandSpec("redraw", ("clear", "cls", "refresh"), "redraw", "重绘界面", "设置"),
-    CommandSpec("mode", ("view",), "mode <dashboard|stream>", "切换视图", "设置"),
-    CommandSpec("color", (), "color <on|off>", "切换颜色", "设置"),
     CommandSpec("end", ("endroom",), "end", "结束并结算", "管理"),
     CommandSpec("delete", ("del", "destroy"), "delete", "解散房间", "管理"),
-    CommandSpec("help", ("h", "?"), "help", "完整帮助", "通用", True),
-    CommandSpec("leave", ("back", "lobby", "exit"), "leave", "返回大厅", "通用", True),
+    CommandSpec("leave", ("back", "lobby"), "leave", "返回大厅", "通用", True),
 )
 
 
@@ -106,7 +106,28 @@ COMMANDS_BY_SCOPE: Dict[str, tuple[CommandSpec, ...]] = {
 def command_specs(scope: str) -> tuple[CommandSpec, ...]:
     """Return the command catalogue used by parsing, help, and sidebars."""
 
-    return COMMANDS_BY_SCOPE.get(scope, ())
+    return (*COMMANDS_BY_SCOPE.get(scope, ()), *GLOBAL_COMMANDS)
+
+
+def command_alias_conflicts(scope: str) -> Dict[str, tuple[str, ...]]:
+    """Return duplicate tokens in an effective scope for invariant tests."""
+
+    owners: Dict[str, list[str]] = {}
+    for spec in command_specs(scope):
+        for token in spec.tokens:
+            owners.setdefault(token, []).append(spec.name)
+    return {
+        token: tuple(names)
+        for token, names in owners.items()
+        if len(set(names)) > 1
+    }
+
+
+def is_global_command(value: str, name: str) -> bool:
+    """Check a raw token against one canonical global command."""
+
+    token = value.strip().lower()
+    return any(spec.name == name and token in spec.tokens for spec in GLOBAL_COMMANDS)
 
 
 def normalize_command(command: CliCommand, scope: str) -> CliCommand:

@@ -489,7 +489,7 @@ class PokerUiRenderer:
         if not compact:
             lines.extend(["", self.c("快捷命令", Colors.BOLD + Colors.BRIGHT_CYAN)])
             for spec in command_specs("room"):
-                if spec.sidebar and spec.name in {"status", "history", "help", "leave"}:
+                if spec.sidebar and spec.name in {"info", "history", "help", "leave", "quit"}:
                     lines.append(f"  {spec.usage:<14} {spec.description}")
             lines.append(self.c("  ↑ / ↓  历史命令", Colors.DIM))
         return "\n".join(lines)
