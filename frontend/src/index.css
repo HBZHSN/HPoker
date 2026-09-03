@@ -213,9 +213,9 @@ html,
     display: none;
   }
 
-  /* During our turn the hand summary is immediately followed by actions;
-     the avatar's rim remains the only timer indicator on the table. */
-  .poker-action-turn-status-self,
+  /* The table avatar already shows whose turn it is and the countdown, so the
+     mobile action console does not repeat that status row. */
+  .poker-action-turn-status,
   .poker-table-center-board {
     display: none;
   }
