@@ -564,3 +564,81 @@ def test_user_privacy_and_balance_endpoints():
 
     my_bal = client.get("/api/balance/my?user_id=u_test1").json()
     assert "username" not in my_bal
+
+
+def test_lobby_online_users_and_websocket_lifecycle():
+    client = TestClient(app)
+
+    # 1. Initially without websocket connections, u_test1 is offline
+    resp = client.get("/api/lobby/users")
+    assert resp.status_code == 200
+    users = resp.json()
+    assert len(users) > 0
+    test1_user = next((u for u in users if u["user_id"] == "u_test1"), None)
+    assert test1_user is not None
+    assert test1_user["is_online"] is False
+
+    # 2. Connect u_test1 via lobby websocket
+    with client.websocket_connect("/ws/lobby/u_test1") as ws:
+        msg = ws.receive_json()
+        assert msg["event"] == EventType.ONLINE_USERS_UPDATE
+        assert "u_test1" in msg["payload"]["online_user_ids"]
+
+        # REST endpoint reflects u_test1 is online
+        resp_online = client.get("/api/lobby/users")
+        u1_state = next(u for u in resp_online.json() if u["user_id"] == "u_test1")
+        assert u1_state["is_online"] is True
+        assert u1_state["current_room_id"] is None
+
+        # Ping/Pong test on lobby WS
+        ws.send_json({"event": EventType.PING, "payload": {}})
+        pong = ws.receive_json()
+        assert pong["event"] == EventType.PONG
+
+    # 3. After websocket disconnection, u_test1 becomes offline
+    resp_offline = client.get("/api/lobby/users")
+    u1_offline = next(u for u in resp_offline.json() if u["user_id"] == "u_test1")
+    assert u1_offline["is_online"] is False
+
+    # 4. Multi-user test: u_test1 in lobby, u_test2 in a game room
+    create_room_resp = client.post("/api/rooms", json={
+        "host_player_id": "u_test2",
+        "room_name": "Online Test Table",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 10,
+        "big_blind": 20,
+        "action_timeout": 15,
+        "max_seats": 6,
+    })
+    assert create_room_resp.status_code == 200
+    r_id = create_room_resp.json()["room_id"]
+
+    with client.websocket_connect("/ws/lobby/u_test1") as lobby_ws:
+        init_lobby_msg = lobby_ws.receive_json()
+        assert init_lobby_msg["event"] == EventType.ONLINE_USERS_UPDATE
+
+        with client.websocket_connect(f"/ws/{r_id}/u_test2") as room_ws:
+            # u_test1 in lobby receives broadcast that u_test2 is online in room
+            update_msg = lobby_ws.receive_json()
+            assert update_msg["event"] == EventType.ONLINE_USERS_UPDATE
+            assert "u_test1" in update_msg["payload"]["online_user_ids"]
+            assert "u_test2" in update_msg["payload"]["online_user_ids"]
+            assert update_msg["payload"]["user_locations"]["u_test2"] == r_id
+
+            # Verify REST API reflects both online and locations
+            resp_both = client.get("/api/lobby/users")
+            users_map = {u["user_id"]: u for u in resp_both.json()}
+            assert users_map["u_test1"]["is_online"] is True
+            assert users_map["u_test1"]["current_room_id"] is None
+            assert users_map["u_test2"]["is_online"] is True
+            assert users_map["u_test2"]["current_room_id"] == r_id
+            assert users_map["u_test2"]["current_room_name"] == "Online Test Table"
+
+    # Both disconnected -> both offline
+    resp_all_offline = client.get("/api/lobby/users")
+    final_map = {u["user_id"]: u for u in resp_all_offline.json()}
+    assert final_map["u_test1"]["is_online"] is False
+    assert final_map["u_test2"]["is_online"] is False
+
+

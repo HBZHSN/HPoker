@@ -41,6 +41,21 @@ class ConnectionManager:
         """Check if a room currently has any connected clients."""
         return self.get_room_connection_count(room_id) > 0
 
+    def get_online_user_ids(self) -> Set[str]:
+        """Return the set of user_ids that have at least one active WebSocket long connection."""
+        return {uid for (_, uid) in self.socket_info.values() if uid}
+
+    def is_user_online(self, user_id: str) -> bool:
+        """Check if a specific user currently has an active WebSocket long connection."""
+        return any(uid == user_id for (_, uid) in self.socket_info.values())
+
+    def get_user_room(self, user_id: str) -> Optional[str]:
+        """Return the active room_id for a user if connected to a game table (ignoring 'lobby')."""
+        for ws, (r_id, uid) in self.socket_info.items():
+            if uid == user_id and r_id != "lobby":
+                return r_id
+        return None
+
     async def close_room_connections(self, room_id: str, reason: str = "Room deleted") -> None:
         """Close all WebSocket connections associated with a room."""
         sockets = list(self.room_connections.get(room_id, set()))

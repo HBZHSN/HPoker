@@ -224,6 +224,36 @@ class CreateRoomRequest(BaseModel):
     max_seats: int = Field(default=6, ge=2, le=9)
 
 
+@api_router.get("/lobby/users")
+@api_router.get("/lobby/online-users")
+def get_lobby_users():
+    """List all registered users with their real-time online status and active game room."""
+    online_uids = ws_manager.get_online_user_ids()
+    users = user_manager.list_users()
+    res = []
+    for u in users:
+        uid = u["user_id"]
+        is_online = uid in online_uids
+        current_room_id = ws_manager.get_user_room(uid)
+        current_room_name = None
+        if current_room_id:
+            r = room_manager.get_room(current_room_id)
+            if r:
+                current_room_name = r.config.room_name
+        res.append({
+            "user_id": u["user_id"],
+            "username": u["username"],
+            "nickname": u["nickname"],
+            "avatar": u["avatar"],
+            "is_admin": u.get("is_admin", False),
+            "is_test": u.get("is_test", False),
+            "is_online": is_online,
+            "current_room_id": current_room_id,
+            "current_room_name": current_room_name,
+        })
+    return res
+
+
 @api_router.get("/rooms")
 def get_rooms():
     return room_manager.list_rooms()

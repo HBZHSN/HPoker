@@ -325,8 +325,57 @@ def schedule_room_empty_check(room_id: str, delay_seconds: float = 3.0) -> None:
     timeout_manager.cancel_empty_room_cleanup(room_id)
 
 
+async def broadcast_lobby_online_users():
+    """Broadcast current online user ids and room locations to all lobby clients."""
+    lobby_sockets = list(ws_manager.get_room_connections("lobby"))
+    if not lobby_sockets:
+        return
+    online_uids = list(ws_manager.get_online_user_ids())
+    user_locations = {uid: r_id for ws, (r_id, uid) in ws_manager.socket_info.items() if uid}
+    payload = {
+        "online_user_ids": online_uids,
+        "user_locations": user_locations,
+    }
+    raw = json.dumps(make_message(EventType.ONLINE_USERS_UPDATE, payload, room_id="lobby"))
+    for ws in lobby_sockets:
+        try:
+            await ws.send_text(raw)
+        except Exception:
+            pass
+
+
+@ws_router.websocket("/ws/lobby/{user_id}")
+async def lobby_websocket_endpoint(websocket: WebSocket, user_id: str):
+    await ws_manager.connect(websocket, "lobby", user_id)
+    await broadcast_lobby_online_users()
+    try:
+        while True:
+            data_text = await websocket.receive_text()
+            try:
+                msg = json.loads(data_text)
+            except Exception:
+                continue
+            event = msg.get("event")
+            if event == EventType.PING:
+                await ws_manager.send_personal_message(
+                    websocket,
+                    make_message(EventType.PONG, {}, room_id="lobby"),
+                )
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.exception(f"Unexpected lobby WebSocket error: {e}")
+    finally:
+        ws_manager.disconnect(websocket)
+        await broadcast_lobby_online_users()
+
+
 @ws_router.websocket("/ws/{room_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
+    if room_id == "lobby":
+        await lobby_websocket_endpoint(websocket, user_id)
+        return
+
     room = room_manager.get_room(room_id)
     if not room:
         await websocket.accept()
@@ -350,6 +399,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     timeout_manager.cancel_empty_room_cleanup(room_id)
     await ws_manager.connect(websocket, room_id, user_id)
     ensure_room_replenish_task(room_id)
+    await broadcast_lobby_online_users()
 
     # Initial state sync
     await ws_manager.broadcast_room_state(room)
@@ -616,3 +666,4 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 active_r = room_manager.get_room(r_id)
                 if active_r and not active_r.is_ended:
                     await ws_manager.broadcast_room_state(active_r)
+        await broadcast_lobby_online_users()

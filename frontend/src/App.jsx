@@ -17,6 +17,7 @@ export default function App() {
   });
 
   const [rooms, setRooms] = useState([]);
+  const [lobbyUsers, setLobbyUsers] = useState([]);
   const [activeRoomId, setActiveRoomId] = useState(() => {
     const savedUser = localStorage.getItem('hpoker_user') || localStorage.getItem('ggpoker_user');
     if (!savedUser) return null;
@@ -109,12 +110,21 @@ export default function App() {
     localStorage.setItem('hpoker_user', JSON.stringify(updatedUser));
   };
 
-  // Fetch initial active rooms
+  // Fetch initial active rooms and online users
   const fetchLobbyData = useCallback(async () => {
     try {
-      const roomsRes = await fetch('/api/rooms');
-      const roomsJson = await roomsRes.json();
-      setRooms(roomsJson);
+      const [roomsRes, usersRes] = await Promise.all([
+        fetch('/api/rooms'),
+        fetch('/api/lobby/users'),
+      ]);
+      if (roomsRes.ok) {
+        const roomsJson = await roomsRes.json();
+        setRooms(roomsJson);
+      }
+      if (usersRes.ok) {
+        const usersJson = await usersRes.json();
+        setLobbyUsers(usersJson);
+      }
     } catch (e) {
       console.error("Failed to load lobby data:", e);
     }
@@ -158,7 +168,7 @@ export default function App() {
   // Keep reconnecting after mobile background suspension. Returning to the
   // foreground triggers an immediate attempt instead of waiting for backoff.
   useEffect(() => {
-    if (!activeRoomId || !currentUser?.user_id) {
+    if (!currentUser?.user_id) {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -209,7 +219,9 @@ export default function App() {
       if (disposed || terminalClose) return;
       setConnectionStatus(retryCount > 0 ? 'retrying' : 'connecting');
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}`;
+      const wsUrl = activeRoomId
+        ? `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}`
+        : `${protocol}//${window.location.host}/ws/lobby/${currentUser.user_id}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -228,9 +240,23 @@ export default function App() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.event === 'ROOM_STATE') {
-            localStorage.setItem(lastRoomStorageKey(currentUser.user_id), activeRoomId);
-            setRoomData(msg.payload);
-            setConnectionStatus('connected');
+            if (activeRoomId) {
+              localStorage.setItem(lastRoomStorageKey(currentUser.user_id), activeRoomId);
+              setRoomData(msg.payload);
+              setConnectionStatus('connected');
+            }
+          } else if (msg.event === 'ONLINE_USERS_UPDATE') {
+            const onlineIds = new Set(msg.payload?.online_user_ids || []);
+            const locations = msg.payload?.user_locations || {};
+            setLobbyUsers((prev) => {
+              if (!prev || prev.length === 0) return prev;
+              return prev.map((u) => ({
+                ...u,
+                is_online: onlineIds.has(u.user_id),
+                current_room_id: locations[u.user_id] === 'lobby' ? null : (locations[u.user_id] || null),
+              }));
+            });
+            fetchLobbyData();
           } else if (msg.event === 'SOUND_EFFECT') {
             soundEngine.play(msg.payload.sound);
           } else if (msg.event === 'CHAT_MESSAGE') {
@@ -248,12 +274,18 @@ export default function App() {
               timestamp: msg.timestamp,
             });
           } else if (msg.event === 'ROOM_DELETED') {
-            terminalClose = true;
-            alert(msg.payload?.message || '房间已被房主解散');
-            handleLeaveRoom();
+            if (activeRoomId) {
+              terminalClose = true;
+              alert(msg.payload?.message || '房间已被房主解散');
+              handleLeaveRoom();
+            } else {
+              fetchLobbyData();
+            }
           } else if (msg.event === 'ERROR_MESSAGE' && msg.payload?.message === 'Room not found') {
-            terminalClose = true;
-            handleLeaveRoom();
+            if (activeRoomId) {
+              terminalClose = true;
+              handleLeaveRoom();
+            }
           }
         } catch (err) {
           console.error("Error parsing WS message:", err);
@@ -397,6 +429,8 @@ export default function App() {
           onOpenBalance={() => setBalanceOpen(true)}
           onLogout={handleLogout}
           rooms={rooms}
+          users={lobbyUsers}
+          onRefreshLobby={fetchLobbyData}
           onCreateRoom={handleCreateRoom}
           onDeleteRoom={handleDeleteRoom}
           onJoinRoom={handleJoinRoom}
