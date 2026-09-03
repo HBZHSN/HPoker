@@ -362,7 +362,7 @@ export default function PokerTable({
               {/* Center Table Area: Board Cards, Pots & Next Hand Countdown */}
               <div className="poker-table-center absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
                 {/* Street & Total Pot Badge */}
-                <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
+                <div className="poker-table-pot-summary flex flex-col items-center gap-1.5 pointer-events-auto">
                   <div className="poker-table-pot-badge flex items-center gap-3 bg-slate-950/85 px-4 py-1.5 rounded-full border-2 border-amber-500/40 backdrop-blur-md shadow-2xl">
                     <span className="text-xs md:text-sm font-bold text-slate-300">
                       {STREET_LABELS[table?.street] || '等待开局'}

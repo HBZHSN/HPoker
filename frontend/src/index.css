@@ -275,6 +275,10 @@ html,
     gap: 4px;
   }
 
+  .poker-table-pot-summary {
+    transform: translateY(-42px);
+  }
+
   .poker-table-pot-badge {
     gap: 8px;
     padding: 4px 9px;
