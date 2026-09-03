@@ -12,6 +12,7 @@ from backend.app.services.timeout_manager import timeout_manager
 from backend.app.websocket.connection_manager import ws_manager
 from backend.app.websocket.protocol import EventType, make_message
 from backend.app.models.room import RoomConfig
+from backend.app.models.user import User
 
 api_router = APIRouter()
 
@@ -24,15 +25,15 @@ class LoginRequest(BaseModel):
 
 
 class UpdateProfileRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     nickname: Optional[str] = None
-    username: Optional[str] = None
-    new_password: Optional[str] = None
     avatar: Optional[str] = None
+    old_password: Optional[str] = None
+    new_password: Optional[str] = None
 
 
 class AdminCreateUserRequest(BaseModel):
-    admin_user_id: str
+    admin_user_id: Optional[str] = None
     username: str
     nickname: str
     password: str = "123"
@@ -42,13 +43,39 @@ class AdminCreateUserRequest(BaseModel):
 
 
 class AdminUpdateUserRequest(BaseModel):
-    admin_user_id: str
+    admin_user_id: Optional[str] = None
     username: Optional[str] = None
     nickname: Optional[str] = None
     password: Optional[str] = None
     avatar: Optional[str] = None
     is_admin: Optional[bool] = None
     is_test: Optional[bool] = None
+
+
+def _verify_admin(
+    authorization: Optional[str] = None,
+    token: Optional[str] = None,
+    admin_id: Optional[str] = None,
+) -> User:
+    auth_token = token
+    if not auth_token and authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.split("Bearer ")[1].strip()
+
+    if auth_token:
+        user = user_manager.get_user_by_token(auth_token)
+        if user and user.is_admin:
+            return user
+        if user and not user.is_admin:
+            raise HTTPException(status_code=403, detail="仅管理员有权限访问")
+
+    if admin_id:
+        user = user_manager.get_user(admin_id)
+        if user and user.is_admin:
+            return user
+        if user and not user.is_admin:
+            raise HTTPException(status_code=403, detail="仅管理员有权限访问")
+
+    raise HTTPException(status_code=403, detail="仅管理员有权限访问")
 
 
 @api_router.post("/auth/login")
@@ -78,12 +105,26 @@ def get_current_user(token: Optional[str] = Query(None), authorization: Optional
 
 
 @api_router.post("/auth/profile")
-def update_profile(req: UpdateProfileRequest):
+def update_profile(
+    req: UpdateProfileRequest,
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    auth_token = token
+    if not auth_token and authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.split("Bearer ")[1].strip()
+
+    auth_user = user_manager.get_user_by_token(auth_token) if auth_token else None
+    target_user_id = auth_user.user_id if auth_user else req.user_id
+
+    if not target_user_id:
+        raise HTTPException(status_code=401, detail="未提供认证信息")
+
     try:
         user = user_manager.update_profile(
-            user_id=req.user_id,
+            user_id=target_user_id,
             nickname=req.nickname,
-            username=req.username,
+            old_password=req.old_password,
             new_password=req.new_password,
             avatar=req.avatar,
         )
@@ -97,18 +138,25 @@ def update_profile(req: UpdateProfileRequest):
 # ----------------- Admin User Management Endpoints -----------------
 
 @api_router.get("/admin/users")
-def admin_list_users(admin_id: str = Query(...)):
-    admin = user_manager.get_user(admin_id)
-    if not admin or not admin.is_admin:
-        raise HTTPException(status_code=403, detail="仅管理员有权限访问")
+def admin_list_users(
+    admin_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    _verify_admin(authorization=authorization, token=token, admin_id=admin_id)
     return user_manager.list_users()
 
 
 @api_router.post("/admin/users")
-def admin_create_user(req: AdminCreateUserRequest):
+def admin_create_user(
+    req: AdminCreateUserRequest,
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    admin = _verify_admin(authorization=authorization, token=token, admin_id=req.admin_user_id)
     try:
         user = user_manager.admin_create_user(
-            admin_user_id=req.admin_user_id,
+            admin_user_id=admin.user_id,
             username=req.username,
             nickname=req.nickname,
             password=req.password,
@@ -124,10 +172,16 @@ def admin_create_user(req: AdminCreateUserRequest):
 
 
 @api_router.put("/admin/users/{user_id}")
-def admin_update_user(user_id: str, req: AdminUpdateUserRequest):
+def admin_update_user(
+    user_id: str,
+    req: AdminUpdateUserRequest,
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    admin = _verify_admin(authorization=authorization, token=token, admin_id=req.admin_user_id)
     try:
         user = user_manager.admin_update_user(
-            admin_user_id=req.admin_user_id,
+            admin_user_id=admin.user_id,
             target_user_id=user_id,
             username=req.username,
             nickname=req.nickname,
@@ -144,35 +198,20 @@ def admin_update_user(user_id: str, req: AdminUpdateUserRequest):
 
 
 @api_router.delete("/admin/users/{user_id}")
-def admin_delete_user(user_id: str, admin_id: str = Query(...)):
+def admin_delete_user(
+    user_id: str,
+    admin_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    admin = _verify_admin(authorization=authorization, token=token, admin_id=admin_id)
     try:
-        ok = user_manager.admin_delete_user(admin_user_id=admin_id, target_user_id=user_id)
+        ok = user_manager.admin_delete_user(admin_user_id=admin.user_id, target_user_id=user_id)
         return {"success": ok}
     except PermissionError as pe:
         raise HTTPException(status_code=403, detail=str(pe))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-
-
-# ----------------- Public Users & Rooms Endpoints -----------------
-
-@api_router.get("/users")
-def get_users():
-    return user_manager.list_users()
-
-
-@api_router.post("/users")
-def create_user(req: AdminCreateUserRequest):
-    user = user_manager.admin_create_user(
-        admin_user_id=req.admin_user_id if req.admin_user_id else "u_admin",
-        username=req.username,
-        nickname=req.nickname,
-        password=req.password,
-        avatar=req.avatar,
-        is_admin=req.is_admin,
-        is_test=req.is_test,
-    )
-    return user.to_dict()
 
 
 class CreateRoomRequest(BaseModel):
@@ -313,7 +352,6 @@ def get_my_balance(user_id: str = Query(...), include_settled: bool = Query(True
 
     return {
         "user_id": user_id,
-        "username": user.username,
         "nickname": user.nickname,
         "avatar": user.avatar,
         "is_test": user.is_test_account,
@@ -349,15 +387,17 @@ def get_settlement_batch(batch_id: str):
 
 
 @api_router.post("/balance/settle-batch")
-def settle_batch(req: SettleBatchRequest):
+def settle_batch(
+    req: SettleBatchRequest,
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
     """Admin executes one-time consolidated debt settlement."""
-    operator = user_manager.get_user(req.operator_id)
-    if not operator or not operator.is_admin:
-        raise HTTPException(status_code=403, detail="仅管理员有权限执行统一结算对账")
+    operator = _verify_admin(authorization=authorization, token=token, admin_id=req.operator_id)
 
     try:
         batch = balance_manager.settle_batch(
-            operator_id=req.operator_id,
+            operator_id=operator.user_id,
             operator_name=operator.nickname or operator.username,
             include_test=req.include_test,
             entry_ids=req.entry_ids,
@@ -368,11 +408,13 @@ def settle_batch(req: SettleBatchRequest):
 
 
 @api_router.delete("/balance/test-records")
-def clear_test_records(admin_id: str = Query(...)):
+def clear_test_records(
+    admin_id: Optional[str] = Query(None),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
     """Admin purges test game records to keep the production ledger clean."""
-    admin = user_manager.get_user(admin_id)
-    if not admin or not admin.is_admin:
-        raise HTTPException(status_code=403, detail="仅管理员有权限清空测试数据")
+    _verify_admin(authorization=authorization, token=token, admin_id=admin_id)
 
     deleted_count = balance_manager.clear_test_records()
     return {"deleted_count": deleted_count, "message": f"已清空 {deleted_count} 条测试账单记录"}

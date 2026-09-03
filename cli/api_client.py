@@ -56,10 +56,15 @@ class PokerApiClient:
             detail = cls._error_detail(response)
             raise PokerApiError(detail, response.status_code) from exc
 
-    async def list_users(self) -> List[Dict[str, Any]]:
-        """Fetch all registered/preset users."""
-
-        response = await self.client.get("/api/users")
+    async def list_users(self, token: Optional[str] = None, admin_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetch users via admin endpoint."""
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        params = {}
+        if admin_id:
+            params["admin_id"] = admin_id
+        response = await self.client.get("/api/admin/users", headers=headers, params=params)
         self._raise_for_status(response)
         payload = response.json()
         return payload if isinstance(payload, list) else []

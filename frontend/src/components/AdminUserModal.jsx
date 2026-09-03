@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, UserPlus, KeyRound, Trash2, Edit3, X, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 
-export default function AdminUserModal({ isOpen, adminUser, onClose }) {
+export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
   if (!isOpen || !adminUser || !adminUser.is_admin) return null;
 
   const [users, setUsers] = useState([]);
@@ -25,7 +25,9 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/users?admin_id=${adminUser.user_id}`);
+      const res = await fetch(`/api/admin/users?admin_id=${adminUser.user_id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) throw new Error('获取用户列表失败');
       const data = await res.json();
       setUsers(data);
@@ -56,7 +58,10 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
     try {
       const res = await fetch('/api/admin/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           admin_user_id: adminUser.user_id,
           username: newUsername.trim(),
@@ -87,7 +92,10 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           admin_user_id: adminUser.user_id,
           nickname: editNickname.trim() || undefined,
@@ -114,6 +122,7 @@ export default function AdminUserModal({ isOpen, adminUser, onClose }) {
     try {
       const res = await fetch(`/api/admin/users/${userId}?admin_id=${adminUser.user_id}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || '删除失败');

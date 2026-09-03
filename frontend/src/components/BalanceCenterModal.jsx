@@ -40,7 +40,9 @@ export default function BalanceCenterModal({
   const fetchMyBalance = useCallback(async () => {
     if (!currentUser?.user_id) return;
     try {
-      const res = await fetch(`/api/balance/my?user_id=${currentUser.user_id}`);
+      const res = await fetch(`/api/balance/my?user_id=${currentUser.user_id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         setMyBalance(data);
@@ -48,12 +50,14 @@ export default function BalanceCenterModal({
     } catch (e) {
       console.error('Failed to fetch my balance', e);
     }
-  }, [currentUser?.user_id]);
+  }, [currentUser?.user_id, token]);
 
   const fetchOverview = useCallback(async () => {
     if (!currentUser?.is_admin) return;
     try {
-      const res = await fetch(`/api/balance/overview?include_test=${includeTest}`);
+      const res = await fetch(`/api/balance/overview?include_test=${includeTest}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         setOverview(data);
@@ -61,11 +65,13 @@ export default function BalanceCenterModal({
     } catch (e) {
       console.error('Failed to fetch overview', e);
     }
-  }, [currentUser?.is_admin, includeTest]);
+  }, [currentUser?.is_admin, includeTest, token]);
 
   const fetchBatches = useCallback(async () => {
     try {
-      const res = await fetch('/api/balance/batches');
+      const res = await fetch('/api/balance/batches', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         setBatches(data);
@@ -73,7 +79,7 @@ export default function BalanceCenterModal({
     } catch (e) {
       console.error('Failed to fetch batches', e);
     }
-  }, []);
+  }, [token]);
 
   const refreshAll = useCallback(() => {
     setLoading(true);
@@ -99,7 +105,10 @@ export default function BalanceCenterModal({
     try {
       const res = await fetch('/api/balance/settle-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           operator_id: currentUser.user_id,
           include_test: includeTest,
@@ -128,6 +137,7 @@ export default function BalanceCenterModal({
     try {
       const res = await fetch(`/api/balance/test-records?admin_id=${currentUser.user_id}`, {
         method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) {
         const errData = await res.json();
@@ -599,7 +609,6 @@ export default function BalanceCenterModal({
                                 {u.avatar || '👤'}
                               </span>
                               <span>{u.nickname}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">@{u.username}</span>
                               {u.is_test && (
                                 <span className="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1 rounded font-bold">
                                   测试

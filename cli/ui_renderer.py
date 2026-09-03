@@ -567,13 +567,13 @@ class PokerUiRenderer:
         lines.append("    • " + self.c("create [选项]", Colors.BRIGHT_GREEN) + " : 创建房间（默认值可直接回车）")
         lines.append("    • " + self.c("rooms / refresh", Colors.BRIGHT_CYAN) + " : 刷新房间列表")
         lines.append("    • " + self.c("info <序号|room_id>", Colors.WHITE) + " : 查看房间详情，不入座")
-        lines.append("    • " + self.c("users", Colors.WHITE) + "             : 查看可登录用户")
         lines.append("    • " + self.c("mode [dashboard|stream]", Colors.CYAN) + " : 切换显示模式")
         lines.append("    • " + self.c("user / logout", Colors.BRIGHT_MAGENTA) + " : 切换用户登录")
         lines.append("    • " + self.c("help", Colors.BRIGHT_WHITE) + "             : 查看大厅帮助")
         lines.append("    • " + self.c("q", Colors.BRIGHT_YELLOW) + " : 关闭当前页面（大厅首页不退出程序）")
         lines.append("    • " + self.c("Ctrl+C", Colors.BRIGHT_RED) + " : 退出程序")
         if is_admin:
+            lines.append("    • " + self.c("users", Colors.WHITE) + "             : 管理员查看用户列表")
             lines.append("    • 管理员可通过牌桌内 " + self.c("delete", Colors.BRIGHT_RED) + " 解散房间")
         lines.append("")
 

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2, Wallet } from 'lucide-react';
 
 export default function Lobby({
-  users,
   currentUser,
   token,
   onUpdateUser,
@@ -69,7 +68,6 @@ export default function Lobby({
                 </span>
               )}
             </div>
-            <span className="text-[10px] text-slate-400 font-mono">@{currentUser?.username}</span>
           </div>
 
           <div className="flex items-center gap-1.5 ml-2">

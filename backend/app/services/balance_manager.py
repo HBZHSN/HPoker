@@ -245,7 +245,6 @@ class BalanceManager:
         user_summaries = [
             {
                 "user_id": u["user_id"],
-                "username": u["username"],
                 "nickname": u["nickname"],
                 "avatar": u["avatar"],
                 "is_test": u["is_test"],

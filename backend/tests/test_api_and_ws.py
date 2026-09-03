@@ -22,10 +22,18 @@ def isolate_user_manager(monkeypatch):
 def test_rest_api_users_and_rooms():
     client = TestClient(app)
 
-    # 1. Get preset users (fwd, hx, yy)
+    # 1. Verify public /api/users is disabled to prevent leaking usernames and accounts
     resp = client.get("/api/users")
-    assert resp.status_code == 200
-    users = resp.json()
+    assert resp.status_code in (404, 405)
+
+    # Verify public registration is blocked (cannot self-register)
+    reg_resp = client.post("/api/users", json={"username": "hacker", "nickname": "hacker"})
+    assert reg_resp.status_code in (404, 405)
+
+    # Admin can access user list
+    admin_resp = client.get("/api/admin/users?admin_id=u_admin")
+    assert admin_resp.status_code == 200
+    users = admin_resp.json()
     assert len(users) >= 3
     assert any(u["username"] == "fwd" for u in users)
     assert any(u["username"] == "hx" for u in users)
@@ -283,6 +291,33 @@ def test_auth_and_admin_security():
     assert resp.status_code == 200
     assert resp.json()["user"]["nickname"] == "FWD Boss"
 
+    # 7. Password update without valid old password fails
+    resp_wrong_pwd = client.post("/api/auth/profile", json={
+        "user_id": "u_fwd",
+        "old_password": "wrong_old_password",
+        "new_password": "newpassword123"
+    })
+    assert resp_wrong_pwd.status_code == 400
+    assert "原密码错误" in resp_wrong_pwd.json()["detail"]
+
+    # 8. Password update with correct old password succeeds
+    fwd_token = auth_data["token"]
+    resp_correct_pwd = client.post(
+        "/api/auth/profile",
+        headers={"Authorization": f"Bearer {fwd_token}"},
+        json={
+            "old_password": "123",
+            "new_password": "newpassword123"
+        }
+    )
+    assert resp_correct_pwd.status_code == 200
+
+    # 9. Verify new password can log in and old password fails
+    resp_old_fail = client.post("/api/auth/login", json={"username": "fwd", "password": "123"})
+    assert resp_old_fail.status_code == 401
+    resp_new_ok = client.post("/api/auth/login", json={"username": "fwd", "password": "newpassword123"})
+    assert resp_new_ok.status_code == 200
+
 
 @pytest.mark.asyncio
 async def test_turn_timeout_and_hand_end_auto_start():
@@ -520,3 +555,87 @@ def test_unsettled_room_is_retained_when_empty():
     schedule_room_empty_check(room_id, delay_seconds=0.1)
 
     assert room_manager.get_room(room_id) is not None
+
+
+def test_comprehensive_user_security_and_privacy():
+    client = TestClient(app)
+
+    # 1. No public user listing or registration
+    assert client.get("/api/users").status_code in (404, 405)
+    assert client.post("/api/users", json={"username": "hacker"}).status_code in (404, 405)
+
+    # 2. Login as regular player fwd
+    fwd_login = client.post("/api/auth/login", json={"username": "fwd", "password": "123"})
+    assert fwd_login.status_code == 200
+    fwd_token = fwd_login.json()["token"]
+
+    # 3. Regular player blocked from admin user management
+    h_fwd = {"Authorization": f"Bearer {fwd_token}"}
+    assert client.get("/api/admin/users", headers=h_fwd).status_code == 403
+    assert client.post("/api/admin/users", headers=h_fwd, json={"username": "evil", "nickname": "evil"}).status_code == 403
+    assert client.put("/api/admin/users/u_admin", headers=h_fwd, json={"nickname": "Hacked"}).status_code == 403
+    assert client.delete("/api/admin/users/u_hx", headers=h_fwd).status_code == 403
+
+    # 4. Login as admin
+    admin_login = client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+    assert admin_login.status_code == 200
+    admin_token = admin_login.json()["token"]
+    h_admin = {"Authorization": f"Bearer {admin_token}"}
+
+    # 5. Admin creates a new account (only admin can register new users)
+    create_res = client.post("/api/admin/users", headers=h_admin, json={
+        "username": "player_vip",
+        "nickname": "VIP Player",
+        "password": "initial_password",
+        "avatar": "🤠",
+        "is_admin": False
+    })
+    assert create_res.status_code == 200
+    new_uid = create_res.json()["user_id"]
+
+    # 6. Admin can reset player password directly
+    reset_res = client.put(f"/api/admin/users/{new_uid}", headers=h_admin, json={
+        "password": "admin_reset_pass",
+        "nickname": "VIP Player Pro"
+    })
+    assert reset_res.status_code == 200
+
+    # 7. Player logs in with reset password
+    vip_login = client.post("/api/auth/login", json={"username": "player_vip", "password": "admin_reset_pass"})
+    assert vip_login.status_code == 200
+    vip_token = vip_login.json()["token"]
+    h_vip = {"Authorization": f"Bearer {vip_token}"}
+
+    # 8. Profile update: change password with wrong old password fails
+    fail_pwd = client.post("/api/auth/profile", headers=h_vip, json={
+        "old_password": "wrong_password",
+        "new_password": "my_new_secret_pass"
+    })
+    assert fail_pwd.status_code == 400
+    assert "原密码错误" in fail_pwd.json()["detail"]
+
+    # 9. Profile update: change password with correct old password succeeds
+    ok_pwd = client.post("/api/auth/profile", headers=h_vip, json={
+        "nickname": "VIP Legend",
+        "old_password": "admin_reset_pass",
+        "new_password": "my_new_secret_pass"
+    })
+    assert ok_pwd.status_code == 200
+    assert ok_pwd.json()["user"]["nickname"] == "VIP Legend"
+
+    # 10. Verify new password works and old reset password fails
+    assert client.post("/api/auth/login", json={"username": "player_vip", "password": "admin_reset_pass"}).status_code == 401
+    assert client.post("/api/auth/login", json={"username": "player_vip", "password": "my_new_secret_pass"}).status_code == 200
+
+    # 11. Balance endpoints do not leak username
+    overview = client.get("/api/balance/overview").json()
+    for u in overview.get("user_balances", []):
+        assert "username" not in u
+
+    my_bal = client.get("/api/balance/my?user_id=u_fwd").json()
+    assert "username" not in my_bal
+
+    # 12. Admin deletes user
+    del_res = client.delete(f"/api/admin/users/{new_uid}", headers=h_admin)
+    assert del_res.status_code == 200
+    assert client.post("/api/auth/login", json={"username": "player_vip", "password": "my_new_secret_pass"}).status_code == 401

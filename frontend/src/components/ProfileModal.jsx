@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, KeyRound, Shield, CheckCircle2, AlertCircle, X, Sparkles } from 'lucide-react';
+import { User, KeyRound, CheckCircle2, AlertCircle, X } from 'lucide-react';
 
 const AVATAR_OPTIONS = ['👑', '🦈', '🦁', '🐺', '🦅', '🦊', '🐯', '🐉', '🐼', '👤', '🤠', '🦄'];
 
@@ -7,9 +7,10 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
   if (!isOpen || !user) return null;
 
   const [nickname, setNickname] = useState(user.nickname || '');
-  const [username, setUsername] = useState(user.username || '');
   const [avatar, setAvatar] = useState(user.avatar || '👤');
+  const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -18,6 +19,23 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
     e?.preventDefault();
     setError('');
     setSuccess('');
+
+    // If changing password, validate password fields
+    if (newPassword.trim()) {
+      if (!oldPassword.trim()) {
+        setError('修改密码需输入原密码');
+        return;
+      }
+      if (newPassword.trim().length < 3) {
+        setError('新密码长度不能少于3位');
+        return;
+      }
+      if (newPassword.trim() !== confirmPassword.trim()) {
+        setError('两次输入的新密码不一致');
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -25,13 +43,13 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           user_id: user.user_id,
-          nickname: nickname.trim(),
-          username: username.trim(),
+          nickname: nickname.trim() || undefined,
           avatar: avatar,
+          old_password: oldPassword.trim() || undefined,
           new_password: newPassword.trim() || undefined,
         }),
       });
@@ -41,11 +59,11 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
         throw new Error(data.detail || '更新失败');
       }
 
-      setSuccess('已保存');
+      setSuccess('资料更新成功');
       onUpdateUser(data.user);
       setTimeout(() => {
         onClose();
-      }, 1200);
+      }, 1000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -113,38 +131,76 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
             </div>
           </div>
 
+          {/* Read-only account username */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-300">昵称</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-300">登录账号</label>
+              <span className="text-[10px] text-slate-500 font-mono">管理员分配，不可修改</span>
+            </div>
+            <input
+              type="text"
+              value={user.username}
+              disabled
+              className="w-full bg-slate-950/70 px-3 py-2 rounded-xl border border-slate-800 text-slate-400 font-mono text-xs cursor-not-allowed select-none"
+            />
+          </div>
+
+          {/* Editable Nickname */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-300">玩家昵称</label>
             <input
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
+              placeholder="在牌桌和结算单中显示的名称"
               className="w-full bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-300">用户名</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none"
-            />
-          </div>
+          {/* Password Change Section */}
+          <div className="border-t border-slate-800/80 pt-3 flex flex-col gap-2.5">
+            <div className="text-xs font-black text-amber-400/90 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5" />
+                修改密码
+              </span>
+              <span className="text-[10px] text-slate-500 font-normal">不修改请留空</span>
+            </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-slate-300 flex items-center gap-1">
-              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-              新密码
-            </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="不修改请留空"
-              className="w-full bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none"
-            />
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold text-slate-400">原密码</label>
+              <input
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                placeholder="输入当前密码"
+                className="w-full bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 text-slate-100 text-xs focus:border-amber-400 focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold text-slate-400">新密码</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="至少3位"
+                  className="w-full bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 text-slate-100 text-xs focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold text-slate-400">确认新密码</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="再次输入新密码"
+                  className="w-full bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 text-slate-100 text-xs focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 mt-2">

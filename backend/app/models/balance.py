@@ -22,7 +22,6 @@ class ParticipantRecord:
     def to_dict(self) -> dict:
         return {
             "player_id": self.player_id,
-            "username": self.username,
             "nickname": self.nickname,
             "avatar": self.avatar,
             "is_test": self.is_test,
@@ -121,7 +120,6 @@ class UserBalanceSummary:
     def to_dict(self) -> dict:
         return {
             "user_id": self.user_id,
-            "username": self.username,
             "nickname": self.nickname,
             "avatar": self.avatar,
             "is_test": self.is_test,

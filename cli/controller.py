@@ -330,20 +330,20 @@ class PokerCliController:
             if is_global_command(username, "back"):
                 self._output("当前已是登录页；按 Ctrl+C 可退出程序。")
                 continue
-            if username.lower() in {"users", "list"}:
-                await self._show_users()
-                continue
 
             password = await self._async_password_input("密码: ")
             if self._stdin_closed:
                 return False
             if await self._try_login(username, password):
                 return True
-            self._output("请重新输入；输入 users 可查看可用账号。")
+            self._output("用户名或密码错误，请重新输入。")
 
     async def _show_users(self) -> None:
+        if not self.current_user or not self.current_user.get("is_admin"):
+            self._output(self.renderer.c("仅管理员有权限查看用户列表", Colors.YELLOW))
+            return
         try:
-            users = await self.api.list_users()
+            users = await self.api.list_users(token=self.token, admin_id=self.current_user.get("user_id"))
             self._output(self.renderer.render_users(users), panel=True)
         except Exception as exc:
             self._output(self.renderer.c(f"获取用户列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))

@@ -147,15 +147,17 @@ class UserManager:
         user_id: str,
         nickname: Optional[str] = None,
         username: Optional[str] = None,
+        old_password: Optional[str] = None,
         new_password: Optional[str] = None,
         avatar: Optional[str] = None,
+        is_admin_override: bool = False,
     ) -> Optional[User]:
-        """Allow a logged-in user to update their own nickname, username, avatar, and password."""
+        """Allow a logged-in user to update their nickname, avatar, and password (requires old password)."""
         user = self._users.get(user_id)
         if not user:
             return None
 
-        if username and username.strip():
+        if username and username.strip() and is_admin_override:
             clean_username = username.strip()
             for other_uid, other_u in self._users.items():
                 if other_uid != user_id and other_u.username.lower() == clean_username.lower():
@@ -169,7 +171,11 @@ class UserManager:
             user.avatar = avatar.strip()
 
         if new_password and len(new_password.strip()) >= 3:
-            user.set_password(new_password.strip())
+            clean_pwd = new_password.strip()
+            if not is_admin_override:
+                if not old_password or not user.verify_password(old_password):
+                    raise ValueError("原密码错误")
+            user.set_password(clean_pwd)
 
         self.save_to_storage()
         return user

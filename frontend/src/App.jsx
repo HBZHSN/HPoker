@@ -16,7 +16,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [users, setUsers] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [activeRoomId, setActiveRoomId] = useState(() => {
     const savedUser = localStorage.getItem('hpoker_user') || localStorage.getItem('ggpoker_user');
@@ -110,17 +109,11 @@ export default function App() {
     localStorage.setItem('hpoker_user', JSON.stringify(updatedUser));
   };
 
-  // Fetch initial users and active rooms
+  // Fetch initial active rooms
   const fetchLobbyData = useCallback(async () => {
     try {
-      const [usersRes, roomsRes] = await Promise.all([
-        fetch('/api/users'),
-        fetch('/api/rooms'),
-      ]);
-      const usersJson = await usersRes.json();
+      const roomsRes = await fetch('/api/rooms');
       const roomsJson = await roomsRes.json();
-
-      setUsers(usersJson);
       setRooms(roomsJson);
     } catch (e) {
       console.error("Failed to load lobby data:", e);
@@ -396,7 +389,6 @@ export default function App() {
         </div>
       ) : (
         <Lobby
-          users={users}
           currentUser={currentUser}
           token={token}
           onUpdateUser={handleUpdateUser}
@@ -427,6 +419,7 @@ export default function App() {
         <AdminUserModal
           isOpen={adminOpen}
           adminUser={currentUser}
+          token={token}
           onClose={() => setAdminOpen(false)}
         />
       )}
