@@ -18,8 +18,7 @@ from backend.app.models.balance import (
     UserBalanceSummary,
     SettlementBatch,
 )
-from backend.app.models.room import SettlementReport
-from backend.app.services.settlement import SettlementEngine, PaymentTransaction
+from backend.app.services.settlement import SettlementEngine, PaymentTransaction, SettlementReport
 from backend.app.services.user_manager import user_manager, UserManager
 
 DEFAULT_BALANCE_STORAGE_FILE = os.path.join(
