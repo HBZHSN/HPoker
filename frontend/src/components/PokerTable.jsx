@@ -247,19 +247,20 @@ export default function PokerTable({
             className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
           >
             <LogOut className="w-3.5 h-3.5 text-amber-400" />
-            大厅
+            <span className="hidden sm:inline">大厅</span>
+            <span className="sm:hidden">离开</span>
           </button>
 
-          <div className="flex flex-col">
+          <div className="poker-table-room-summary flex flex-col">
             <div className="flex items-center gap-2">
               <h1 className="text-sm md:text-base font-black text-amber-400 tracking-wide">
                 {room?.config?.room_name || 'HPoker 现金桌'}
               </h1>
-              <span className="text-[11px] bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-bold">
+              <span className="poker-table-room-blinds text-[11px] bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-bold">
                 盲注: ${room?.config?.small_blind}/${room?.config?.big_blind}
               </span>
             </div>
-            <span className="text-[11px] text-slate-400">
+            <span className="poker-table-room-buyin text-[11px] text-slate-400">
               买入: ${room?.config?.buyin_chips} = ¥{room?.config?.cash_value} · 超时: {room?.config?.action_timeout}s
             </span>
           </div>

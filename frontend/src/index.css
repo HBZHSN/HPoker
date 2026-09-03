@@ -232,10 +232,15 @@ html,
   }
 
   .poker-table-header h1 {
-    max-width: 24vw;
+    max-width: 30vw;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .poker-table-room-blinds,
+  .poker-table-room-buyin {
+    display: none;
   }
 
   .poker-table-header > :last-child {
