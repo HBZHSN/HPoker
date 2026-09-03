@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2 } from 'lucide-react';
+import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2, Wallet } from 'lucide-react';
 
 export default function Lobby({
   users,
@@ -8,6 +8,7 @@ export default function Lobby({
   onUpdateUser,
   onOpenProfile,
   onOpenAdmin,
+  onOpenBalance,
   onLogout,
   rooms,
   onCreateRoom,
@@ -62,11 +63,26 @@ export default function Lobby({
                   👑 管理员
                 </span>
               )}
+              {currentUser?.is_test && (
+                <span className="text-[10px] bg-purple-950 text-purple-300 px-1.5 py-0.2 rounded border border-purple-500/40 font-bold">
+                  🧪 测试账号
+                </span>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 font-mono">@{currentUser?.username}</span>
           </div>
 
           <div className="flex items-center gap-1.5 ml-2">
+            {/* Balance & Ledger Button */}
+            <button
+              onClick={onOpenBalance}
+              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1"
+              title="账务中心"
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              账务中心
+            </button>
+
             {/* Edit Profile Button */}
             <button
               onClick={onOpenProfile}

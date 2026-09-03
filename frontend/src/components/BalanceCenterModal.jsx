@@ -1,0 +1,783 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Wallet,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Check,
+  X,
+  History,
+  ShieldCheck,
+  Trash2,
+  Calendar,
+  Layers,
+} from 'lucide-react';
+
+export default function BalanceCenterModal({
+  isOpen,
+  currentUser,
+  token,
+  onClose,
+}) {
+  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'history' | 'admin'
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  // Data states
+  const [myBalance, setMyBalance] = useState(null);
+  const [overview, setOverview] = useState({ user_balances: [], preview: null });
+  const [batches, setBatches] = useState([]);
+  const [includeTest, setIncludeTest] = useState(false);
+  const [settleConfirmOpen, setSettleConfirmOpen] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+
+  const fetchMyBalance = useCallback(async () => {
+    if (!currentUser?.user_id) return;
+    try {
+      const res = await fetch(`/api/balance/my?user_id=${currentUser.user_id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMyBalance(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch my balance', e);
+    }
+  }, [currentUser?.user_id]);
+
+  const fetchOverview = useCallback(async () => {
+    if (!currentUser?.is_admin) return;
+    try {
+      const res = await fetch(`/api/balance/overview?include_test=${includeTest}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOverview(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch overview', e);
+    }
+  }, [currentUser?.is_admin, includeTest]);
+
+  const fetchBatches = useCallback(async () => {
+    try {
+      const res = await fetch('/api/balance/batches');
+      if (res.ok) {
+        const data = await res.json();
+        setBatches(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch batches', e);
+    }
+  }, []);
+
+  const refreshAll = useCallback(() => {
+    setLoading(true);
+    Promise.all([fetchMyBalance(), fetchOverview(), fetchBatches()])
+      .finally(() => setLoading(false));
+  }, [fetchMyBalance, fetchOverview, fetchBatches]);
+
+  useEffect(() => {
+    if (isOpen) {
+      refreshAll();
+      setError('');
+      setSuccessMsg('');
+    }
+  }, [isOpen, refreshAll]);
+
+  if (!isOpen) return null;
+
+  // Execute one-time batch settlement
+  const handleExecuteBatchSettle = async () => {
+    setError('');
+    setSuccessMsg('');
+    setLoading(true);
+    try {
+      const res = await fetch('/api/balance/settle-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          operator_id: currentUser.user_id,
+          include_test: includeTest,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || '结算失败');
+      }
+      const newBatch = await res.json();
+      setSuccessMsg(`结算成功！已生成对账批次 #${newBatch.batch_id}`);
+      setSettleConfirmOpen(false);
+      setSelectedBatch(newBatch);
+      refreshAll();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Clear test records
+  const handleClearTestRecords = async () => {
+    if (!window.confirm('确定要清空所有测试账号/机器人的测试对局记录吗？')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/balance/test-records?admin_id=${currentUser.user_id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || '清空失败');
+      }
+      const data = await res.json();
+      setSuccessMsg(data.message || '测试记录已清空');
+      refreshAll();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyBatchText = (batch) => {
+    if (!batch) return;
+    const dateStr = new Date(batch.created_at * 1000).toLocaleString();
+    let text = `【HPoker 战局统一结算批次 #${batch.batch_id}】\n`;
+    text += `结算时间: ${dateStr}\n`;
+    text += `操作员: ${batch.operator_name}\n`;
+    text += `转账总额: ¥${batch.total_transferred_cash.toFixed(2)}\n\n`;
+
+    text += `--- 各玩家结算汇总 ---\n`;
+    (batch.user_summaries || []).forEach((u, idx) => {
+      const sign = u.net_cash >= 0 ? '+' : '';
+      text += `${idx + 1}. ${u.nickname}: 净额 ${sign}¥${u.net_cash.toFixed(2)} (${u.unsettled_games_count}局)\n`;
+    });
+
+    text += `\n--- 最终转账执行清单 ---\n`;
+    if (!batch.transactions || batch.transactions.length === 0) {
+      text += `无需转账（收支已完全相抵或平局）。\n`;
+    } else {
+      batch.transactions.forEach((t, idx) => {
+        text += `${idx + 1}. ${t.from_player_name} -> ${t.to_player_name}: ¥${t.amount_cash.toFixed(2)}\n`;
+      });
+    }
+
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+      <div className="relative w-full max-w-4xl bg-gradient-to-b from-slate-900 via-slate-950 to-black border border-amber-500/40 rounded-3xl p-5 md:p-7 shadow-2xl flex flex-col gap-5 max-h-[92vh] overflow-y-auto">
+        {/* Top Header */}
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+              <Wallet className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black text-white tracking-wide">账务中心与余额结算</h2>
+                <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-bold">
+                  记账对账
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                支持对局自动记账、债务合并抵消与管理员一键结算
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={refreshAll}
+              disabled={loading}
+              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+              title="刷新账本"
+            >
+              <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+          <button
+            onClick={() => setActiveTab('my')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              activeTab === 'my'
+                ? 'bg-amber-500 text-slate-950 shadow-glow-gold'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Wallet className="w-3.5 h-3.5" />
+            我的账户
+            {myBalance && myBalance.unsettled_games_count > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === 'my' ? 'bg-slate-950 text-amber-300' : 'bg-amber-950 text-amber-300'
+              }`}>
+                {myBalance.unsettled_games_count} 局待结
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              activeTab === 'history'
+                ? 'bg-amber-500 text-slate-950 shadow-glow-gold'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <History className="w-3.5 h-3.5" />
+            结算记录
+            {batches.length > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                activeTab === 'history' ? 'bg-slate-950 text-amber-300' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {batches.length}
+              </span>
+            )}
+          </button>
+
+          {currentUser?.is_admin && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                activeTab === 'admin'
+                  ? 'bg-amber-500 text-slate-950 shadow-glow-gold'
+                  : 'bg-amber-950/40 text-amber-300 border border-amber-500/30 hover:bg-amber-900/50'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              对账管理（管理员）
+              {overview?.preview?.entry_count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                  activeTab === 'admin' ? 'bg-slate-950 text-amber-300' : 'bg-amber-500 text-slate-950'
+                }`}>
+                  {overview.preview.entry_count} 待结
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Notices */}
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-950/80 border border-red-500/60 rounded-xl text-red-300 text-xs font-bold">
+            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        {successMsg && (
+          <div className="flex items-center gap-2 p-3 bg-emerald-950/80 border border-emerald-500/60 rounded-xl text-emerald-300 text-xs font-bold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* Tab 1: My Account View */}
+        {activeTab === 'my' && (
+          <div className="flex flex-col gap-4">
+            {/* My Balance Summary Card */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 flex flex-col gap-1">
+                <span className="text-[11px] text-slate-400 font-medium">当前待结净金额</span>
+                <div className={`text-2xl font-black flex items-center gap-1 ${
+                  (myBalance?.pending_net_cash || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                }`}>
+                  {(myBalance?.pending_net_cash || 0) >= 0 ? (
+                    <TrendingUp className="w-5 h-5" />
+                  ) : (
+                    <TrendingDown className="w-5 h-5" />
+                  )}
+                  {(myBalance?.pending_net_cash || 0) >= 0 ? '+' : ''}
+                  ¥{(myBalance?.pending_net_cash || 0).toFixed(2)}
+                </div>
+                <span className="text-[10px] text-slate-500">
+                  {(myBalance?.pending_net_cash || 0) >= 0 ? '待应收账款' : '待应付账款'}
+                </span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col gap-1">
+                <span className="text-[11px] text-slate-400 font-medium">待结筹码净额</span>
+                <div className="text-2xl font-black text-amber-300">
+                  {(myBalance?.pending_net_chips || 0) >= 0 ? '+' : ''}
+                  {myBalance?.pending_net_chips || 0}
+                </div>
+                <span className="text-[10px] text-slate-500">累计未结筹码</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col gap-1">
+                <span className="text-[11px] text-slate-400 font-medium">未结对局数</span>
+                <div className="text-2xl font-black text-slate-200">
+                  {myBalance?.unsettled_games_count || 0} 桌
+                </div>
+                <span className="text-[10px] text-slate-500">等待管理员统一结算</span>
+              </div>
+            </div>
+
+            {/* My Match Ledger History */}
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                我参与的对局账单流水
+              </h3>
+              {(!myBalance?.records || myBalance.records.length === 0) ? (
+                <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
+                  暂无对局账单记录
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800">
+                      <tr>
+                        <th className="p-3">房间 / 时间</th>
+                        <th className="p-3 text-center">模式</th>
+                        <th className="p-3 text-right">总买入筹码</th>
+                        <th className="p-3 text-right">剩余筹码</th>
+                        <th className="p-3 text-right">我的盈亏 (¥)</th>
+                        <th className="p-3 text-center">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {myBalance.records.map((rec) => {
+                        const myRec = rec.my_record || {};
+                        const isProfit = (myRec.net_cash || 0) >= 0;
+                        const dateStr = new Date(rec.created_at * 1000).toLocaleString();
+                        const isSettled = rec.status === 'settled';
+                        return (
+                          <tr key={rec.entry_id} className="hover:bg-slate-900/40 transition">
+                            <td className="p-3">
+                              <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                                {rec.room_name}
+                                {rec.is_test_game && (
+                                  <span className="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1 rounded">
+                                    测试
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-500 font-mono mt-0.5">{dateStr}</div>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
+                                rec.settlement_type === 'balance'
+                                  ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
+                                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+                              }`}>
+                                {rec.settlement_type === 'balance' ? '计入余额' : '实时转账'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right text-slate-400">
+                              {myRec.total_buyin_chips}
+                            </td>
+                            <td className="p-3 text-right text-amber-300 font-bold">
+                              {myRec.final_chips}
+                            </td>
+                            <td className={`p-3 text-right font-black ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {isProfit ? '+' : ''}¥{(myRec.net_cash || 0).toFixed(2)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                isSettled
+                                  ? 'bg-slate-800 text-slate-400'
+                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                              }`}>
+                                {isSettled ? '已结算' : '待结算'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Settlement Batches History */}
+        {activeTab === 'history' && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                历史统一结算批次 ({batches.length})
+              </h3>
+            </div>
+
+            {batches.length === 0 ? (
+              <div className="p-8 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
+                暂无历史结算批次记录。当管理员进行一键对账结算后，批次将在此存档。
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {batches.map((batch) => {
+                  const dateStr = new Date(batch.created_at * 1000).toLocaleString();
+                  const isExpanded = selectedBatch?.batch_id === batch.batch_id;
+                  return (
+                    <div
+                      key={batch.batch_id}
+                      className="border border-slate-800 bg-slate-950/60 rounded-2xl p-4 flex flex-col gap-3 transition hover:border-slate-700"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <span className="font-mono text-xs font-black text-amber-400 bg-amber-950/80 px-2 py-1 rounded-lg border border-amber-500/30">
+                            #{batch.batch_id}
+                          </span>
+                          <div>
+                            <div className="text-xs font-bold text-white flex items-center gap-2">
+                              <span>操作员: {batch.operator_name}</span>
+                              <span className="text-slate-500">·</span>
+                              <span className="text-slate-400">{batch.entry_ids?.length || 0} 局合并结算</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 font-mono mt-0.5 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {dateStr}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="text-right">
+                            <div className="text-xs text-slate-400">转账总额</div>
+                            <div className="text-sm font-black text-amber-400">
+                              ¥{(batch.total_transferred_cash || 0).toFixed(2)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setSelectedBatch(isExpanded ? null : batch)}
+                            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition"
+                          >
+                            {isExpanded ? '收起详情' : '查看明细'}
+                          </button>
+                          <button
+                            onClick={() => copyBatchText(batch)}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow transition flex items-center gap-1"
+                          >
+                            <Copy className="w-3 h-3" />
+                            复制结算单
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Expanded Batch Detail */}
+                      {isExpanded && (
+                        <div className="border-t border-slate-800/80 pt-3 flex flex-col gap-3">
+                          {/* User Summaries in this batch */}
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-400">各玩家本批次结算净额</span>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              {(batch.user_summaries || []).map((u, i) => {
+                                const isPos = u.net_cash >= 0;
+                                return (
+                                  <div
+                                    key={i}
+                                    className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs"
+                                  >
+                                    <span className="font-bold text-slate-200 truncate">{u.nickname}</span>
+                                    <span className={`font-black ${isPos ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {isPos ? '+' : ''}¥{u.net_cash.toFixed(2)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Minimal Transfers in this batch */}
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[11px] font-bold text-slate-400">最终点对点转账清单</span>
+                            {(!batch.transactions || batch.transactions.length === 0) ? (
+                              <div className="p-2.5 rounded-xl bg-slate-900/50 text-center text-slate-400 text-xs">
+                                无需转账
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-1.5">
+                                {batch.transactions.map((t, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center justify-between p-2.5 rounded-xl border border-slate-800 bg-slate-900/70 text-xs"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-red-400 bg-red-950/80 px-2 py-0.5 rounded border border-red-900/60">
+                                        {t.from_player_name}
+                                      </span>
+                                      <span className="text-slate-500">应付给</span>
+                                      <ArrowRight className="w-3.5 h-3.5 text-amber-400" />
+                                      <span className="font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-900/60">
+                                        {t.to_player_name}
+                                      </span>
+                                    </div>
+                                    <span className="font-black text-amber-400 text-sm">
+                                      ¥{t.amount_cash.toFixed(2)}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Admin Consolidated Settlement & Audit */}
+        {activeTab === 'admin' && currentUser?.is_admin && (
+          <div className="flex flex-col gap-5">
+            {/* Top Toolbar / Filter */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={includeTest}
+                    onChange={(e) => setIncludeTest(e.target.checked)}
+                    className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span>包含测试账号与机器人数据</span>
+                </label>
+                {!includeTest && (
+                  <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 font-bold">
+                    🛡️ 防污染模式生效中（仅统计真实玩家）
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleClearTestRecords}
+                  disabled={loading}
+                  className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900 text-red-300 text-xs font-bold rounded-xl border border-red-500/40 transition flex items-center gap-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  清理测试对局流水
+                </button>
+              </div>
+            </div>
+
+            {/* Overview Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col gap-1">
+                <span className="text-[11px] text-slate-400 font-medium">当前待结总局数</span>
+                <div className="text-2xl font-black text-amber-400">
+                  {overview?.preview?.entry_count || 0} 桌
+                </div>
+                <span className="text-[10px] text-slate-500">累计记账未结</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col gap-1">
+                <span className="text-[11px] text-slate-400 font-medium">涉及活跃玩家数</span>
+                <div className="text-2xl font-black text-slate-200">
+                  {overview?.user_balances?.length || 0} 人
+                </div>
+                <span className="text-[10px] text-slate-500">真实用户账单</span>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-950 border border-amber-500/40 flex flex-col gap-1">
+                <span className="text-[11px] text-amber-400 font-medium">若此时结算建议流转总额</span>
+                <div className="text-2xl font-black text-amber-400">
+                  ¥{(overview?.preview?.total_transferred_cash || 0).toFixed(2)}
+                </div>
+                <span className="text-[10px] text-slate-400">经过多对多抵消后的最简支付</span>
+              </div>
+            </div>
+
+            {/* User Balances Table */}
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                各玩家当前待结净额清单
+              </h3>
+              {(!overview?.user_balances || overview.user_balances.length === 0) ? (
+                <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
+                  当前暂无待结算的真实玩家账单
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800">
+                      <tr>
+                        <th className="p-3">玩家</th>
+                        <th className="p-3 text-center">待结局数</th>
+                        <th className="p-3 text-right">待结筹码净额</th>
+                        <th className="p-3 text-right">待结现金净额 (¥)</th>
+                        <th className="p-3 text-center">结算身份</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/60">
+                      {overview.user_balances.map((u) => {
+                        const isProfit = u.net_cash >= 0;
+                        return (
+                          <tr key={u.user_id} className="hover:bg-slate-900/40 transition">
+                            <td className="p-3 font-bold text-white flex items-center gap-2">
+                              <span className="w-7 h-7 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center text-sm">
+                                {u.avatar || '👤'}
+                              </span>
+                              <span>{u.nickname}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">@{u.username}</span>
+                              {u.is_test && (
+                                <span className="text-[9px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1 rounded font-bold">
+                                  测试
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center text-slate-300">
+                              {u.unsettled_games_count} 局
+                            </td>
+                            <td className="p-3 text-right text-amber-300 font-bold">
+                              {u.net_chips > 0 ? '+' : ''}{u.net_chips}
+                            </td>
+                            <td className={`p-3 text-right font-black ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {isProfit ? '+' : ''}¥{u.net_cash.toFixed(2)}
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                isProfit
+                                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                                  : 'bg-red-950 text-red-300 border border-red-500/40'
+                              }`}>
+                                {isProfit ? '应收款（赢家）' : '应付款（输家）'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Minimal Debt Transfer Preview */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  多局合并 · 最少笔数点对点转账方案预览
+                </h3>
+                <span className="text-[11px] text-slate-400">
+                  仅需 {overview?.preview?.transactions?.length || 0} 笔转账即可平账
+                </span>
+              </div>
+
+              {(!overview?.preview?.transactions || overview.preview.transactions.length === 0) ? (
+                <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
+                  当前无需要执行的转账
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {overview.preview.transactions.map((t, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-slate-900/60 shadow"
+                    >
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="font-bold text-red-400 bg-red-950/80 px-2 py-1 rounded-lg border border-red-900/60">
+                          {t.from_player_name}
+                        </span>
+                        <span className="text-slate-400">应直接支付给</span>
+                        <ArrowRight className="w-4 h-4 text-amber-400" />
+                        <span className="font-bold text-emerald-400 bg-emerald-950/80 px-2 py-1 rounded-lg border border-emerald-900/60">
+                          {t.to_player_name}
+                        </span>
+                      </div>
+                      <span className="font-black text-amber-400 text-sm">
+                        ¥{t.amount_cash.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Batch Settle Action Button */}
+            <div className="pt-2 flex justify-end">
+              <button
+                disabled={loading || !overview?.preview?.entry_count}
+                onClick={() => setSettleConfirmOpen(true)}
+                className={`px-6 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg transition active:scale-95 ${
+                  overview?.preview?.entry_count
+                    ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 shadow-glow-gold hover:brightness-105 cursor-pointer'
+                    : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                立即执行一次性对账结算 ({overview?.preview?.entry_count || 0} 局)
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Batch Settlement Confirmation Modal */}
+        {settleConfirmOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="relative w-full max-w-lg bg-gradient-to-b from-slate-900 to-black border-2 border-amber-500/60 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">确认执行一次性批量结算？</h3>
+                  <p className="text-xs text-slate-400">将本周期所有待结算对局归档并生成正式批次</p>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs flex flex-col gap-2">
+                <div className="flex justify-between text-slate-300">
+                  <span>本次结算局数:</span>
+                  <span className="font-bold text-amber-400">{overview?.preview?.entry_count || 0} 局</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>涉及真实玩家:</span>
+                  <span className="font-bold text-white">{overview?.user_balances?.length || 0} 位</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>最终流转支付总额:</span>
+                  <span className="font-black text-amber-400">¥{(overview?.preview?.total_transferred_cash || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-slate-300">
+                  <span>转账笔数:</span>
+                  <span className="font-bold text-slate-200">{overview?.preview?.transactions?.length || 0} 笔</span>
+                </div>
+              </div>
+
+              <p className="text-xs text-amber-300/80">
+                确认结算后，所有参与玩家的待结余额将归零，并生成永久存档的结算批次清单，方便发送至群聊。
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setSettleConfirmOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition"
+                >
+                  取消
+                </button>
+                <button
+                  disabled={loading}
+                  onClick={handleExecuteBatchSettle}
+                  className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-glow-gold transition flex items-center justify-center gap-1.5"
+                >
+                  {loading ? '正在处理...' : '确认结算并平账'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

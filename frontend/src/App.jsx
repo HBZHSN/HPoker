@@ -4,6 +4,7 @@ import PokerTable from './components/PokerTable';
 import LoginModal from './components/LoginModal';
 import ProfileModal from './components/ProfileModal';
 import AdminUserModal from './components/AdminUserModal';
+import BalanceCenterModal from './components/BalanceCenterModal';
 import { soundEngine } from './sound/SoundEngine';
 
 const lastRoomStorageKey = (userId) => `hpoker_active_room_${userId}`;
@@ -35,6 +36,7 @@ export default function App() {
   // Modals
   const [profileOpen, setProfileOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [balanceOpen, setBalanceOpen] = useState(false);
 
   const wsRef = useRef(null);
   const socialBubbleTimersRef = useRef(new Map());
@@ -400,6 +402,7 @@ export default function App() {
           onUpdateUser={handleUpdateUser}
           onOpenProfile={() => setProfileOpen(true)}
           onOpenAdmin={() => setAdminOpen(true)}
+          onOpenBalance={() => setBalanceOpen(true)}
           onLogout={handleLogout}
           rooms={rooms}
           onCreateRoom={handleCreateRoom}
@@ -425,6 +428,16 @@ export default function App() {
           isOpen={adminOpen}
           adminUser={currentUser}
           onClose={() => setAdminOpen(false)}
+        />
+      )}
+
+      {/* Balance & Ledger Management Modal */}
+      {balanceOpen && (
+        <BalanceCenterModal
+          isOpen={balanceOpen}
+          currentUser={currentUser}
+          token={token}
+          onClose={() => setBalanceOpen(false)}
         />
       )}
     </div>
