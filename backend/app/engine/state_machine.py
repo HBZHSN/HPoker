@@ -1086,6 +1086,8 @@ class TableStateMachine:
                     "chips": p.chips,
                     "is_folded": p.is_folded,
                     "is_winner": payout_amt > 0,
+                    "rebuy_count": p.rebuy_count,
+                    "total_buyin_chips": p.total_buyin_chips,
                     "hand_desc": hand_desc,
                     "hand_desc_2": hand_desc_2,
                     "hole_cards": [c.to_dict() for c in p.hole_cards] if (p.player_id == viewer_player_id) else [],

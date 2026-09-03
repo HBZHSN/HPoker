@@ -174,26 +174,29 @@ export default function PlayerSeat({
           </div>
         )}
 
-        {/* === TOP-LEFT CORNER: Rebuy / Buy-in Count Badge (买入次数) === */}
-        {seatData.rebuy_count > 1 && (
-          <div
-            className="absolute -top-2 -left-2 z-20 flex items-center gap-0.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-slate-950 px-1 py-0.5 rounded-full border border-amber-300 md:border-2 md:px-1.5 text-[9px] md:text-[10px] font-black shadow-lg ring-1 md:ring-2 ring-slate-900 whitespace-nowrap"
-            title={`买入次数: ${seatData.rebuy_count} 次`}
-          >
-            <RefreshCw className="w-2 h-2 md:w-2.5 md:h-2.5 text-slate-950 stroke-[3]" />
-            <span>x{seatData.rebuy_count}</span>
-          </div>
-        )}
+        {/* === TOP-LEFT CORNER: Buy-in Count Badge & Bot Indicator (买入次数与机器人标识) === */}
+        <div className="absolute -top-2 -left-2 z-20 flex items-center gap-1">
+          {/* Buy-in Count Badge (买入次数) */}
+          {(seatData.rebuy_count || 1) >= 1 && (
+            <div
+              className="flex items-center gap-0.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-slate-950 px-1 py-0.5 rounded-full border border-amber-300 md:border-2 md:px-1.5 text-[9px] md:text-[10px] font-black shadow-lg ring-1 md:ring-2 ring-slate-900 whitespace-nowrap"
+              title={`买入次数: ${seatData.rebuy_count || 1} 次 (总买入: $${(seatData.total_buyin_chips || seatData.chips).toLocaleString()})`}
+            >
+              <RefreshCw className="w-2 h-2 md:w-2.5 md:h-2.5 text-slate-950 stroke-[3]" />
+              <span>x{seatData.rebuy_count || 1}</span>
+            </div>
+          )}
 
-        {isBot && (
-          <div
-            className="absolute -top-2 -left-2 z-20 flex items-center gap-0.5 bg-indigo-950/95 text-indigo-200 px-1 py-0.5 rounded-full border border-indigo-400/70 text-[9px] md:text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
-            title="测试机器人：随机 Call / Fold / Raise"
-          >
-            <Bot className="w-2 h-2 md:w-2.5 md:h-2.5" />
-            <span>BOT</span>
-          </div>
-        )}
+          {isBot && (
+            <div
+              className="flex items-center gap-0.5 bg-indigo-950/95 text-indigo-200 px-1 py-0.5 rounded-full border border-indigo-400/70 text-[9px] md:text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
+              title="测试机器人：随机 Call / Fold / Raise"
+            >
+              <Bot className="w-2 h-2 md:w-2.5 md:h-2.5" />
+              <span>BOT</span>
+            </div>
+          )}
+        </div>
 
         {/* === BOTTOM-RIGHT CORNER: Time Bank Cards Badge (时间卡数量) === */}
         <div

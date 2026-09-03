@@ -103,7 +103,7 @@ export default function SettlementModal({
                         )}
                       </td>
                       <td className="p-2.5 text-center text-slate-300">
-                        x{r.rebuy_count}
+                        x{r.rebuy_count || 1}
                       </td>
                       <td className="p-2.5 text-right text-slate-400">
                         {r.total_buyin_chips}
