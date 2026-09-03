@@ -7,6 +7,7 @@ import HandResultModal from './HandResultModal';
 import SettlementModal from './SettlementModal';
 import EndRoomConfirmModal from './EndRoomConfirmModal';
 import TableSocialControls from './TableSocialControls';
+import EquityDrawer from './EquityDrawer';
 import { sortCardsLowToHigh } from '../utils/cards';
 import { soundEngine } from '../sound/SoundEngine';
 import {
@@ -101,6 +102,19 @@ export default function PokerTable({
     () => sortCardsLowToHigh(selfSeat?.hole_cards || []),
     [selfSeat?.hole_cards]
   );
+
+  // Active opponents still in-hand (not folded, has cards, not self)
+  const numOpponents = useMemo(() => {
+    if (!table?.seats || !currentUser?.user_id) return 0;
+    return table.seats.filter(
+      (s) =>
+        s &&
+        s.player_id !== currentUser.user_id &&
+        s.has_cards &&
+        !s.is_folded
+    ).length;
+  }, [table?.seats, currentUser?.user_id]);
+
   const botCount = (table?.seats || []).filter((seat) => seat?.is_bot).length;
   const showPotBreakdown = useMemo(() => {
     const inHandSeats = (table?.seats || []).filter(
@@ -370,6 +384,20 @@ export default function PokerTable({
               {botCount > 0 && <span>×{botCount}</span>}
             </button>
           )}
+
+          {/* Equity / Win Rate Analysis Drawer */}
+          <EquityDrawer
+            holeCards={selfSeat?.hole_cards || []}
+            boardCards={table?.board_cards || []}
+            street={table?.street || 'IDLE'}
+            numOpponents={numOpponents}
+            potSize={table?.total_pot || 0}
+            toCall={Math.max(
+              0,
+              (table?.current_round_highest_bet || 0) -
+                (selfSeat?.current_round_bet || 0)
+            )}
+          />
 
           {/* Host End Room Button */}
           {isHost && !room?.is_ended && (
