@@ -330,7 +330,7 @@ export default function PokerTable({
           )}
 
           {/* Host Delete/Disband Room Button */}
-          {(isHost || currentUser?.is_admin) && (
+          {(isHost || currentUser?.is_admin) && !room?.is_ended && (
             <button
               onClick={handleDeleteRoom}
               className="flex items-center gap-1 px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"

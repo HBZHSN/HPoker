@@ -557,6 +557,64 @@ def test_unsettled_room_is_retained_when_empty():
     assert room_manager.get_room(room_id) is not None
 
 
+def test_room_automatically_deleted_after_settlement():
+    client = TestClient(app)
+
+    # 1. Test WebSocket END_ROOM auto dissolution
+    resp = client.post("/api/rooms", json={
+        "host_player_id": "u_fwd",
+        "room_name": "Auto Disband WS Table",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 10,
+        "big_blind": 20,
+    })
+    room_id = resp.json()["room_id"]
+    assert room_manager.get_room(room_id) is not None
+    assert any(r["room_id"] == room_id for r in client.get("/api/rooms").json())
+
+    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws_host:
+        _ = ws_host.receive_json()  # INITIAL ROOM_STATE
+
+        # Host sends END_ROOM
+        ws_host.send_json({"event": EventType.END_ROOM.value, "payload": {"settlement_type": "balance"}})
+
+        # Receive messages until final ROOM_STATE with report
+        final_state = None
+        for _ in range(5):
+            msg = ws_host.receive_json()
+            if msg.get("event") == EventType.ROOM_STATE.value:
+                final_state = msg
+                if msg.get("payload", {}).get("is_ended"):
+                    break
+
+        assert final_state is not None
+        assert final_state["payload"]["is_ended"] is True
+        assert final_state["payload"]["settlement_report"] is not None
+
+        # Room must be automatically deleted from room_manager and not visible in lobby
+        assert room_manager.get_room(room_id) is None
+        assert not any(r["room_id"] == room_id for r in client.get("/api/rooms").json())
+
+    # 2. Test REST POST /api/rooms/{id}/end auto dissolution
+    resp2 = client.post("/api/rooms", json={
+        "host_player_id": "u_fwd",
+        "room_name": "Auto Disband REST Table",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 10,
+        "big_blind": 20,
+    })
+    room_id2 = resp2.json()["room_id"]
+    assert room_manager.get_room(room_id2) is not None
+
+    end_resp = client.post(f"/api/rooms/{room_id2}/end?requester_id=u_fwd&settlement_type=balance")
+    assert end_resp.status_code == 200
+    assert end_resp.json()["room_id"] == room_id2
+    assert room_manager.get_room(room_id2) is None
+    assert not any(r["room_id"] == room_id2 for r in client.get("/api/rooms").json())
+
+
 def test_comprehensive_user_security_and_privacy():
     client = TestClient(app)
 

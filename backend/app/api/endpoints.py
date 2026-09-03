@@ -284,7 +284,8 @@ def end_room(room_id: str, requester_id: str = Query(...), settlement_type: str 
     report = room.end_room(requester_id=requester_id, settlement_type=settlement_type)
     if not report:
         raise HTTPException(status_code=403, detail="Only host can end room or room already ended")
-    room_manager.checkpoint_room(room)
+    timeout_manager.cancel_all_timers(room_id)
+    room_manager.delete_room(room_id)
     return report.to_dict()
 
 

@@ -583,6 +583,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                     timeout_manager.cancel_all_timers(room_id)
                     await ws_manager.broadcast_sound(room_id, "win_pot")
                     await ws_manager.broadcast_room_state(room)
+                    room_manager.delete_room(room_id)
 
             elif event == EventType.DELETE_ROOM:
                 requester = user_manager.get_user(user_id)

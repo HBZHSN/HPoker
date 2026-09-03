@@ -89,6 +89,8 @@ class RoomManager:
     def list_rooms(self) -> List[dict]:
         rooms_info = []
         for r in self._rooms.values():
+            if r.is_ended:
+                continue
             rooms_info.append({
                 "room_id": r.room_id,
                 "room_name": r.config.room_name,
