@@ -9,8 +9,11 @@ export default function SettlementModal({
 
   if (!report) return null;
 
+  const isBalanceMode = (report.settlement_type || 'balance') === 'balance';
+
   const copySettlementText = () => {
     let text = `【${report.room_name} - 结算清单】\n`;
+    text += `结算模式: ${isBalanceMode ? '✨ 计入系统余额 (后续由管理员统一结算)' : '⚡ 实时转账 (当场结清)'}\n`;
     text += `买入: ${report.buyin_chips}筹码 = ¥${report.cash_value}\n\n`;
     text += `--- 玩家战绩 ---\n`;
     report.player_records.forEach((r, idx) => {
@@ -18,7 +21,7 @@ export default function SettlementModal({
       text += `${idx + 1}. ${r.player_name}: 买入x${r.rebuy_count} (${r.total_buyin_chips}筹码) -> 余额${r.final_chips}筹码 | 净输赢: ${sign}¥${r.net_cash.toFixed(2)}\n`;
     });
 
-    text += `\n--- 转账 ---\n`;
+    text += `\n--- 转账明细 ---\n`;
     if (report.transactions.length === 0) {
       text += `无需转账。\n`;
     } else {
@@ -42,7 +45,16 @@ export default function SettlementModal({
               <Award className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-white tracking-wide">战局结束 · 现金结算清单</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black text-white tracking-wide">战局结束 · 结算清单</h2>
+                <span className={`text-[11px] font-black px-2 py-0.5 rounded-full border ${
+                  isBalanceMode
+                    ? 'bg-amber-950 text-amber-300 border-amber-500/50'
+                    : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
+                }`}>
+                  {isBalanceMode ? '✨ 计入余额' : '⚡ 实时转账'}
+                </span>
+              </div>
               <p className="text-xs text-slate-400">
                 {report.room_name} · 买入: ${report.buyin_chips} = ¥{report.cash_value}
               </p>
@@ -54,6 +66,24 @@ export default function SettlementModal({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Settlement Mode Banner */}
+        <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between ${
+          isBalanceMode
+            ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+            : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+        }`}>
+          <div>
+            <div className="font-bold">
+              {isBalanceMode ? '本局已记入系统待结余额' : '本局为实时转账模式'}
+            </div>
+            <div className="text-[11px] opacity-80 mt-0.5">
+              {isBalanceMode
+                ? '输赢数据已记录至系统账户。可在首页【账务中心】查看总待结账单，后续由管理员统一一次性结算。'
+                : '请各位玩家根据下方转账清单进行私下结算。'}
+            </div>
+          </div>
         </div>
 
         {/* Player Leaderboard */}
@@ -84,6 +114,11 @@ export default function SettlementModal({
                           {r.avatar || '👤'}
                         </span>
                         <span className="truncate">{r.player_name}</span>
+                        {(r.is_test || r.player_name?.toLowerCase()?.includes('test') || r.player_id?.startsWith('bot_')) && (
+                          <span className="text-[9px] bg-purple-950/80 text-purple-300 border border-purple-500/40 px-1 py-0.2 rounded font-bold ml-1">
+                            测试
+                          </span>
+                        )}
                       </td>
                       <td className="p-2.5 text-center text-slate-300">
                         x{r.rebuy_count}

@@ -5,6 +5,7 @@ import ActionBar from './ActionBar';
 import CardView from './CardView';
 import HandResultModal from './HandResultModal';
 import SettlementModal from './SettlementModal';
+import EndRoomConfirmModal from './EndRoomConfirmModal';
 import TableSocialControls from './TableSocialControls';
 import { sortCardsLowToHigh } from '../utils/cards';
 import { soundEngine } from '../sound/SoundEngine';
@@ -54,6 +55,7 @@ export default function PokerTable({
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [settlementOpen, setSettlementOpen] = useState(false);
+  const [endRoomConfirmOpen, setEndRoomConfirmOpen] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
 
@@ -160,10 +162,20 @@ export default function PokerTable({
     onSendWsEvent('REVEAL_BOARD_CARDS', {});
   };
 
+  const hasTestAccountInRoom = useMemo(() => {
+    if (!table?.seats) return false;
+    return table.seats.some(
+      (s) => s && (s.is_bot || s.name?.toLowerCase()?.includes('test') || s.player_id?.toLowerCase()?.includes('test'))
+    );
+  }, [table?.seats]);
+
   const handleEndRoom = () => {
-    if (window.confirm('确定要结束房间并生成结算清单吗？')) {
-      onSendWsEvent('END_ROOM', {});
-    }
+    setEndRoomConfirmOpen(true);
+  };
+
+  const handleConfirmEndRoom = (settlementType) => {
+    setEndRoomConfirmOpen(false);
+    onSendWsEvent('END_ROOM', { settlement_type: settlementType });
   };
 
   const handleDeleteRoom = () => {
@@ -695,6 +707,16 @@ export default function PokerTable({
           onRebuy={handleRebuy}
           onStartNextHand={handleStartGame}
           onClose={() => setHandResultDismissed(true)}
+        />
+      )}
+
+      {/* End Room Settlement Type Confirmation Modal */}
+      {endRoomConfirmOpen && (
+        <EndRoomConfirmModal
+          isOpen={endRoomConfirmOpen}
+          hasTestAccount={hasTestAccountInRoom}
+          onConfirm={handleConfirmEndRoom}
+          onClose={() => setEndRoomConfirmOpen(false)}
         />
       )}
 
