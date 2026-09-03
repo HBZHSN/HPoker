@@ -12,6 +12,7 @@ from cli.ws_client import PokerWsClient
 from cli.ui_renderer import PokerUiRenderer, Colors
 from cli.controller import PokerCliController
 from cli.tui import TerminalTui
+from cli.textual_app import PokerTextualApp
 from cli.text_utils import display_width
 from cli.commands import (
     BetSizingContext,
@@ -167,6 +168,33 @@ async def test_controller_tui_timer_refreshes_room_dashboard_locally():
     assert all(call.kwargs.get("now") is not None for call in controller._refresh_tui.call_args_list)
 
 
+@pytest.mark.asyncio
+async def test_textual_tui_handles_input_and_responsive_layout():
+    controller = PokerCliController(enable_color=False)
+    controller.current_user = {"user_id": "u_me", "nickname": "Hero"}
+    controller.rooms = []
+    controller._tui_view = "lobby"
+    app = PokerTextualApp(controller, autostart=False)
+
+    try:
+        async with app.run_test(size=(120, 36)) as pilot:
+            controller._refresh_tui()
+            await pilot.pause()
+            assert app.bridge.active is True
+            assert app.screen.has_class("narrow") is False
+
+            read_task = asyncio.create_task(app.bridge.read_line("大厅> ", ["rooms"]))
+            await pilot.pause()
+            await pilot.press("h", "e", "l", "p", "enter")
+            assert await asyncio.wait_for(read_task, timeout=1) == "help"
+
+            await pilot.resize_terminal(80, 30)
+            await pilot.pause()
+            assert app.screen.has_class("narrow") is True
+    finally:
+        await controller.api.close()
+
+
 class TestPokerUiRenderer:
     """Tests for terminal UI rendering."""
 
@@ -187,6 +215,59 @@ class TestPokerUiRenderer:
         formatted = renderer.format_card(card)
         assert "A♥" in formatted
         assert "\033[" in formatted  # ANSI escape code present
+
+    def test_large_cards_and_split_dashboard_sections(self):
+        renderer = PokerUiRenderer(enable_color=False, mode="dashboard")
+        room_data = {
+            "room_id": "r_split",
+            "host_player_id": "u_me",
+            "config": {"room_name": "深夜牌局", "small_blind": 5, "big_blind": 10},
+            "table": {
+                "hand_number": 8,
+                "street": "FLOP",
+                "total_pot": 180,
+                "board_cards": [
+                    {"rank_symbol": "A", "suit_symbol": "♠"},
+                    {"rank_symbol": "10", "suit_symbol": "♥"},
+                    {"rank_symbol": "2", "suit_symbol": "♦"},
+                ],
+                "current_turn_seat": 0,
+                "current_turn_duration": 20,
+                "turn_started_at": 100.0,
+                "seats": [{
+                    "player_id": "u_me",
+                    "name": "Hero",
+                    "chips": 900,
+                    "current_round_bet": 20,
+                    "hole_cards": [
+                        {"rank_symbol": "K", "suit_symbol": "♣"},
+                        {"rank_symbol": "K", "suit_symbol": "♦"},
+                    ],
+                }],
+                "legal_actions": {
+                    "can_check": True,
+                    "can_fold": True,
+                    "can_bet": True,
+                    "min_bet": 20,
+                    "max_bet": 900,
+                    "can_all_in": True,
+                    "all_in_amount": 900,
+                },
+                "action_history": [{"player_name": "Hero", "action": "BET", "amount": 20}],
+            },
+        }
+
+        cards = renderer.format_large_cards(room_data["table"]["board_cards"], slots=5)
+        main = renderer.render_table_main(room_data, "u_me")
+        sidebar = renderer.render_table_sidebar(room_data, "u_me")
+
+        assert len(cards.splitlines()) == 5
+        assert all(display_width(line) == 39 for line in cards.splitlines())
+        assert "公共牌" in main and "你的手牌" in main
+        assert "A" in main and "K" in main
+        assert "下注 20~900" in sidebar
+        assert "r 1/2p" in sidebar
+        assert "最近动态" in sidebar
 
     def test_render_lobby(self):
         renderer = PokerUiRenderer(enable_color=False, mode="dashboard")
