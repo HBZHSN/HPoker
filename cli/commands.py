@@ -150,6 +150,13 @@ def parse_command(line: str) -> Optional[CliCommand]:
     raw = line.strip()
     if not raw:
         return None
+    compact_raise = re.fullmatch(r"(?P<name>[rb])(?P<amount>\d+(?:\.\d+)?)", raw, re.IGNORECASE)
+    if compact_raise:
+        return CliCommand(
+            name=compact_raise.group("name").lower(),
+            args=(compact_raise.group("amount"),),
+            raw=raw,
+        )
     try:
         tokens = shlex.split(raw)
     except ValueError as exc:
@@ -250,7 +257,16 @@ def _raw_target(token: str, context: BetSizingContext) -> Optional[float]:
         base = context.current_highest_bet or context.current_round_bet
         return base + amount
 
-    return _number(value)
+    plain = _number(value)
+    # Tiny bare values are far more useful as pot multipliers than as chip
+    # amounts.  The legal minimum / blind unit keeps this unambiguous on
+    # normal 10/20-style tables: ``r0.5`` means half pot and ``r1`` means pot,
+    # while ``raise 200`` remains an exact chip target.
+    if plain is not None:
+        chip_floor = max(int(context.minimum), context.unit)
+        if 0 < plain <= 3 and plain < chip_floor:
+            return context.pot * plain
+    return plain
 
 
 def align_bet_amount(amount: int, context: BetSizingContext) -> int:
@@ -284,6 +300,7 @@ def resolve_bet_amount(token: Optional[str], context: BetSizingContext) -> Optio
     Supported forms include:
 
     * chip amounts: ``120``, ``1,200`` or ``¥120``;
+    * short pot ratios below the legal chip floor: ``0.5`` or ``1``;
     * pot fractions: ``1/3p``, ``1/2``, ``2/3p``, ``p``, ``1.5p``;
     * blind multiples: ``2.5bb`` and ``10sb``;
     * relative increments: ``+1bb`` and ``+20``;

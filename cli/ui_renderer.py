@@ -7,7 +7,7 @@ import sys
 import time
 from typing import Any, Dict, Iterable, List, Optional
 
-from cli.commands import command_specs
+from cli.commands import BetSizingContext, command_specs, resolve_bet_amount
 from cli.text_utils import clip_display, display_width, pad_display
 
 
@@ -443,18 +443,38 @@ class PokerUiRenderer:
 
         if (legal.get("can_bet") or legal.get("can_raise")) and is_my_turn:
             pot = self._int(table.get("total_pot", 0))
+            can_bet = bool(legal.get("can_bet"))
+            minimum = self._int(
+                legal.get("min_bet" if can_bet else "min_raise_to", legal.get("min_raise", 0))
+            )
+            maximum = self._int(
+                legal.get("max_bet" if can_bet else "max_raise_to", legal.get("max_raise", 0))
+            )
+            small_blind = self._int(table.get("small_blind", cfg.get("small_blind", 1)), 1)
+            sizing_context = BetSizingContext(
+                pot=pot,
+                minimum=minimum,
+                maximum=maximum,
+                small_blind=small_blind,
+                current_highest_bet=self._int(table.get("current_round_highest_bet", 0)),
+                big_blind=self._int(table.get("big_blind", cfg.get("big_blind", 0))) or None,
+            )
+            size_options = []
+            for ratio, label in (("1/3p", "1/3池"), ("0.5", "半池"), ("1", "整池")):
+                amount = resolve_bet_amount(ratio, sizing_context)
+                if amount is not None and amount not in {item[0] for item in size_options}:
+                    size_options.append((amount, label))
             if compact:
-                lines.extend(["", f"尺度  1/3p:{int(pot / 3)}  1/2p:{int(pot / 2)}  pot:{pot}"])
+                numeric_sizes = "  ".join(f"raise {amount}" for amount, _ in size_options)
+                lines.extend(["", f"快捷  {numeric_sizes}", self.c("比例缩写  r0.5 / r1", Colors.DIM)])
             else:
                 lines.extend([
                     "",
-                    self.c("下注尺度", Colors.BOLD + Colors.BRIGHT_CYAN),
-                    f"  r 1/3p   {int(pot / 3)}",
-                    f"  r 1/2p   {int(pot / 2)}",
-                    f"  r 2/3p   {int(pot * 2 / 3)}",
-                    f"  r pot    {pot}",
-                    "  r +1bb   加 1BB",
+                    self.c("快捷下注", Colors.BOLD + Colors.BRIGHT_CYAN),
                 ])
+                for amount, label in size_options:
+                    lines.append(f"  raise {amount:<7} {label}")
+                lines.append(self.c("  比例缩写  r0.5 / r1", Colors.DIM))
 
         lines.extend(["", self.c("最近动态", Colors.BOLD + Colors.BRIGHT_CYAN)])
         history_limit = 2 if compact else 5
@@ -1017,8 +1037,10 @@ class PokerUiRenderer:
             lines.extend([
                 "",
                 self.c("下注额度", Colors.BOLD + Colors.BRIGHT_WHITE),
-                "  100 / 2.5bb / +1bb           固定额、盲注倍数、相对加注",
-                "  1/3p / 1/2p / 2/3p / pot     底池比例",
+                "  raise 200                     优先使用明确的筹码总额",
+                "  r0.5 / r1                     无空格的半池 / 整池缩写",
+                "  1/3p / 1/2p / 2/3p / pot     完整底池比例语法",
+                "  2.5bb / +1bb                  盲注倍数、相对加注",
                 "  1.5p / 2p / 3p / allin       超池下注或全下",
             ])
         elif scope == "lobby":

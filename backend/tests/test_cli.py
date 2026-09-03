@@ -32,6 +32,9 @@ def test_cli_command_parser_and_bet_sizing():
     assert command is not None
     assert command.name == "create"
     assert command.args == ("Friday cash game", "--buyin", "2000")
+    assert parse_command("r1").args == ("1",)
+    assert parse_command("r0.5").args == ("0.5",)
+    assert parse_command("r200").args == ("200",)
 
     with pytest.raises(CommandParseError):
         parse_command('create "unfinished')
@@ -48,6 +51,10 @@ def test_cli_command_parser_and_bet_sizing():
     assert resolve_bet_amount("2/3p", context) == 130
     assert resolve_bet_amount("3bb", context) == 60
     assert resolve_bet_amount("+1bb", context) == 60
+    assert resolve_bet_amount("0.5", context) == 100
+    assert resolve_bet_amount("1", context) == 200
+    assert resolve_bet_amount("2", context) == 400
+    assert resolve_bet_amount("5", context) == 40
     assert resolve_bet_amount("all-in", context) == 1000
     assert resolve_bet_amount(None, context) == 40
     assert resolve_bet_amount("not-an-amount", context) is None
@@ -58,12 +65,15 @@ def test_cli_commands_use_one_scope_aware_registry():
     room_check = normalize_command(parse_command("c"), "room")
     lobby_refresh = normalize_command(parse_command("r"), "lobby")
     room_raise = normalize_command(parse_command("r 1/2p"), "room")
+    compact_raise = normalize_command(parse_command("r0.5"), "room")
 
     assert lobby_create.name == "create"
     assert room_check.name == "check"
     assert lobby_refresh.name == "rooms"
     assert room_raise.name == "raise"
     assert room_raise.args == ("1/2p",)
+    assert compact_raise.name == "raise"
+    assert compact_raise.args == ("0.5",)
     assert normalize_command(parse_command("s1"), "room").args == ("1",)
     assert normalize_command(parse_command("muck"), "room").args == ("muck",)
     assert any(spec.name == "raise" and "r" in spec.aliases for spec in command_specs("room"))
@@ -270,14 +280,17 @@ class TestPokerUiRenderer:
         assert "公共牌" in main and "你的手牌" in main
         assert "A" in main and "K" in main
         assert "下注 20~900" in sidebar
-        assert "r 1/2p" in sidebar
+        assert "raise 90" in sidebar
+        assert "raise 180" in sidebar
+        assert "r0.5 / r1" in sidebar
         assert "最近动态" in sidebar
         assert "公共牌  [A♠] [10♥] [2♦]" in compact_main
         assert "手牌    [K♣] [K♦]" in compact_main
         assert "┌─────┐" not in compact_main
         assert len(compact_main.splitlines()) < len(main.splitlines())
         assert "[" not in compact_sidebar  # compact timer omits the progress bar
-        assert "尺度  1/3p:60  1/2p:90  pot:180" in compact_sidebar
+        assert "快捷  raise 60  raise 90  raise 180" in compact_sidebar
+        assert "比例缩写  r0.5 / r1" in compact_sidebar
         assert "快捷命令" not in compact_sidebar
 
     def test_render_lobby(self):
@@ -594,6 +607,15 @@ class TestPokerCliController:
         # Test 1p -> 200
         mock_ws.reset_mock()
         await controller._handle_raise_command(["r", "1p"])
+        mock_ws.player_action.assert_called_with("RAISE", 200)
+
+        # Compact command syntax: r0.5 -> half pot, r200 -> 200 chips.
+        mock_ws.reset_mock()
+        await controller._dispatch_room_command(parse_command("r0.5"))
+        mock_ws.player_action.assert_called_with("RAISE", 100)
+
+        mock_ws.reset_mock()
+        await controller._dispatch_room_command(parse_command("r200"))
         mock_ws.player_action.assert_called_with("RAISE", 200)
 
         # Test 2/3p -> 133
