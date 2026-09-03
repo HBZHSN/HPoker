@@ -19,6 +19,7 @@ export default function PlayerSeat({
   street = 'IDLE',
   turnCount = 0,
   actionHistoryLength = 0,
+  emojiReaction = null,
 }) {
   const baseTimeout = (isCurrentTurn && isUsingTimeBank)
     ? (currentTurnDuration || 30)
@@ -72,6 +73,17 @@ export default function PlayerSeat({
     <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
       {/* Anchor Container for Avatar Card & Floating Badges */}
       <div className="relative w-full h-full flex flex-col items-center justify-center">
+        {emojiReaction && (
+          <div
+            key={emojiReaction.reaction_id}
+            className="poker-seat-emoji absolute -top-14 left-1/2 z-40 -translate-x-1/2 text-4xl md:-top-16 md:text-5xl"
+            role="status"
+            aria-label={`${seatData.name} 发送了表情 ${emojiReaction.emoji}`}
+          >
+            {emojiReaction.emoji}
+          </div>
+        )}
+
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {isCurrentTurn ? (
           isUsingTimeBank ? (

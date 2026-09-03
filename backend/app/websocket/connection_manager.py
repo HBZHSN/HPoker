@@ -105,6 +105,16 @@ class ConnectionManager:
             except Exception as e:
                 logger.warning(f"Failed to send sound to socket: {e}")
 
+    async def broadcast_event(self, room_id: str, event: EventType, payload: dict) -> None:
+        """Broadcast an ephemeral room event without checkpointing game state."""
+        sockets = self.room_connections.get(room_id, set())
+        raw = json.dumps(make_message(event, payload, room_id=room_id))
+        for ws in list(sockets):
+            try:
+                await ws.send_text(raw)
+            except Exception as e:
+                logger.warning(f"Failed to broadcast {event.value}: {e}")
+
 
 # Global singleton
 ws_manager = ConnectionManager()

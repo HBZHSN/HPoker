@@ -471,6 +471,47 @@ html,
   animation: card-flip 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+@keyframes seat-emoji-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.45) rotate(-8deg);
+  }
+  18%, 78% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.08) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(0.9) rotate(6deg);
+  }
+}
+
+.poker-seat-emoji {
+  animation: seat-emoji-pop 4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: drop-shadow(0 5px 8px rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+}
+
+.poker-chat-messages {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+@media (max-width: 640px) {
+  .poker-social-controls {
+    bottom: 10px;
+    left: 10px;
+  }
+
+  .poker-chat-window {
+    max-height: min(430px, calc(100dvh - 110px));
+  }
+
+  .poker-chat-messages {
+    height: min(16rem, calc(100dvh - 230px));
+  }
+}
+
 /* A post-hand reveal keeps a small diagonal card-back corner so the full face
    stays readable while it remains distinct from normal dealt cards. */
 .poker-card-post-hand-corner {

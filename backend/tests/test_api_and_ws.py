@@ -167,6 +167,73 @@ def test_websocket_room_interaction():
             assert state2["payload"]["table"]["street"] == "PREFLOP"
 
 
+def test_websocket_chat_and_emoji_broadcast():
+    client = TestClient(app)
+    response = client.post("/api/rooms", json={
+        "host_player_id": "u_fwd",
+        "room_name": "Social WS Test",
+        "max_seats": 2,
+    })
+    room_id = response.json()["room_id"]
+
+    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws_host:
+        ws_host.receive_json()
+        with client.websocket_connect(f"/ws/{room_id}/u_hx") as ws_guest:
+            ws_host.receive_json()
+            ws_guest.receive_json()
+
+            ws_guest.send_json({
+                "event": EventType.CHAT_MESSAGE.value,
+                "payload": {"message": "  好牌！  "},
+            })
+            for message in (ws_host.receive_json(), ws_guest.receive_json()):
+                assert message["event"] == EventType.CHAT_MESSAGE.value
+                assert message["room_id"] == room_id
+                assert message["payload"]["player_id"] == "u_hx"
+                assert message["payload"]["name"] == "hx"
+                assert message["payload"]["avatar"] == "🦁"
+                assert message["payload"]["message"] == "好牌！"
+                assert message["payload"]["message_id"]
+
+            ws_host.send_json({
+                "event": EventType.EMOJI_REACTION.value,
+                "payload": {"emoji": "🔥"},
+            })
+            for message in (ws_host.receive_json(), ws_guest.receive_json()):
+                assert message["event"] == EventType.EMOJI_REACTION.value
+                assert message["payload"]["player_id"] == "u_fwd"
+                assert message["payload"]["emoji"] == "🔥"
+                assert message["payload"]["reaction_id"]
+
+
+def test_websocket_rejects_invalid_social_content():
+    client = TestClient(app)
+    response = client.post("/api/rooms", json={
+        "host_player_id": "u_fwd",
+        "room_name": "Social Validation Test",
+    })
+    room_id = response.json()["room_id"]
+
+    with client.websocket_connect(f"/ws/{room_id}/u_fwd") as ws:
+        ws.receive_json()
+
+        ws.send_json({
+            "event": EventType.CHAT_MESSAGE.value,
+            "payload": {"message": "   "},
+        })
+        error = ws.receive_json()
+        assert error["event"] == EventType.ERROR_MESSAGE.value
+        assert "1-120" in error["payload"]["message"]
+
+        ws.send_json({
+            "event": EventType.EMOJI_REACTION.value,
+            "payload": {"emoji": "not-an-emoji"},
+        })
+        error = ws.receive_json()
+        assert error["event"] == EventType.ERROR_MESSAGE.value
+        assert error["payload"]["message"] == "当前无法发送该表情"
+
+
 def test_auth_and_admin_security():
     client = TestClient(app)
 

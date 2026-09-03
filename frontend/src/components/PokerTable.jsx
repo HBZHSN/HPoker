@@ -5,6 +5,7 @@ import ActionBar from './ActionBar';
 import CardView from './CardView';
 import HandResultModal from './HandResultModal';
 import SettlementModal from './SettlementModal';
+import TableSocialControls from './TableSocialControls';
 import { sortCardsLowToHigh } from '../utils/cards';
 import { soundEngine } from '../sound/SoundEngine';
 import {
@@ -46,6 +47,8 @@ const buildSeatPositions = (seatCount) => {
 export default function PokerTable({
   room,
   currentUser,
+  chatMessages = [],
+  emojiReactions = {},
   onSendWsEvent,
   onLeaveRoom,
 }) {
@@ -579,6 +582,7 @@ export default function PokerTable({
                       street={table?.street || 'IDLE'}
                       turnCount={table?.turn_count || 0}
                       actionHistoryLength={table?.action_history?.length || 0}
+                      emojiReaction={emojiReactions[seatData?.player_id] || null}
                     />
                   </div>
                 );
@@ -654,6 +658,14 @@ export default function PokerTable({
           />
         </aside>
       </div>
+
+      <TableSocialControls
+        messages={chatMessages}
+        currentUserId={currentUser?.user_id}
+        canReact={Boolean(selfSeat)}
+        onSendChat={(message) => onSendWsEvent('CHAT_MESSAGE', { message })}
+        onSendEmoji={(emoji) => onSendWsEvent('EMOJI_REACTION', { emoji })}
+      />
 
       {/* Hand Result Settlement & Card Reveal Modal */}
       {table?.street === 'HAND_END' && !handResultDismissed && table?.hand_results && table.hand_results.length > 0 && (

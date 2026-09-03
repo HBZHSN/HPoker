@@ -9,7 +9,13 @@ import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Optional
 
-from backend.app.websocket.protocol import EventType, make_message
+from backend.app.websocket.protocol import (
+    ALLOWED_EMOJI_REACTIONS,
+    CHAT_MESSAGE_MAX_LENGTH,
+    EventType,
+    make_message,
+    normalize_chat_message,
+)
 from backend.app.websocket.connection_manager import ws_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.services.user_manager import user_manager
@@ -362,6 +368,56 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
             if event == EventType.PING:
                 await ws_manager.send_personal_message(websocket, make_message(EventType.PONG, {}))
                 continue
+
+            elif event == EventType.CHAT_MESSAGE:
+                message = normalize_chat_message(payload.get("message"))
+                if message is None:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"message": f"聊天内容需为 1-{CHAT_MESSAGE_MAX_LENGTH} 个字符"},
+                            room_id=room_id,
+                        ),
+                    )
+                    continue
+                await ws_manager.broadcast_event(
+                    room_id,
+                    EventType.CHAT_MESSAGE,
+                    {
+                        "message_id": secrets.token_hex(8),
+                        "player_id": user_id,
+                        "name": nickname,
+                        "avatar": avatar,
+                        "message": message,
+                    },
+                )
+
+            elif event == EventType.EMOJI_REACTION:
+                emoji = payload.get("emoji")
+                is_seated = any(
+                    seat and seat.player_id == user_id
+                    for seat in room.table.seats
+                )
+                if emoji not in ALLOWED_EMOJI_REACTIONS or not is_seated:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"message": "当前无法发送该表情"},
+                            room_id=room_id,
+                        ),
+                    )
+                    continue
+                await ws_manager.broadcast_event(
+                    room_id,
+                    EventType.EMOJI_REACTION,
+                    {
+                        "reaction_id": secrets.token_hex(8),
+                        "player_id": user_id,
+                        "emoji": emoji,
+                    },
+                )
 
             elif event == EventType.SIT_DOWN:
                 seat_index = payload.get("seat_index")
