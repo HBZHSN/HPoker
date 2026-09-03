@@ -66,6 +66,28 @@
 > - `./start.sh stop`：强制停止占用 8000 / 5173 端口的残留进程
 > - `./start.sh help`：查看全部命令帮助
 
+### 🔄 systemd 开机自启（生产环境）
+
+仓库提供 `deploy/poker.service` 和自动安装脚本，由 systemd 直接托管虚拟环境中的 Uvicorn。执行：
+
+```bash
+cd /home/hanxu/code/python/poker
+sudo ./deploy/install-systemd.sh
+```
+
+脚本会自动构建前端，按当前项目路径与项目所有者生成服务单元，然后安装、启动并设为开机自启。
+
+常用管理命令：
+
+```bash
+systemctl status poker.service
+journalctl -u poker.service -f
+sudo systemctl restart poker.service
+sudo systemctl disable --now poker.service
+```
+
+服务默认监听 `0.0.0.0:8000`，前端静态资源由 FastAPI 同端口提供；房间和用户持久化数据保存在 `backend/data/`。
+
 ---
 
 ### 💻 Textual TUI 终端客户端
