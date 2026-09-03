@@ -406,9 +406,11 @@ export default function BalanceCenterModal({
                             </td>
                             <td className="p-3 text-right text-slate-400">
                               <span>{myRec.total_buyin_chips}</span>
-                              <span className="text-[10px] text-amber-400/80 font-mono ml-1">
-                                (x{myRec.rebuy_count || 1})
-                              </span>
+                              {myRec.rebuy_count > 1 && (
+                                <span className="text-[10px] text-amber-400/80 font-mono ml-1">
+                                  (x{myRec.rebuy_count})
+                                </span>
+                              )}
                             </td>
                             <td className="p-3 text-right text-amber-300 font-bold">
                               {myRec.final_chips}

@@ -461,9 +461,10 @@
 
 ---
 
-### 阶段 39：前端玩家买入次数（Buy-in Count）展示恢复与全链路联动
-- [x] 39.1 修复 `PlayerSeat` 买入次数角标判断逻辑（由仅 `> 1` 调整为支持展示所有在座玩家的买入次数 `x1, x2...`），并与 BOT 机器人标识采用弹性行排列避免重叠遮挡
-- [x] 39.2 在操作栏 `ActionBar` 玩家本人概览卡片中增加买入次数指示角标 (`买入 x1`)
-- [x] 39.3 在手牌结算弹窗 `HandResultModal` 结算汇总中展示各玩家买入次数 (`买入 x1`)，并在后端 `hand_results` 补齐 `rebuy_count` 字段
-- [x] 39.4 完善对账中心 `BalanceCenterModal` 与战局终局 `SettlementModal` 中买入次数的显示与容错回退
+### 阶段 39：前端玩家买入次数（Buy-in Count）展示规则优化（仅重买超1次时展示）
+- [x] 39.1 优化 `PlayerSeat` 买入次数角标：初始买入 1 次不显，超过 1 次（`rebuy_count > 1`）展示 `x2, x3...`，并与 BOT 标识弹性排列防遮挡
+- [x] 39.2 优化 `ActionBar` 本人概览卡片：仅在买入超过 1 次时展示 `买入 xN`
+- [x] 39.3 优化 `HandResultModal` 单手牌结算弹窗：仅对买入超过 1 次的玩家展示 `买入 xN`，后端保持带出 `rebuy_count`
+- [x] 39.4 优化 `BalanceCenterModal` 个人账单流水：仅当买入超过 1 次时展示 `(xN)`，战局终局 `SettlementModal` 保持清单全量明细
+
 

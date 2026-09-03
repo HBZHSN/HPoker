@@ -267,9 +267,11 @@ export default function HandResultModal({
                         {res.net_profit > 0 ? `+$${res.net_profit}` : res.net_profit < 0 ? `-$${Math.abs(res.net_profit)}` : '$0'}
                       </span>
                       <div className="flex items-center justify-end gap-1.5">
-                        <span className="text-[10px] text-amber-400/80 font-medium">
-                          买入 x{res.rebuy_count || 1}
-                        </span>
+                        {res.rebuy_count > 1 && (
+                          <span className="text-[10px] text-amber-400/80 font-medium">
+                            买入 x{res.rebuy_count}
+                          </span>
+                        )}
                         <span className={`text-[11px] font-medium ${res.chips === 0 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
                           余额: ${res.chips}
                         </span>

@@ -1,4 +1,75 @@
 {
-  "entries": [],
+  "entries": [
+    {
+      "entry_id": "entry_30d0060547",
+      "room_id": "1052a490",
+      "room_name": "新现金桌",
+      "settlement_type": "balance",
+      "status": "unsettled",
+      "created_at": 1788436461.3731692,
+      "is_test_game": false,
+      "participants": [
+        {
+          "player_id": "u_fwd",
+          "nickname": "fwd",
+          "avatar": "🐉",
+          "is_test": false,
+          "rebuy_count": 1,
+          "total_buyin_chips": 1000,
+          "final_chips": 1730,
+          "net_chips": 730,
+          "net_cash": 7.3
+        },
+        {
+          "player_id": "u_hx",
+          "nickname": "hx",
+          "avatar": "🦁",
+          "is_test": false,
+          "rebuy_count": 1,
+          "total_buyin_chips": 1000,
+          "final_chips": 1270,
+          "net_chips": 270,
+          "net_cash": 2.7
+        },
+        {
+          "player_id": "u_yy",
+          "nickname": "yy",
+          "avatar": "🦊",
+          "is_test": false,
+          "rebuy_count": 1,
+          "total_buyin_chips": 1000,
+          "final_chips": 0,
+          "net_chips": -1000,
+          "net_cash": -10.0
+        }
+      ],
+      "transactions": [
+        {
+          "from_player_id": "u_yy",
+          "from_player_name": "yy",
+          "to_player_id": "u_fwd",
+          "to_player_name": "fwd",
+          "amount_cash": 7.3,
+          "amount_chips": 730,
+          "display": "yy 应付给 fwd: ¥7.30 (730 筹码)"
+        },
+        {
+          "from_player_id": "u_yy",
+          "from_player_name": "yy",
+          "to_player_id": "u_hx",
+          "to_player_name": "hx",
+          "amount_cash": 2.7,
+          "amount_chips": 270,
+          "display": "yy 应付给 hx: ¥2.70 (270 筹码)"
+        }
+      ],
+      "chip_to_cash_ratio": 0.01,
+      "buyin_chips": 1000,
+      "cash_value": 10.0,
+      "settled_at": null,
+      "settled_by": null,
+      "batch_id": null
+    }
+  ],
   "batches": []
 }
