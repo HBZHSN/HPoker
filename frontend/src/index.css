@@ -88,6 +88,14 @@ html,
   display: block;
 }
 
+.poker-mobile-raise-slider {
+  width: 1.25rem;
+  min-height: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  touch-action: none;
+}
+
 @media (max-width: 767px) {
   .poker-mobile-sticky-info {
     position: sticky;
