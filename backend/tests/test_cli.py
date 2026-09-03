@@ -163,7 +163,7 @@ async def test_global_context_commands_work_in_lobby_and_room():
 def test_cli_entrypoint_options():
     args = parse_args([
         "--server", "http://poker.test:9000",
-        "--user", "fwd",
+        "--user", "test1",
         "--password", "123",
         "--room", "rm_123",
         "--mode", "stream",
@@ -173,7 +173,7 @@ def test_cli_entrypoint_options():
     ])
 
     assert args.server == "http://poker.test:9000"
-    assert args.user == "fwd"
+    assert args.user == "test1"
     assert args.password == "123"
     assert args.room == "rm_123"
     assert args.mode == "stream"
@@ -250,7 +250,7 @@ async def test_direct_room_entry_returns_to_lobby_after_leaving_room():
     controller._stdin_closed = False
 
     with patch("cli.main.PokerCliController", return_value=controller):
-        status = await main_async(["--user", "fwd", "--room", "r1", "--mode", "stream"])
+        status = await main_async(["--user", "test1", "--room", "r1", "--mode", "stream"])
 
     assert status == 0
     controller.enter_room.assert_awaited_once_with("r1")
@@ -406,7 +406,7 @@ class TestPokerUiRenderer:
 
     def test_render_lobby(self):
         renderer = PokerUiRenderer(enable_color=False, mode="dashboard")
-        current_user = {"user_id": "u_fwd", "nickname": "fwd", "username": "fwd"}
+        current_user = {"user_id": "u_test1", "nickname": "test1", "username": "test1"}
         rooms = [
             {
                 "room_id": "rm123",
@@ -418,7 +418,7 @@ class TestPokerUiRenderer:
         ]
         output = renderer.render_lobby(current_user, rooms)
         assert "HPoker 游戏大厅" in output
-        assert "fwd" in output
+        assert "test1" in output
         assert "rm123" in output
         assert "测试房间" in output
         assert "5/10" in output
@@ -427,7 +427,7 @@ class TestPokerUiRenderer:
         renderer = PokerUiRenderer(enable_color=False, mode="dashboard")
         room_data = {
             "room_id": "r_test",
-            "host_player_id": "u_admin",
+            "host_player_id": "u_test1",
             "config": {"room_name": "经典德州现金桌", "small_blind": 5, "big_blind": 10, "action_timeout": 15},
             "is_ended": False,
             "table": {
@@ -448,8 +448,8 @@ class TestPokerUiRenderer:
                 "bb_seat": 1,
                 "seats": [
                     {
-                        "player_id": "u_admin",
-                        "name": "Admin",
+                        "player_id": "u_test1",
+                        "name": "test1",
                         "chips": 980,
                         "rebuy_count": 1,
                         "current_round_bet": 10,
@@ -461,8 +461,8 @@ class TestPokerUiRenderer:
                         "time_bank_cards": 3,
                     },
                     {
-                        "player_id": "u_fwd",
-                        "name": "fwd",
+                        "player_id": "u_test2",
+                        "name": "test2",
                         "chips": 990,
                         "rebuy_count": 1,
                         "current_round_bet": 0,
@@ -485,15 +485,15 @@ class TestPokerUiRenderer:
                     "all_in_amount": 980,
                 },
                 "action_history": [
-                    {"player_name": "Admin", "action": "Bet", "amount": 10, "street": "FLOP"}
+                    {"player_name": "test1", "action": "Bet", "amount": 10, "street": "FLOP"}
                 ],
             }
         }
-        output = renderer.render_table_dashboard(room_data, "u_admin", now=105.0)
+        output = renderer.render_table_dashboard(room_data, "u_test1", now=105.0)
         assert "HPoker 现金桌: 经典德州现金桌" in output
         assert "翻牌圈 (Flop)" in output
         assert "[A♠] [K♥] [Q♦]" in output
-        assert "Admin (你)👑" in output
+        assert "test1 (你)👑" in output
         assert "[A♣] [A♦]" in output
         assert "[c]过牌 (Check)" in output
         assert "[r/b <额度>]下注(10~980)" in output
@@ -507,7 +507,7 @@ class TestPokerUiRenderer:
         renderer = PokerUiRenderer(enable_color=False, mode="dashboard")
         room_data = {
             "room_id": "r_test",
-            "host_player_id": "u_admin",
+            "host_player_id": "u_test1",
             "config": {"room_name": "测试桌", "small_blind": 5, "big_blind": 10, "action_timeout": 15},
             "is_ended": False,
             "table": {
@@ -530,7 +530,7 @@ class TestPokerUiRenderer:
                 "legal_actions": {},
             },
         }
-        output = renderer.render_table_dashboard(room_data, "u_admin")
+        output = renderer.render_table_dashboard(room_data, "u_test1")
         assert "🤖测试机器人 1" in output
 
     def test_render_help_contains_bot(self):
@@ -754,31 +754,31 @@ class TestPokerApiClient:
 
             # Mock users
             mock_get.return_value.status_code = 200
-            mock_get.return_value.json = MagicMock(return_value=[{"user_id": "u_fwd", "username": "fwd"}])
+            mock_get.return_value.json = MagicMock(return_value=[{"user_id": "u_test1", "username": "test1"}])
             mock_get.return_value.raise_for_status = MagicMock()
 
             users = await client.list_users()
             assert len(users) == 1
-            assert users[0]["username"] == "fwd"
+            assert users[0]["username"] == "test1"
 
             # Mock login
             mock_post.return_value.status_code = 200
-            mock_post.return_value.json = MagicMock(return_value={"token": "tk_123", "user": {"user_id": "u_fwd"}})
+            mock_post.return_value.json = MagicMock(return_value={"token": "tk_123", "user": {"user_id": "u_test1"}})
             mock_post.return_value.raise_for_status = MagicMock()
 
-            login_res = await client.login("fwd", "123")
+            login_res = await client.login("test1", "123")
             assert login_res["token"] == "tk_123"
 
             # Mock create room
             mock_post.return_value.json = MagicMock(return_value={"room_id": "rm_999"})
-            room = await client.create_room("u_fwd", "新房间")
+            room = await client.create_room("u_test1", "新房间")
             assert room["room_id"] == "rm_999"
 
             # Mock add test bot
             mock_post.return_value.json = MagicMock(return_value={"room_id": "rm_999", "bot_added": True})
-            bot_res = await client.add_test_bot("rm_999", "u_fwd", seat_index=2)
+            bot_res = await client.add_test_bot("rm_999", "u_test1", seat_index=2)
             assert bot_res["bot_added"] is True
-            assert mock_post.call_args[1]["params"] == {"requester_id": "u_fwd", "seat_index": 2}
+            assert mock_post.call_args[1]["params"] == {"requester_id": "u_test1", "seat_index": 2}
 
             await client.close()
 
@@ -909,17 +909,17 @@ class TestPokerCliController:
         controller.api = MagicMock()
         controller.api.login = AsyncMock(return_value={
             "token": "test_token_123",
-            "user": {"user_id": "u_fwd", "nickname": "fwd", "username": "fwd"},
+            "user": {"user_id": "u_test1", "nickname": "test1", "username": "test1"},
         })
 
-        # Mock user typing username "fwd" then password "123"
-        with patch.object(controller, "_async_input", AsyncMock(side_effect=["fwd"])), \
+        # Mock user typing username "test1" then password "123"
+        with patch.object(controller, "_async_input", AsyncMock(side_effect=["test1"])), \
              patch.object(controller, "_async_password_input", AsyncMock(return_value="123")):
             success = await controller.login_flow()
             assert success is True
-            assert controller.current_user["username"] == "fwd"
+            assert controller.current_user["username"] == "test1"
             assert controller.auth_token == "test_token_123"
-            controller.api.login.assert_called_once_with("fwd", "123")
+            controller.api.login.assert_called_once_with("test1", "123")
 
     async def test_add_bot_command_host_and_non_host(self):
         """Test host can add test bot via CLI and non-host cannot."""
@@ -973,19 +973,19 @@ class TestPokerCliController:
         from backend.main import app
 
         with TestClient(app) as client:
-            # 1. Login Admin
-            login_resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin"})
+            # 1. Login test1 (Host)
+            login_resp = client.post("/api/auth/login", json={"username": "test1", "password": "123"})
             assert login_resp.status_code == 200
-            admin_data = login_resp.json()
+            t1_data = login_resp.json()
 
-            # 2. Login Player fwd
-            login_fwd = client.post("/api/auth/login", json={"username": "fwd", "password": "123"})
-            assert login_fwd.status_code == 200
-            fwd_data = login_fwd.json()
+            # 2. Login test2 (Player)
+            login_t2 = client.post("/api/auth/login", json={"username": "test2", "password": "123"})
+            assert login_t2.status_code == 200
+            t2_data = login_t2.json()
 
             # 3. Create room
             create_resp = client.post("/api/rooms", json={
-                "host_player_id": admin_data["user"]["user_id"],
+                "host_player_id": t1_data["user"]["user_id"],
                 "room_name": "CLI集成测试房间",
                 "buyin_chips": 1000,
                 "cash_value": 100.0,
@@ -999,28 +999,28 @@ class TestPokerCliController:
             r_id = room["room_id"]
 
             # 4. Connect WebSockets for both players
-            with client.websocket_connect(f"/ws/{r_id}/{admin_data['user']['user_id']}") as ws_admin, \
-                 client.websocket_connect(f"/ws/{r_id}/{fwd_data['user']['user_id']}") as ws_fwd:
+            with client.websocket_connect(f"/ws/{r_id}/{t1_data['user']['user_id']}") as ws_t1, \
+                 client.websocket_connect(f"/ws/{r_id}/{t2_data['user']['user_id']}") as ws_t2:
 
                 # Drain initial state messages
-                msg_admin = ws_admin.receive_json()
-                assert msg_admin["event"] == "ROOM_STATE"
+                msg_t1 = ws_t1.receive_json()
+                assert msg_t1["event"] == "ROOM_STATE"
 
-                msg_fwd = ws_fwd.receive_json()
-                assert msg_fwd["event"] == "ROOM_STATE"
+                msg_t2 = ws_t2.receive_json()
+                assert msg_t2["event"] == "ROOM_STATE"
 
                 # Both players ready
-                ws_admin.send_json({"event": "PLAYER_READY", "payload": {"ready": True}})
-                ws_fwd.send_json({"event": "PLAYER_READY", "payload": {"ready": True}})
+                ws_t1.send_json({"event": "PLAYER_READY", "payload": {"ready": True}})
+                ws_t2.send_json({"event": "PLAYER_READY", "payload": {"ready": True}})
 
-                # Admin starts game
-                ws_admin.send_json({"event": "START_GAME", "payload": {}})
+                # Host starts game
+                ws_t1.send_json({"event": "START_GAME", "payload": {}})
 
                 # Receive updated state with dealing
                 # In game: PREFLOP
                 state = None
                 for _ in range(10):
-                    data = ws_admin.receive_json()
+                    data = ws_t1.receive_json()
                     if data.get("event") == "ROOM_STATE":
                         state = data.get("payload")
                         if state.get("table", {}).get("street") == "PREFLOP":
@@ -1031,12 +1031,12 @@ class TestPokerCliController:
                 assert state["table"]["hand_number"] == 1
 
                 # End room as host
-                ws_admin.send_json({"event": "END_ROOM", "payload": {}})
+                ws_t1.send_json({"event": "END_ROOM", "payload": {}})
 
                 # Receive state with settlement report
                 final_state = None
                 for _ in range(5):
-                    data = ws_admin.receive_json()
+                    data = ws_t1.receive_json()
                     if data.get("event") == "ROOM_STATE":
                         final_state = data.get("payload")
                         if final_state.get("is_ended"):

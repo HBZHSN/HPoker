@@ -41,7 +41,7 @@ async def create_room(client: httpx.AsyncClient) -> str:
     response = await client.post(
         "/api/rooms",
         json={
-            "host_player_id": "u_fwd",
+            "host_player_id": "u_test1",
             "room_name": "Test Bot Room",
             "buyin_chips": 100,
             "cash_value": 10,
@@ -60,10 +60,10 @@ async def test_rest_add_test_bot_is_host_only():
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         room_id = await create_room(client)
 
-        forbidden = await client.post(f"/api/rooms/{room_id}/test-bots?requester_id=u_hx")
+        forbidden = await client.post(f"/api/rooms/{room_id}/test-bots?requester_id=u_test2")
         assert forbidden.status_code == 403
 
-        allowed = await client.post(f"/api/rooms/{room_id}/test-bots?requester_id=u_fwd")
+        allowed = await client.post(f"/api/rooms/{room_id}/test-bots?requester_id=u_test1")
         assert allowed.status_code == 200
         bot_seats = [
             seat for seat in allowed.json()["table"]["seats"] if seat and seat["is_bot"]
@@ -75,7 +75,7 @@ async def test_rest_add_test_bot_is_host_only():
 @pytest.mark.asyncio
 async def test_websocket_add_test_bot_is_host_only():
     room = room_manager.create_room(
-        host_player_id="u_fwd",
+        host_player_id="u_test1",
         config=RoomConfig(
             room_name="Test Bot WS Room",
             buyin_chips=100,
@@ -87,13 +87,13 @@ async def test_websocket_add_test_bot_is_host_only():
     )
     room_id = room.room_id
     guest_ws = FakeWebSocket([{"event": EventType.ADD_TEST_BOT.value}])
-    await websocket_endpoint(guest_ws, room_id, "u_hx")
+    await websocket_endpoint(guest_ws, room_id, "u_test2")
     room = room_manager.get_room(room_id)
     assert room is not None
     assert not any(seat and seat.is_bot for seat in room.table.seats)
 
     host_ws = FakeWebSocket([{"event": EventType.ADD_TEST_BOT.value}])
-    await websocket_endpoint(host_ws, room_id, "u_fwd")
+    await websocket_endpoint(host_ws, room_id, "u_test1")
     sound_messages = [
         message for message in host_ws.messages if message["event"] == EventType.SOUND_EFFECT.value
     ]
@@ -122,7 +122,7 @@ async def test_bot_automatically_acts_when_its_turn(monkeypatch):
     monkeypatch.setattr(router_mod, "BOT_ACTION_DELAY_MAX", 0.1)
 
     room = room_manager.create_room(
-        host_player_id="u_fwd",
+        host_player_id="u_test1",
         config=RoomConfig(
             room_name="Test Bot Action Room",
             buyin_chips=100,
@@ -134,14 +134,14 @@ async def test_bot_automatically_acts_when_its_turn(monkeypatch):
     )
     room_id = room.room_id
 
-    room.sit_down_player("u_fwd", "fwd", 0)
+    room.sit_down_player("u_test1", "test1", 0)
     bot = room.add_test_bot(seat_index=1)
     assert bot is not None
     bot_id = bot["player_id"]
 
     assert room.table.start_new_hand() is True
     assert room.table.current_turn_seat == 0
-    assert room.table.handle_action("u_fwd", ActionType.CALL) is True
+    assert room.table.handle_action("u_test1", ActionType.CALL) is True
     assert room.table.current_turn_seat == 1
 
     await trigger_room_after_action(room_id)

@@ -15,8 +15,8 @@ from backend.app.websocket.router import trigger_room_turn_timer
 def test_player_seat_time_cards_defaults():
     """Verify player starts with 3 time cards and has max cap of 5."""
     seat = PlayerSeat(
-        player_id="u_test",
-        name="Tester",
+        player_id="u_test1",
+        name="test1",
         seat_index=0,
         chips=1000
     )
@@ -109,9 +109,9 @@ async def test_time_card_auto_consumption_sequence():
         action_timeout=1,
         max_seats=6
     )
-    room = room_manager.create_room(host_player_id="u_fwd", config=config)
-    room.sit_down_player("u_fwd", "fwd", 0)
-    room.sit_down_player("u_hx", "hx", 1)
+    room = room_manager.create_room(host_player_id="u_test1", config=config)
+    room.sit_down_player("u_test1", "test1", 0)
+    room.sit_down_player("u_test2", "test2", 1)
 
     assert room.table.start_new_hand() is True
     turn_seat = room.table.current_turn_seat

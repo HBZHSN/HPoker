@@ -69,7 +69,7 @@ async def test_ephemeral_event_broadcasts_to_every_room_socket():
     await manager.broadcast_event(
         "room-1",
         EventType.CHAT_MESSAGE,
-        {"player_id": "u_hx", "message": "好牌！"},
+        {"player_id": "u_test1", "message": "好牌！"},
     )
 
     assert len(first.messages) == 1
@@ -78,6 +78,6 @@ async def test_ephemeral_event_broadcasts_to_every_room_socket():
     assert first.messages[0]["event"] == EventType.CHAT_MESSAGE.value
     assert first.messages[0]["room_id"] == "room-1"
     assert first.messages[0]["payload"] == {
-        "player_id": "u_hx",
+        "player_id": "u_test1",
         "message": "好牌！",
     }
