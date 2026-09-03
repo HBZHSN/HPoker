@@ -673,6 +673,8 @@ export default function PokerTable({
             onUseTimeCard={() => onSendWsEvent('USE_TIME_CARD', {})}
             seats={table?.seats || []}
             turnCount={table?.turn_count || 0}
+            currentRoundHighestBet={table?.current_round_highest_bet || 0}
+            handNumber={table?.hand_number || 0}
           />
         </aside>
       </div>

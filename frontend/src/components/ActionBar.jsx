@@ -9,6 +9,14 @@ import {
   RefreshCw,
   AlertCircle,
 } from 'lucide-react';
+import {
+  PRE_ACTIONS,
+  isEligibleForPreAction,
+  getEffectiveHighestBet,
+  calculatePreActionBounds,
+  shouldCancelPreAction,
+  determineAutoAction,
+} from '../utils/preActionRules';
 
 export default function ActionBar({
   legalActions,
@@ -30,11 +38,39 @@ export default function ActionBar({
   onUseTimeCard,
   seats = [],
   turnCount = 0,
+  currentRoundHighestBet = 0,
+  handNumber = 0,
 }) {
   const blindUnit = Math.max(1, Number(smallBlind) || 1);
   const bigBlind = blindUnit * 2;
-  const minVal = legalActions?.can_bet ? legalActions.min_bet : (legalActions?.min_raise_to || 0);
-  const maxVal = legalActions?.can_bet ? legalActions.max_bet : (legalActions?.max_raise_to || 0);
+  const selfChips = Number(selfSeat?.chips) || 0;
+  const selfRoundBet = Number(selfSeat?.current_round_bet) || 0;
+  const effectiveHighestBet = getEffectiveHighestBet(currentRoundHighestBet, seats);
+  const preCallCost = Math.max(0, effectiveHighestBet - selfRoundBet);
+  const preCallDisplayAmt = Math.min(preCallCost, selfChips);
+
+  const canPreAction = isEligibleForPreAction({
+    disabled,
+    isMyTurn,
+    selfSeat,
+    street,
+  });
+
+  const preActionBounds = calculatePreActionBounds({
+    effectiveHighestBet,
+    selfChips,
+    selfRoundBet,
+    bigBlind,
+  });
+
+  const minVal = isMyTurn
+    ? (legalActions?.can_bet ? legalActions.min_bet : (legalActions?.min_raise_to || 0))
+    : (canPreAction ? preActionBounds.minVal : 0);
+
+  const maxVal = isMyTurn
+    ? (legalActions?.can_bet ? legalActions.max_bet : (legalActions?.max_raise_to || 0))
+    : (canPreAction ? preActionBounds.maxVal : 0);
+
   const alignedMinVal = minVal > 0 ? Math.ceil(minVal / blindUnit) * blindUnit : 0;
   const alignedMaxVal = maxVal > 0 ? Math.floor(maxVal / blindUnit) * blindUnit : 0;
   const hasAlignedRange = alignedMinVal <= alignedMaxVal;
@@ -60,6 +96,17 @@ export default function ActionBar({
     : (currentTurnDuration || actionTimeout || 15);
   const [turnTimeLeft, setTurnTimeLeft] = useState(effectiveTimeout);
 
+  // Pre-action selection state
+  const [preAction, setPreAction] = useState(null); // 'CHECK_FOLD' | 'CHECK_CALL' | 'RAISE' | null
+  const [preActionData, setPreActionData] = useState(null); // { street, highestBet, targetAmount }
+
+  const preActionRef = useRef(preAction);
+  preActionRef.current = preAction;
+  const preActionDataRef = useRef(preActionData);
+  preActionDataRef.current = preActionData;
+  const canPreActionRef = useRef(canPreAction);
+  canPreActionRef.current = canPreAction;
+
   // Sync raiseAmount whenever minVal or maxVal changes
   useEffect(() => {
     if (minVal > 0) {
@@ -68,7 +115,52 @@ export default function ActionBar({
         return alignAmount(next);
       });
     }
-  }, [minVal, maxVal, legalActions?.can_bet, legalActions?.can_raise]);
+  }, [minVal, maxVal, legalActions?.can_bet, legalActions?.can_raise, isMyTurn, canPreAction]);
+
+  // Reset pre-action when street changes
+  const prevStreetRef = useRef(street);
+  useEffect(() => {
+    if (prevStreetRef.current !== street) {
+      prevStreetRef.current = street;
+      setPreAction(null);
+      setPreActionData(null);
+    }
+  }, [street]);
+
+  // Reset pre-action when hand changes
+  const prevHandRef = useRef(handNumber);
+  useEffect(() => {
+    if (prevHandRef.current !== handNumber) {
+      prevHandRef.current = handNumber;
+      setPreAction(null);
+      setPreActionData(null);
+    }
+  }, [handNumber]);
+
+  // Reset pre-action if player folds, all-in, or leaves seat
+  useEffect(() => {
+    if (!selfSeat || selfSeat.is_folded || selfSeat.is_all_in || selfSeat.is_sitting_out) {
+      setPreAction(null);
+      setPreActionData(null);
+    }
+  }, [selfSeat?.is_folded, selfSeat?.is_all_in, selfSeat?.is_sitting_out, selfSeat?.player_id]);
+
+  // Cancel pre-action if someone raises higher before my turn (CHECK_CALL & RAISE)
+  useEffect(() => {
+    if (!preAction || !preActionData || isMyTurn) return;
+
+    const shouldCancel = shouldCancelPreAction({
+      preAction,
+      preActionData,
+      currentStreet: street,
+      effectiveHighestBet,
+    });
+
+    if (shouldCancel) {
+      setPreAction(null);
+      setPreActionData(null);
+    }
+  }, [effectiveHighestBet, street, preAction, preActionData, isMyTurn]);
 
   // Turn timer countdown in sidebar
   useEffect(() => {
@@ -93,7 +185,7 @@ export default function ActionBar({
 
   const currentAmount = alignAmount(raiseAmount || minVal);
   const isAllIn = Boolean(
-    (legalActions?.can_bet || legalActions?.can_raise) &&
+    ((isMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)) &&
     maxVal > 0 &&
     (currentAmount >= maxVal || (sizingMax > 0 && currentAmount >= sizingMax))
   );
@@ -104,32 +196,96 @@ export default function ActionBar({
   const legalActionsRef = useRef(legalActions);
   legalActionsRef.current = legalActions;
 
+  // Toggle pre-action
+  const togglePreAction = (actionType) => {
+    if (!canPreAction) return;
+    if (preAction === actionType) {
+      setPreAction(null);
+      setPreActionData(null);
+    } else {
+      setPreAction(actionType);
+      setPreActionData({
+        street,
+        highestBet: effectiveHighestBet,
+        targetAmount: currentAmountRef.current,
+      });
+    }
+  };
+  const togglePreActionRef = useRef(togglePreAction);
+  togglePreActionRef.current = togglePreAction;
+
+  // Update target amount when slider / presets change while RAISE pre-action is armed
+  useEffect(() => {
+    if (preAction === PRE_ACTIONS.RAISE) {
+      setPreActionData((prev) => (prev ? { ...prev, targetAmount: currentAmount } : prev));
+    }
+  }, [currentAmount, preAction]);
+
+  // Execute pre-action when it becomes my turn
+  useEffect(() => {
+    if (!isMyTurn || !preActionRef.current || !legalActions) return;
+
+    const actionToRun = preActionRef.current;
+    const dataToRun = preActionDataRef.current;
+
+    setPreAction(null);
+    setPreActionData(null);
+
+    const resolved = determineAutoAction({
+      preAction: actionToRun,
+      preActionData: dataToRun,
+      legalActions,
+      effectiveHighestBet,
+      selfChips,
+    });
+
+    if (resolved) {
+      const timer = setTimeout(() => {
+        onAction(resolved.action, resolved.amount);
+      }, 120);
+      return () => clearTimeout(timer);
+    }
+  }, [isMyTurn, legalActions]);
+
   // Keyboard shortcuts (PC)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (disabled || !legalActionsRef.current || !isMyTurn) return;
+      if (disabled) return;
       if (['input', 'textarea'].includes(e.target.tagName.toLowerCase())) return;
 
-      const legal = legalActionsRef.current;
-      if (e.code === 'KeyF' && legal.can_fold) {
-        onAction('FOLD');
-      } else if (e.code === 'Space') {
-        e.preventDefault();
-        if (legal.can_check) {
-          onAction('CHECK');
-        } else if (legal.can_call) {
-          onAction('CALL', legal.call_amount);
+      if (isMyTurn && legalActionsRef.current) {
+        const legal = legalActionsRef.current;
+        if (e.code === 'KeyF' && legal.can_fold) {
+          onAction('FOLD');
+        } else if (e.code === 'Space') {
+          e.preventDefault();
+          if (legal.can_check) {
+            onAction('CHECK');
+          } else if (legal.can_call) {
+            onAction('CALL', legal.call_amount);
+          }
+        } else if (e.code === 'KeyR' && (legal.can_bet || legal.can_raise)) {
+          if (currentAmountRef.current >= maxVal && legal.can_all_in) {
+            onAction('ALL_IN', legal.all_in_amount || maxVal);
+          } else {
+            const act = legal.can_bet ? 'BET' : 'RAISE';
+            onAction(act, currentAmountRef.current);
+          }
+        } else if (e.code === 'KeyA' && (legal.can_all_in || legal.can_bet || legal.can_raise)) {
+          if (legal.can_all_in) {
+            onAction('ALL_IN', legal.all_in_amount || maxVal);
+          }
         }
-      } else if (e.code === 'KeyR' && (legal.can_bet || legal.can_raise)) {
-        if (currentAmountRef.current >= maxVal && legal.can_all_in) {
-          onAction('ALL_IN', legal.all_in_amount || maxVal);
-        } else {
-          const act = legal.can_bet ? 'BET' : 'RAISE';
-          onAction(act, currentAmountRef.current);
-        }
-      } else if (e.code === 'KeyA' && (legal.can_all_in || legal.can_bet || legal.can_raise)) {
-        if (legal.can_all_in) {
-          onAction('ALL_IN', legal.all_in_amount || maxVal);
+      } else if (canPreActionRef.current) {
+        if (e.code === 'KeyF') {
+          e.preventDefault();
+          togglePreActionRef.current(PRE_ACTIONS.CHECK_FOLD);
+        } else if (e.code === 'Space') {
+          e.preventDefault();
+          togglePreActionRef.current(PRE_ACTIONS.CHECK_CALL);
+        } else if (e.code === 'KeyR') {
+          e.preventDefault();
+          togglePreActionRef.current(PRE_ACTIONS.RAISE);
         }
       }
     };
@@ -140,11 +296,12 @@ export default function ActionBar({
 
   // Preset Bet Sizing helpers
   const calcPresetAmount = (ratio) => {
-    if (legalActions?.can_raise) {
-      const callCost = legalActions?.call_amount || 0;
+    const isRaise = isMyTurn ? legalActions?.can_raise : (effectiveHighestBet > 0);
+    if (isRaise) {
+      const callCost = isMyTurn ? (legalActions?.call_amount || 0) : preCallCost;
       const effectivePot = totalPot + callCost;
       const raiseAdd = Math.round((effectivePot * ratio) / blindUnit) * blindUnit;
-      const target = (selfSeat?.current_bet || 0) + callCost + raiseAdd;
+      const target = (selfSeat?.current_bet || selfRoundBet || 0) + callCost + raiseAdd;
       return alignAmount(Math.max(minVal, target));
     }
     const target = Math.round((totalPot * ratio) / blindUnit) * blindUnit;
@@ -156,7 +313,11 @@ export default function ActionBar({
   };
 
   const adjustBB = (multiplier) => {
-    setRaiseAmount(alignAmount(currentAmount + multiplier * bigBlind));
+    const next = alignAmount(currentAmount + multiplier * bigBlind);
+    setRaiseAmount(next);
+    if (preAction === PRE_ACTIONS.RAISE) {
+      setPreActionData((prev) => (prev ? { ...prev, targetAmount: next } : prev));
+    }
   };
 
   const executeBetOrRaise = (targetAmount) => {
@@ -207,6 +368,22 @@ export default function ActionBar({
     { label: '4 BB', mult: 4 },
     { label: '5 BB', mult: 5 },
   ];
+
+  const handlePresetClick = (amount, isMax) => {
+    if (isMyTurn) {
+      if (isMax) {
+        executeAllIn();
+      } else {
+        executeBetOrRaise(amount);
+      }
+    } else if (canPreAction) {
+      const target = isMax ? maxVal : amount;
+      setRaiseAmount(target);
+      if (preAction === PRE_ACTIONS.RAISE) {
+        setPreActionData((prev) => (prev ? { ...prev, targetAmount: target } : prev));
+      }
+    }
+  };
 
   const handleRaiseSubmit = () => {
     if (!legalActions) return;
@@ -406,49 +583,148 @@ export default function ActionBar({
 
       {/* 4. Main Action Buttons Grid */}
       <div className="poker-action-controls bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col gap-2 lg:gap-2.5 shadow-xl">
-        <div className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
-          <Zap className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-amber-400" />
-          操作
+        <div className="flex items-center justify-between">
+          <div className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+            <Zap className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-amber-400" />
+            <span>{canPreAction ? '操作 (提前预选)' : '操作'}</span>
+          </div>
+          {canPreAction && preAction && (
+            <button
+              onClick={() => {
+                setPreAction(null);
+                setPreActionData(null);
+              }}
+              className="text-[10px] lg:text-[11px] text-amber-300 hover:text-amber-200 bg-amber-950/80 hover:bg-amber-900/90 border border-amber-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold cursor-pointer transition shadow"
+              title="取消提前预选"
+            >
+              <span>已预选: {
+                preAction === PRE_ACTIONS.CHECK_FOLD
+                  ? '过牌/弃牌'
+                  : preAction === PRE_ACTIONS.CHECK_CALL
+                  ? `过牌/跟注${preCallCost > 0 ? ` $${preCallDisplayAmt}` : ''}`
+                  : `加注至 $${currentAmount}`
+              }</span>
+              <span className="text-amber-400 font-extrabold">✕ 取消</span>
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-1.5 lg:gap-2">
-          {/* Fold Button */}
-          <button
-            onClick={() => onAction('FOLD')}
-            disabled={disabled || !isMyTurn || !legalActions?.can_fold}
-            className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
-          >
-            <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
-            <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">Fold [F]</span>
-          </button>
-
-          {/* Check or Call Button */}
-          {legalActions?.can_check ? (
+          {/* Fold / Check-Fold Button */}
+          {isMyTurn ? (
             <button
-              onClick={() => onAction('CHECK')}
-              disabled={disabled || !isMyTurn}
-              className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
+              onClick={() => onAction('FOLD')}
+              disabled={disabled || !legalActions?.can_fold}
+              className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
             >
-              <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
-              <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Check [Space]</span>
+              <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
+              <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">Fold [F]</span>
+            </button>
+          ) : canPreAction ? (
+            <button
+              onClick={() => togglePreAction(PRE_ACTIONS.CHECK_FOLD)}
+              disabled={disabled}
+              title="无人加注则过牌，有任何加注则弃牌"
+              className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg ${
+                preAction === PRE_ACTIONS.CHECK_FOLD
+                  ? 'bg-gradient-to-b from-red-700 via-amber-950 to-red-950 border-amber-400 ring-2 ring-amber-400/80 text-amber-200 shadow-glow-gold'
+                  : 'bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                  preAction === PRE_ACTIONS.CHECK_FOLD ? 'bg-amber-400 text-slate-950' : 'border border-slate-500 text-transparent'
+                }`}>
+                  ✓
+                </span>
+                <span className="text-sm lg:text-base font-black tracking-wide">
+                  过牌 / 弃牌
+                </span>
+              </div>
+              <span className={`text-[10px] lg:text-[11px] font-medium ${
+                preAction === PRE_ACTIONS.CHECK_FOLD ? 'text-amber-300' : 'text-slate-400'
+              }`}>
+                Check/Fold [F]
+              </span>
             </button>
           ) : (
             <button
-              onClick={() => onAction('CALL', legalActions?.call_amount || 0)}
-              disabled={disabled || !isMyTurn || !legalActions?.can_call}
-              className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
+              disabled={true}
+              className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg"
             >
-              <span className="text-sm lg:text-base font-black tracking-wide">
-                跟注 ${legalActions?.call_amount || 0}
+              <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
+              <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">Fold [F]</span>
+            </button>
+          )}
+
+          {/* Check / Call / Check-Call Button */}
+          {isMyTurn ? (
+            legalActions?.can_check ? (
+              <button
+                onClick={() => onAction('CHECK')}
+                disabled={disabled}
+                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
+              >
+                <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
+                <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Check [Space]</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => onAction('CALL', legalActions?.call_amount || 0)}
+                disabled={disabled || !legalActions?.can_call}
+                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
+              >
+                <span className="text-sm lg:text-base font-black tracking-wide">
+                  跟注 ${legalActions?.call_amount || 0}
+                </span>
+                <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Call [Space]</span>
+              </button>
+            )
+          ) : canPreAction ? (
+            <button
+              onClick={() => togglePreAction(PRE_ACTIONS.CHECK_CALL)}
+              disabled={disabled}
+              title={
+                preCallCost > 0
+                  ? `若无人继续加注则跟注 $${preCallDisplayAmt}，若有人加注则取消预选`
+                  : '若无人加注则过牌，若有人加注则取消预选'
+              }
+              className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg ${
+                preAction === PRE_ACTIONS.CHECK_CALL
+                  ? 'bg-gradient-to-b from-emerald-600 to-emerald-950 border-emerald-400 ring-2 ring-emerald-400/80 text-white shadow-[0_0_15px_rgba(52,211,153,0.5)]'
+                  : 'bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                  preAction === PRE_ACTIONS.CHECK_CALL ? 'bg-emerald-400 text-slate-950' : 'border border-slate-500 text-transparent'
+                }`}>
+                  ✓
+                </span>
+                <span className="text-sm lg:text-base font-black tracking-wide">
+                  过牌 / 跟注{preCallCost > 0 ? ` $${preCallDisplayAmt}` : ''}
+                </span>
+              </div>
+              <span className={`text-[10px] lg:text-[11px] font-medium ${
+                preAction === PRE_ACTIONS.CHECK_CALL ? 'text-emerald-200' : 'text-slate-400'
+              }`}>
+                Check/Call [Space]
               </span>
-              <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Call [Space]</span>
+            </button>
+          ) : (
+            <button
+              disabled={true}
+              className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg"
+            >
+              <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
+              <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Check [Space]</span>
             </button>
           )}
 
           {/* Row 2, Col 1: Horizontal Sizing Slider */}
           <div
             className={`poker-action-slider-container flex flex-col justify-between py-1.5 lg:py-2 px-2 lg:px-2.5 rounded-lg lg:rounded-xl border shadow-lg transition-all min-h-[52px] lg:min-h-[60px] ${
-              isMyTurn && (legalActions?.can_bet || legalActions?.can_raise)
+              (isMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)
                 ? isAllIn
                   ? 'bg-gradient-to-b from-slate-900 via-purple-950/40 to-slate-950 border-purple-500/60 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
                   : 'bg-slate-950/90 border-amber-500/40'
@@ -457,7 +733,9 @@ export default function ActionBar({
           >
             <div className="flex items-center justify-between text-[11px] lg:text-xs">
               <span className="text-slate-400 font-bold">
-                {legalActions?.can_bet ? '下注' : '加注'}
+                {isMyTurn
+                  ? (legalActions?.can_bet ? '下注' : '加注')
+                  : (effectiveHighestBet === 0 ? '预设下注' : '预设加注')}
               </span>
               <span className={`font-black ${isAllIn ? 'text-purple-300 animate-pulse' : 'text-amber-300'}`}>
                 ${currentAmount}
@@ -469,13 +747,13 @@ export default function ActionBar({
               max={sizingMax}
               step={blindUnit}
               value={currentAmount}
-              disabled={disabled || !isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+              disabled={disabled || (!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               onChange={(e) => {
                 const val = Number(e.target.value);
-                if (val >= sizingMax || val >= maxVal) {
-                  setRaiseAmount(maxVal);
-                } else {
-                  setRaiseAmount(alignAmount(val));
+                const next = (val >= sizingMax || val >= maxVal) ? maxVal : alignAmount(val);
+                setRaiseAmount(next);
+                if (preAction === PRE_ACTIONS.RAISE) {
+                  setPreActionData((prev) => (prev ? { ...prev, targetAmount: next } : prev));
                 }
               }}
               className={`poker-horizontal-raise-slider w-full h-2 lg:h-2.5 my-1 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-slate-800 ${
@@ -492,49 +770,90 @@ export default function ActionBar({
           </div>
 
           {/* Row 2, Col 2: Raise Button (dynamically turns to All-In when dragged to end) */}
-          <button
-            onClick={handleRaiseSubmit}
-            disabled={disabled || !isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-            className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed min-h-[52px] lg:min-h-[60px] ${
-              isAllIn
-                ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
-                : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
-            }`}
-          >
-            {isAllIn ? (
-              <>
-                <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap flex items-center gap-1">
-                  <Flame className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-400 fill-amber-400" />
-                  全下 ${legalActions?.all_in_amount || currentAmount}
+          {isMyTurn ? (
+            <button
+              onClick={handleRaiseSubmit}
+              disabled={disabled || (!legalActions?.can_bet && !legalActions?.can_raise)}
+              className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed min-h-[52px] lg:min-h-[60px] ${
+                isAllIn
+                  ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
+                  : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
+              }`}
+            >
+              {isAllIn ? (
+                <>
+                  <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap flex items-center gap-1">
+                    <Flame className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-400 fill-amber-400" />
+                    全下 ${legalActions?.all_in_amount || currentAmount}
+                  </span>
+                  <span className="text-[10px] lg:text-[11px] text-purple-300/90 font-medium">
+                    All-In [R]
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap">
+                    {legalActions?.can_bet ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`}
+                  </span>
+                  <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">
+                    {legalActions?.can_bet ? 'Bet [R]' : 'Raise [R]'}
+                  </span>
+                </>
+              )}
+            </button>
+          ) : canPreAction ? (
+            <button
+              onClick={() => togglePreAction(PRE_ACTIONS.RAISE)}
+              disabled={disabled || maxVal <= 0}
+              title="若无人加注则按此额度加注，若有人加注则取消预选"
+              className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed min-h-[52px] lg:min-h-[60px] ${
+                preAction === PRE_ACTIONS.RAISE
+                  ? isAllIn
+                    ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 border-purple-400 ring-2 ring-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.5)] text-amber-200'
+                    : 'bg-gradient-to-b from-amber-600 to-amber-950 border-amber-300 ring-2 ring-amber-400/80 shadow-glow-gold text-white'
+                  : 'bg-gradient-to-b from-slate-850 to-slate-950 hover:from-slate-800 hover:to-slate-900 border-slate-700/80 text-slate-300 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                  preAction === PRE_ACTIONS.RAISE ? 'bg-amber-400 text-slate-950' : 'border border-slate-500 text-transparent'
+                }`}>
+                  ✓
                 </span>
-                <span className="text-[10px] lg:text-[11px] text-purple-300/90 font-medium">
-                  All-In [R]
+                <span className="text-sm lg:text-base font-black tracking-wide whitespace-nowrap">
+                  {isAllIn
+                    ? `预选全下 $${maxVal}`
+                    : (effectiveHighestBet === 0 ? `预选下注 $${currentAmount}` : `预选加注至 $${currentAmount}`)}
                 </span>
-              </>
-            ) : (
-              <>
-                <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap">
-                  {legalActions?.can_bet ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`}
-                </span>
-                <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">
-                  {legalActions?.can_bet ? 'Bet [R]' : 'Raise [R]'}
-                </span>
-              </>
-            )}
-          </button>
+              </div>
+              <span className={`text-[10px] lg:text-[11px] font-medium ${
+                preAction === PRE_ACTIONS.RAISE ? 'text-amber-300' : 'text-slate-400'
+              }`}>
+                Raise [R] (无人加注时)
+              </span>
+            </button>
+          ) : (
+            <button
+              disabled={true}
+              className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg opacity-35 cursor-not-allowed min-h-[52px] lg:min-h-[60px] bg-gradient-to-b from-amber-500 to-amber-900 text-white"
+            >
+              <span className="text-sm lg:text-base font-black tracking-wide">加注</span>
+              <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">Raise [R]</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 4. Raise / Bet Sizing Console */}
+      {/* 5. Raise / Bet Sizing Console */}
       <div className="poker-action-sizing bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col gap-2 lg:gap-2.5 shadow-xl">
         <div className="flex items-center justify-between">
           <span className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-            下注额
+            {canPreAction && !isMyTurn ? '预设额度' : '下注额'}
           </span>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => adjustBB(-1)}
-              disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+              disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
               title="-1 BB"
             >
@@ -548,14 +867,20 @@ export default function ActionBar({
                 max={sizingMax}
                 step={blindUnit}
                 value={currentAmount}
-                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
-                onChange={(e) => setRaiseAmount(alignAmount(e.target.value))}
+                disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
+                onChange={(e) => {
+                  const next = alignAmount(e.target.value);
+                  setRaiseAmount(next);
+                  if (preAction === PRE_ACTIONS.RAISE) {
+                    setPreActionData((prev) => (prev ? { ...prev, targetAmount: next } : prev));
+                  }
+                }}
                 className="w-14 lg:w-16 bg-transparent text-right font-black text-amber-300 text-xs lg:text-sm focus:outline-none"
               />
             </div>
             <button
               onClick={() => adjustBB(1)}
-              disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+              disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
               title="+1 BB"
             >
@@ -569,12 +894,18 @@ export default function ActionBar({
           {potPresets.map((preset, idx) => {
             const amount = preset.isMax ? maxVal : calcPresetAmount(preset.ratio);
             const isTooSmall = !preset.isMax && amount < sizingMin;
-            const isSelected = isMyTurn && currentAmount === amount && (legalActions?.can_bet || legalActions?.can_raise);
+            const isSelected = (isMyTurn || canPreAction) && currentAmount === amount && (
+              isMyTurn ? (legalActions?.can_bet || legalActions?.can_raise) : maxVal > 0
+            );
+            const isPresetDisabled = isMyTurn
+              ? (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in)) || isTooSmall
+              : (!canPreAction || maxVal <= 0 || isTooSmall);
+
             return (
               <button
                 key={idx}
-                onClick={() => (preset.isMax ? executeAllIn() : executeBetOrRaise(amount))}
-                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in)) || isTooSmall}
+                onClick={() => handlePresetClick(amount, preset.isMax)}
+                disabled={isPresetDisabled}
                 className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border ${
                   isSelected
                     ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -584,14 +915,14 @@ export default function ActionBar({
                 } disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 <span
-                    className={`text-[10px] lg:text-[11px] font-bold tracking-tight ${
+                  className={`text-[10px] lg:text-[11px] font-bold tracking-tight ${
                     preset.isMax ? 'text-red-300' : isSelected ? 'text-amber-200' : 'text-slate-300'
                   }`}
                 >
                   {preset.label}
                 </span>
                 <span
-                    className={`text-[11px] lg:text-xs font-black ${
+                  className={`text-[11px] lg:text-xs font-black ${
                     preset.isMax ? 'text-amber-400' : isSelected ? 'text-amber-300' : 'text-amber-400/90'
                   }`}
                 >
@@ -608,12 +939,18 @@ export default function ActionBar({
             const rawAmount = calcBBAmount(preset.mult);
             const amount = alignAmount(rawAmount);
             const isTooSmall = rawAmount < sizingMin;
-            const isSelected = isMyTurn && currentAmount === amount && (legalActions?.can_bet || legalActions?.can_raise);
+            const isSelected = (isMyTurn || canPreAction) && currentAmount === amount && (
+              isMyTurn ? (legalActions?.can_bet || legalActions?.can_raise) : maxVal > 0
+            );
+            const isBbDisabled = isMyTurn
+              ? (!legalActions?.can_bet && !legalActions?.can_raise) || isTooSmall
+              : (!canPreAction || maxVal <= 0 || isTooSmall);
+
             return (
               <button
                 key={idx}
-                onClick={() => executeBetOrRaise(amount)}
-                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise) || isTooSmall}
+                onClick={() => handlePresetClick(amount, false)}
+                disabled={isBbDisabled}
                 className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border ${
                   isSelected
                     ? 'bg-amber-950/60 border-amber-400/80 shadow-[0_0_8px_rgba(251,191,36,0.2)]'
