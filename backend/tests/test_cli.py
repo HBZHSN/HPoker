@@ -182,6 +182,7 @@ async def test_textual_tui_handles_input_and_responsive_layout():
             await pilot.pause()
             assert app.bridge.active is True
             assert app.screen.has_class("narrow") is False
+            assert app.screen.has_class("compact") is False
 
             read_task = asyncio.create_task(app.bridge.read_line("大厅> ", ["rooms"]))
             await pilot.pause()
@@ -191,6 +192,7 @@ async def test_textual_tui_handles_input_and_responsive_layout():
             await pilot.resize_terminal(80, 30)
             await pilot.pause()
             assert app.screen.has_class("narrow") is True
+            assert app.screen.has_class("compact") is True
     finally:
         await controller.api.close()
 
@@ -260,6 +262,8 @@ class TestPokerUiRenderer:
         cards = renderer.format_large_cards(room_data["table"]["board_cards"], slots=5)
         main = renderer.render_table_main(room_data, "u_me")
         sidebar = renderer.render_table_sidebar(room_data, "u_me")
+        compact_main = renderer.render_table_main(room_data, "u_me", compact=True)
+        compact_sidebar = renderer.render_table_sidebar(room_data, "u_me", compact=True)
 
         assert len(cards.splitlines()) == 5
         assert all(display_width(line) == 39 for line in cards.splitlines())
@@ -268,6 +272,13 @@ class TestPokerUiRenderer:
         assert "下注 20~900" in sidebar
         assert "r 1/2p" in sidebar
         assert "最近动态" in sidebar
+        assert "公共牌  [A♠] [10♥] [2♦]" in compact_main
+        assert "手牌    [K♣] [K♦]" in compact_main
+        assert "┌─────┐" not in compact_main
+        assert len(compact_main.splitlines()) < len(main.splitlines())
+        assert "[" not in compact_sidebar  # compact timer omits the progress bar
+        assert "尺度  1/3p:60  1/2p:90  pot:180" in compact_sidebar
+        assert "快捷命令" not in compact_sidebar
 
     def test_render_lobby(self):
         renderer = PokerUiRenderer(enable_color=False, mode="dashboard")

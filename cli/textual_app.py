@@ -208,6 +208,38 @@ class PokerTextualApp(App[int]):
         min-width: 0;
         height: 1fr;
     }
+    Screen.compact #topbar {
+        height: 1;
+        padding: 0 1;
+        border: none;
+    }
+    Screen.compact #workspace {
+        padding: 0;
+    }
+    Screen.compact #main-panel, Screen.compact #side-panel {
+        padding: 0 1;
+        border: none;
+    }
+    Screen.compact #main-panel {
+        margin-bottom: 0;
+    }
+    Screen.compact #side-panel {
+        border-top: solid #273142;
+    }
+    Screen.compact #notice {
+        max-height: 1;
+        padding: 0 1;
+    }
+    Screen.compact #command-bar, Screen.compact #command-input {
+        height: 1;
+    }
+    Screen.compact #command-bar {
+        border: none;
+    }
+    Screen.compact #prompt-label {
+        width: 8;
+        padding-left: 1;
+    }
     """
 
     def __init__(self, controller, room_id: Optional[str] = None, *, autostart: bool = True) -> None:
@@ -230,7 +262,7 @@ class PokerTextualApp(App[int]):
 
     async def on_mount(self) -> None:
         self.bridge.enter()
-        self._apply_responsive_class(self.size.width)
+        self._apply_responsive_class(self.size.width, self.size.height)
         self.query_one("#main-panel", Static).border_title = "牌桌"
         self.query_one("#side-panel", Static).border_title = "操作"
         self.query_one("#command-input", Input).focus()
@@ -254,7 +286,9 @@ class PokerTextualApp(App[int]):
 
     @on(events.Resize)
     def _on_resize(self, event: events.Resize) -> None:
-        self._apply_responsive_class(event.size.width)
+        self._apply_responsive_class(event.size.width, event.size.height)
+        if self.bridge.active:
+            self.controller._refresh_tui()
 
     @on(events.Key)
     def _on_key(self, event: events.Key) -> None:
@@ -269,8 +303,9 @@ class PokerTextualApp(App[int]):
             command_input.cursor_position = len(value)
             event.stop()
 
-    def _apply_responsive_class(self, width: int) -> None:
+    def _apply_responsive_class(self, width: int, height: int) -> None:
         self.screen.set_class(width < 100, "narrow")
+        self.screen.set_class(width < 100 or height < 30, "compact")
 
     @staticmethod
     def _rich_text(value: str) -> Text:
@@ -285,12 +320,17 @@ class PokerTextualApp(App[int]):
         renderer = controller.renderer
         view = controller._tui_view
         panel_open = controller._tui_panel is not None
+        compact = self.screen.has_class("compact")
 
         if panel_open:
             main = fallback_frame
             main_title = "详情"
         elif view == "room" and controller.active_room_data:
-            main = renderer.render_table_main(controller.active_room_data, controller._current_user_id())
+            main = renderer.render_table_main(
+                controller.active_room_data,
+                controller._current_user_id(),
+                compact=compact,
+            )
             main_title = "牌桌"
         elif view == "lobby" and controller.current_user:
             main = renderer.render_lobby_main(controller.current_user, controller.rooms)
@@ -303,6 +343,7 @@ class PokerTextualApp(App[int]):
             sidebar = renderer.render_table_sidebar(
                 controller.active_room_data or {},
                 controller._current_user_id(),
+                compact=compact,
             )
             room = controller.active_room_data or {}
             cfg = room.get("config", {})

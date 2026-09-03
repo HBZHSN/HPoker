@@ -296,8 +296,18 @@ class PokerUiRenderer:
         lines.extend(["", self.c("↑ / ↓  历史命令   Ctrl+D  返回", Colors.DIM)])
         return "\n".join(lines)
 
-    def render_table_main(self, room: Dict[str, Any], current_user_id: str) -> str:
-        """Render board, hero cards, and seats as the primary visual hierarchy."""
+    def render_table_main(
+        self,
+        room: Dict[str, Any],
+        current_user_id: str,
+        *,
+        compact: bool = False,
+    ) -> str:
+        """Render board, hero cards, and seats as the primary visual hierarchy.
+
+        Compact mode keeps both card groups on single lines for small or
+        deliberately discreet terminal windows.
+        """
 
         table = room.get("table", {})
         cfg = room.get("config", {})
@@ -313,20 +323,32 @@ class PokerUiRenderer:
         lines = [
             f"第 {hand_number} 手  ·  {self.format_street_name(street)}  ·  "
             + self.c(f"底池 {total_pot}", Colors.BOLD + Colors.BRIGHT_YELLOW),
-            "",
-            self.c("公共牌", Colors.BOLD + Colors.BRIGHT_CYAN),
-            self.format_large_cards(board, slots=5),
         ]
+        if compact:
+            lines.append(f"公共牌  {self.format_cards(board)}")
+        else:
+            lines.extend([
+                "",
+                self.c("公共牌", Colors.BOLD + Colors.BRIGHT_CYAN),
+                self.format_large_cards(board, slots=5),
+            ])
         if table.get("rit_enabled") and board_2:
-            lines.extend(["", self.c("公共牌 · 第二板", Colors.BOLD + Colors.BRIGHT_MAGENTA)])
-            lines.append(self.format_large_cards(board_2, slots=5))
+            if compact:
+                lines.append(f"第二板  {self.format_cards(board_2)}")
+            else:
+                lines.extend(["", self.c("公共牌 · 第二板", Colors.BOLD + Colors.BRIGHT_MAGENTA)])
+                lines.append(self.format_large_cards(board_2, slots=5))
 
         my_seat = next((seat for seat in seats if seat and seat.get("player_id") == current_user_id), None)
-        lines.extend(["", self.c("你的手牌", Colors.BOLD + Colors.BRIGHT_CYAN)])
-        if my_seat and my_seat.get("hole_cards"):
-            lines.append(self.format_large_cards(my_seat.get("hole_cards", [])))
+        hole_cards = my_seat.get("hole_cards", []) if my_seat else []
+        if compact:
+            lines.append(f"手牌    {self.format_cards(hole_cards)}")
         else:
-            lines.append(self.c("未入座或等待发牌", Colors.DIM))
+            lines.extend(["", self.c("你的手牌", Colors.BOLD + Colors.BRIGHT_CYAN)])
+            if hole_cards:
+                lines.append(self.format_large_cards(hole_cards))
+            else:
+                lines.append(self.c("未入座或等待发牌", Colors.DIM))
 
         lines.extend(["", self.c("玩家", Colors.BOLD + Colors.BRIGHT_CYAN)])
         ready_ids = table.get("ready_player_ids", [])
@@ -359,7 +381,13 @@ class PokerUiRenderer:
             lines.extend(["", self.c("牌局已结束，可使用 bill 查看结算。", Colors.BRIGHT_YELLOW)])
         return "\n".join(lines)
 
-    def render_table_sidebar(self, room: Dict[str, Any], current_user_id: str) -> str:
+    def render_table_sidebar(
+        self,
+        room: Dict[str, Any],
+        current_user_id: str,
+        *,
+        compact: bool = False,
+    ) -> str:
         """Render state-aware actions, sizing hints, timer, and recent events."""
 
         table = room.get("table", {})
@@ -392,7 +420,8 @@ class PokerUiRenderer:
             remaining = self._remaining_turn_seconds(table, duration, time.time())
             timer_color = self._timer_color(remaining, duration)
             lines.append(self.c(f"轮到你  {math.ceil(remaining):02d}s", timer_color))
-            lines.append(self.c(self._progress_bar(remaining, duration, 22), timer_color))
+            if not compact:
+                lines.append(self.c(self._progress_bar(remaining, duration, 22), timer_color))
             if legal.get("can_check"):
                 lines.append("  check     过牌")
             if legal.get("can_call"):
@@ -414,18 +443,22 @@ class PokerUiRenderer:
 
         if (legal.get("can_bet") or legal.get("can_raise")) and is_my_turn:
             pot = self._int(table.get("total_pot", 0))
-            lines.extend([
-                "",
-                self.c("下注尺度", Colors.BOLD + Colors.BRIGHT_CYAN),
-                f"  r 1/3p   {int(pot / 3)}",
-                f"  r 1/2p   {int(pot / 2)}",
-                f"  r 2/3p   {int(pot * 2 / 3)}",
-                f"  r pot    {pot}",
-                "  r +1bb   加 1BB",
-            ])
+            if compact:
+                lines.extend(["", f"尺度  1/3p:{int(pot / 3)}  1/2p:{int(pot / 2)}  pot:{pot}"])
+            else:
+                lines.extend([
+                    "",
+                    self.c("下注尺度", Colors.BOLD + Colors.BRIGHT_CYAN),
+                    f"  r 1/3p   {int(pot / 3)}",
+                    f"  r 1/2p   {int(pot / 2)}",
+                    f"  r 2/3p   {int(pot * 2 / 3)}",
+                    f"  r pot    {pot}",
+                    "  r +1bb   加 1BB",
+                ])
 
         lines.extend(["", self.c("最近动态", Colors.BOLD + Colors.BRIGHT_CYAN)])
-        history = table.get("action_history", [])[-5:]
+        history_limit = 2 if compact else 5
+        history = table.get("action_history", [])[-history_limit:]
         if not history:
             lines.append(self.c("  暂无操作", Colors.DIM))
         for item in history:
@@ -433,11 +466,12 @@ class PokerUiRenderer:
             amount = self._int(item.get("amount", 0))
             lines.append(f"  {name} · {item.get('action', '')}" + (f" {amount}" if amount else ""))
 
-        lines.extend(["", self.c("快捷命令", Colors.BOLD + Colors.BRIGHT_CYAN)])
-        for spec in command_specs("room"):
-            if spec.sidebar and spec.name in {"status", "history", "help", "leave"}:
-                lines.append(f"  {spec.usage:<14} {spec.description}")
-        lines.append(self.c("  ↑ / ↓  历史命令", Colors.DIM))
+        if not compact:
+            lines.extend(["", self.c("快捷命令", Colors.BOLD + Colors.BRIGHT_CYAN)])
+            for spec in command_specs("room"):
+                if spec.sidebar and spec.name in {"status", "history", "help", "leave"}:
+                    lines.append(f"  {spec.usage:<14} {spec.description}")
+            lines.append(self.c("  ↑ / ↓  历史命令", Colors.DIM))
         return "\n".join(lines)
 
     def format_street_name(self, street: str) -> str:
