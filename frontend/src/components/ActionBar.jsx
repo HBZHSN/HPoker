@@ -144,22 +144,43 @@ export default function ActionBar({
     return alignAmount(target);
   };
 
-  const applyPresetRatio = (ratio) => {
-    const target = calcPresetAmount(ratio);
-    setRaiseAmount(target);
-  };
-
   const calcBBAmount = (mult) => {
     return alignAmount(Math.round(mult * bigBlind));
   };
 
-  const applyBBMultiplier = (mult) => {
-    const target = calcBBAmount(mult);
-    setRaiseAmount(target);
-  };
-
   const adjustBB = (multiplier) => {
     setRaiseAmount(alignAmount(currentAmount + multiplier * bigBlind));
+  };
+
+  const executeBetOrRaise = (targetAmount) => {
+    if (disabled || !isMyTurn || !legalActions) return;
+    if (!legalActions.can_bet && !legalActions.can_raise && !legalActions.can_all_in) return;
+
+    const amount = alignAmount(targetAmount);
+    setRaiseAmount(amount);
+
+    const isTargetAllIn = Boolean(
+      maxVal > 0 &&
+      (amount >= maxVal || (sizingMax > 0 && amount >= sizingMax))
+    );
+
+    if (isTargetAllIn && legalActions.can_all_in) {
+      onAction('ALL_IN', legalActions.all_in_amount || maxVal);
+      return;
+    }
+
+    const act = legalActions.can_bet ? 'BET' : 'RAISE';
+    onAction(act, amount);
+  };
+
+  const executeAllIn = () => {
+    if (disabled || !isMyTurn || !legalActions) return;
+    if (legalActions.can_all_in) {
+      setRaiseAmount(maxVal);
+      onAction('ALL_IN', legalActions.all_in_amount || maxVal);
+    } else if (legalActions.can_bet || legalActions.can_raise) {
+      executeBetOrRaise(maxVal);
+    }
   };
 
   const potPresets = [
@@ -539,8 +560,8 @@ export default function ActionBar({
             return (
               <button
                 key={idx}
-                onClick={() => (preset.isMax ? setRaiseAmount(maxVal) : applyPresetRatio(preset.ratio))}
-                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
+                onClick={() => (preset.isMax ? executeAllIn() : executeBetOrRaise(amount))}
+                disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in))}
                 className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border ${
                   isSelected
                     ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -576,7 +597,7 @@ export default function ActionBar({
             return (
               <button
                 key={idx}
-                onClick={() => applyBBMultiplier(preset.mult)}
+                onClick={() => executeBetOrRaise(amount)}
                 disabled={!isMyTurn || (!legalActions?.can_bet && !legalActions?.can_raise)}
                 className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border ${
                   isSelected
