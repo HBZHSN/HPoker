@@ -37,6 +37,7 @@ class AdminCreateUserRequest(BaseModel):
     password: str = "123"
     avatar: str = "👤"
     is_admin: bool = False
+    is_test: bool = False
 
 
 class AdminUpdateUserRequest(BaseModel):
@@ -46,6 +47,7 @@ class AdminUpdateUserRequest(BaseModel):
     password: Optional[str] = None
     avatar: Optional[str] = None
     is_admin: Optional[bool] = None
+    is_test: Optional[bool] = None
 
 
 @api_router.post("/auth/login")
@@ -111,6 +113,7 @@ def admin_create_user(req: AdminCreateUserRequest):
             password=req.password,
             avatar=req.avatar,
             is_admin=req.is_admin,
+            is_test=req.is_test,
         )
         return user.to_dict()
     except PermissionError as pe:
@@ -130,6 +133,7 @@ def admin_update_user(user_id: str, req: AdminUpdateUserRequest):
             password=req.password,
             avatar=req.avatar,
             is_admin=req.is_admin,
+            is_test=req.is_test,
         )
         return user.to_dict()
     except PermissionError as pe:
@@ -165,6 +169,7 @@ def create_user(req: AdminCreateUserRequest):
         password=req.password,
         avatar=req.avatar,
         is_admin=req.is_admin,
+        is_test=req.is_test,
     )
     return user.to_dict()
 

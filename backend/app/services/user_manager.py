@@ -11,10 +11,13 @@ from backend.app.models.user import User, hash_password
 
 
 DEFAULT_PRESET_USERS = [
-    {"user_id": "u_admin", "username": "admin", "nickname": "房主 (Admin)", "avatar": "👑", "is_admin": True, "password": "admin"},
-    {"user_id": "u_fwd", "username": "fwd", "nickname": "fwd", "avatar": "🦈", "is_admin": False, "password": "123"},
-    {"user_id": "u_hx", "username": "hx", "nickname": "hx", "avatar": "🦁", "is_admin": False, "password": "123"},
-    {"user_id": "u_yy", "username": "yy", "nickname": "yy", "avatar": "🦊", "is_admin": False, "password": "123"},
+    {"user_id": "u_admin", "username": "admin", "nickname": "房主 (Admin)", "avatar": "👑", "is_admin": True, "is_test": False, "password": "admin"},
+    {"user_id": "u_fwd", "username": "fwd", "nickname": "fwd", "avatar": "🦈", "is_admin": False, "is_test": False, "password": "123"},
+    {"user_id": "u_hx", "username": "hx", "nickname": "hx", "avatar": "🦁", "is_admin": False, "is_test": False, "password": "123"},
+    {"user_id": "u_yy", "username": "yy", "nickname": "yy", "avatar": "🦊", "is_admin": False, "is_test": False, "password": "123"},
+    {"user_id": "u_test1", "username": "test1", "nickname": "test1", "avatar": "🧪", "is_admin": False, "is_test": True, "password": "123"},
+    {"user_id": "u_test2", "username": "test2", "nickname": "test2", "avatar": "🧪", "is_admin": False, "is_test": True, "password": "123"},
+    {"user_id": "u_test3", "username": "test3", "nickname": "test3", "avatar": "🧪", "is_admin": False, "is_test": True, "password": "123"},
 ]
 
 DEFAULT_STORAGE_FILE = os.path.join(
@@ -55,7 +58,7 @@ class UserManager:
             except Exception as e:
                 print(f"[UserManager] Warning: Failed to load storage from {self.storage_path}: {e}")
 
-        # Ensure preset users exist (admin, fwd, hx, yy)
+        # Ensure preset users exist (admin, fwd, hx, yy, test1, test2, test3)
         modified = False
         existing_usernames = {u.username.lower(): u for u in self._users.values()}
         now = time.time()
@@ -69,6 +72,7 @@ class UserManager:
                     nickname=preset["nickname"],
                     avatar=preset["avatar"],
                     is_admin=preset.get("is_admin", False),
+                    is_test=preset.get("is_test", False),
                     password_hash=hash_password(pwd),
                     created_at=now,
                 )
@@ -80,6 +84,10 @@ class UserManager:
                 preset_admin = preset.get("is_admin", False)
                 if existing_user.is_admin != preset_admin:
                     existing_user.is_admin = preset_admin
+                    modified = True
+                preset_test = preset.get("is_test", False)
+                if existing_user.is_test != preset_test:
+                    existing_user.is_test = preset_test
                     modified = True
 
         if modified or not has_file:
@@ -174,6 +182,7 @@ class UserManager:
         password: str = "123",
         avatar: str = "👤",
         is_admin: bool = False,
+        is_test: bool = False,
     ) -> User:
         """Admin creates a new user account with password."""
         admin = self._users.get(admin_user_id)
@@ -192,6 +201,7 @@ class UserManager:
             nickname=nickname.strip() or clean_username,
             avatar=avatar,
             is_admin=is_admin,
+            is_test=is_test or clean_username.lower().startswith("test"),
             password_hash=hash_password(password or "123"),
             created_at=time.time(),
         )
@@ -208,6 +218,7 @@ class UserManager:
         password: Optional[str] = None,
         avatar: Optional[str] = None,
         is_admin: Optional[bool] = None,
+        is_test: Optional[bool] = None,
     ) -> User:
         """Admin updates any user's credentials, role, nickname, or resets password."""
         admin = self._users.get(admin_user_id)
@@ -237,8 +248,25 @@ class UserManager:
         if is_admin is not None:
             target.is_admin = is_admin
 
+        if is_test is not None:
+            target.is_test = is_test
+
         self.save_to_storage()
         return target
+
+    def is_test_user(self, user_id_or_username: str) -> bool:
+        """Check if a given user_id or username belongs to a test account or bot."""
+        if not user_id_or_username:
+            return False
+        if user_id_or_username.startswith("bot_"):
+            return True
+        user = self._users.get(user_id_or_username)
+        if user:
+            return user.is_test_account
+        for u in self._users.values():
+            if u.username.lower() == user_id_or_username.lower():
+                return u.is_test_account
+        return user_id_or_username.lower().startswith("test")
 
     def admin_delete_user(self, admin_user_id: str, target_user_id: str) -> bool:
         """Admin deletes a user account (cannot delete self)."""
