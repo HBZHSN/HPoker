@@ -28,13 +28,37 @@ if [ "$SERVICE_USER" = "root" ]; then
     SERVICE_USER="$(stat -c '%U' "$PROJECT_ROOT")"
 fi
 SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
+SERVICE_HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)"
 
 echo "[1/4] 构建前端生产资源..."
-if ! command -v npm >/dev/null 2>&1; then
+NPM_BIN="$(
+    runuser -u "$SERVICE_USER" -- \
+        env HOME="$SERVICE_HOME" bash -lc 'command -v npm' 2>/dev/null || true
+)"
+if [ ! -x "$NPM_BIN" ]; then
+    for candidate in /usr/local/bin/npm /usr/bin/npm; do
+        if [ -x "$candidate" ]; then
+            NPM_BIN="$candidate"
+            break
+        fi
+    done
+fi
+if [ ! -x "$NPM_BIN" ]; then
+    NPM_BIN="$(
+        { find -L "$SERVICE_HOME/.nvm/versions/node" \
+            -mindepth 3 -maxdepth 3 -path '*/bin/npm' \
+            -type f -perm -u+x -print 2>/dev/null || true; } \
+            | sort -V | tail -n 1
+    )"
+fi
+if [ ! -x "$NPM_BIN" ]; then
     echo "未找到 npm，请先安装 Node.js 18+ 与 npm。" >&2
     exit 1
 fi
-runuser -u "$SERVICE_USER" -- npm --prefix "$PROJECT_ROOT/frontend" run build
+NPM_PATH="$(dirname "$NPM_BIN"):/usr/local/bin:/usr/bin:/bin"
+runuser -u "$SERVICE_USER" -- \
+    env HOME="$SERVICE_HOME" PATH="$NPM_PATH" \
+    "$NPM_BIN" --prefix "$PROJECT_ROOT/frontend" run build
 
 echo "[2/4] 安装 $SERVICE_NAME..."
 TEMP_UNIT="$(mktemp)"
@@ -48,7 +72,8 @@ install -m 0644 "$TEMP_UNIT" "$SERVICE_TARGET"
 
 echo "[3/4] 重新加载 systemd 并启用开机自启..."
 systemctl daemon-reload
-systemctl enable --now "$SERVICE_NAME"
+systemctl enable "$SERVICE_NAME"
+systemctl restart "$SERVICE_NAME"
 
 echo "[4/4] 检查服务状态..."
 systemctl is-enabled "$SERVICE_NAME"
