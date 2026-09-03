@@ -17,6 +17,11 @@ import {
   shouldCancelPreAction,
   determineAutoAction,
 } from '../utils/preActionRules';
+import {
+  BET_SLIDER_STEPS,
+  amountToNonlinearProgress,
+  nonlinearProgressToAmount,
+} from '../utils/betSizing';
 
 export default function ActionBar({
   legalActions,
@@ -184,6 +189,7 @@ export default function ActionBar({
   }, [currentTurnPlayer?.player_id, street, turnCount, actionHistory?.length, effectiveTimeout, isUsingTimeBank]);
 
   const currentAmount = alignAmount(raiseAmount || minVal);
+  const sliderValue = amountToNonlinearProgress(currentAmount, sizingMin, sizingMax);
   const isAllIn = Boolean(
     ((isMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)) &&
     maxVal > 0 &&
@@ -743,14 +749,21 @@ export default function ActionBar({
             </div>
             <input
               type="range"
-              min={sizingMin}
-              max={sizingMax}
-              step={blindUnit}
-              value={currentAmount}
+              min={0}
+              max={BET_SLIDER_STEPS}
+              step={1}
+              value={sliderValue}
               disabled={disabled || (!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               onChange={(e) => {
-                const val = Number(e.target.value);
-                const next = (val >= sizingMax || val >= maxVal) ? maxVal : alignAmount(val);
+                const progress = Number(e.target.value);
+                const rawAmount = nonlinearProgressToAmount(
+                  progress,
+                  sizingMin,
+                  sizingMax,
+                );
+                const next = progress >= BET_SLIDER_STEPS
+                  ? maxVal
+                  : alignAmount(rawAmount);
                 setRaiseAmount(next);
                 if (preAction === PRE_ACTIONS.RAISE) {
                   setPreActionData((prev) => (prev ? { ...prev, targetAmount: next } : prev));
@@ -759,7 +772,8 @@ export default function ActionBar({
               className={`poker-horizontal-raise-slider w-full h-2 lg:h-2.5 my-1 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-slate-800 ${
                 isAllIn ? 'accent-purple-400' : 'accent-amber-400'
               }`}
-              aria-label="横向调整下注额度"
+              aria-label="非线性调整下注额度"
+              aria-valuetext={`下注 ${currentAmount} 筹码`}
             />
             <div className="flex items-center justify-between text-[9px] lg:text-[10px] text-slate-500 font-semibold px-0.5">
               <span>${sizingMin}</span>
