@@ -54,9 +54,12 @@ export default function ActionBar({
   const preCallCost = Math.max(0, effectiveHighestBet - selfRoundBet);
   const preCallDisplayAmt = Math.min(preCallCost, selfChips);
 
+  const hasCards = Boolean(selfSeat?.has_cards || (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0));
+  const effectiveIsMyTurn = Boolean(isMyTurn && hasCards);
+
   const canPreAction = isEligibleForPreAction({
     disabled,
-    isMyTurn,
+    isMyTurn: effectiveIsMyTurn,
     selfSeat,
     street,
   });
@@ -68,11 +71,11 @@ export default function ActionBar({
     bigBlind,
   });
 
-  const minVal = isMyTurn
+  const minVal = effectiveIsMyTurn
     ? (legalActions?.can_bet ? legalActions.min_bet : (legalActions?.min_raise_to || 0))
     : (canPreAction ? preActionBounds.minVal : 0);
 
-  const maxVal = isMyTurn
+  const maxVal = effectiveIsMyTurn
     ? (legalActions?.can_bet ? legalActions.max_bet : (legalActions?.max_raise_to || 0))
     : (canPreAction ? preActionBounds.maxVal : 0);
 
@@ -120,7 +123,7 @@ export default function ActionBar({
         return alignAmount(next);
       });
     }
-  }, [minVal, maxVal, legalActions?.can_bet, legalActions?.can_raise, isMyTurn, canPreAction]);
+  }, [minVal, maxVal, legalActions?.can_bet, legalActions?.can_raise, effectiveIsMyTurn, canPreAction]);
 
   // Reset pre-action when street changes
   const prevStreetRef = useRef(street);
@@ -152,7 +155,7 @@ export default function ActionBar({
 
   // Cancel pre-action if someone raises higher before my turn (CHECK_CALL & RAISE)
   useEffect(() => {
-    if (!preAction || !preActionData || isMyTurn) return;
+    if (!preAction || !preActionData || effectiveIsMyTurn) return;
 
     const shouldCancel = shouldCancelPreAction({
       preAction,
@@ -165,7 +168,7 @@ export default function ActionBar({
       setPreAction(null);
       setPreActionData(null);
     }
-  }, [effectiveHighestBet, street, preAction, preActionData, isMyTurn]);
+  }, [effectiveHighestBet, street, preAction, preActionData, effectiveIsMyTurn]);
 
   // Turn timer countdown in sidebar
   useEffect(() => {
@@ -191,7 +194,7 @@ export default function ActionBar({
   const currentAmount = alignAmount(raiseAmount || minVal);
   const sliderValue = amountToNonlinearProgress(currentAmount, sizingMin, sizingMax);
   const isAllIn = Boolean(
-    ((isMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)) &&
+    ((effectiveIsMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)) &&
     maxVal > 0 &&
     (currentAmount >= maxVal || (sizingMax > 0 && currentAmount >= sizingMax))
   );
@@ -229,7 +232,7 @@ export default function ActionBar({
 
   // Execute pre-action when it becomes my turn
   useEffect(() => {
-    if (!isMyTurn || !preActionRef.current || !legalActions) return;
+    if (!effectiveIsMyTurn || !preActionRef.current || !legalActions) return;
 
     const actionToRun = preActionRef.current;
     const dataToRun = preActionDataRef.current;
@@ -251,7 +254,7 @@ export default function ActionBar({
       }, 120);
       return () => clearTimeout(timer);
     }
-  }, [isMyTurn, legalActions]);
+  }, [effectiveIsMyTurn, legalActions]);
 
   // Keyboard shortcuts (PC)
   useEffect(() => {
@@ -259,7 +262,7 @@ export default function ActionBar({
       if (disabled) return;
       if (['input', 'textarea'].includes(e.target.tagName.toLowerCase())) return;
 
-      if (isMyTurn && legalActionsRef.current) {
+      if (effectiveIsMyTurn && legalActionsRef.current) {
         const legal = legalActionsRef.current;
         if (e.code === 'KeyF' && legal.can_fold) {
           onAction('FOLD');
@@ -298,13 +301,13 @@ export default function ActionBar({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [disabled, onAction, isMyTurn, maxVal]);
+  }, [disabled, onAction, effectiveIsMyTurn, maxVal]);
 
   // Preset Bet Sizing helpers
   const calcPresetAmount = (ratio) => {
-    const isRaise = isMyTurn ? legalActions?.can_raise : (effectiveHighestBet > 0);
+    const isRaise = effectiveIsMyTurn ? legalActions?.can_raise : (effectiveHighestBet > 0);
     if (isRaise) {
-      const callCost = isMyTurn ? (legalActions?.call_amount || 0) : preCallCost;
+      const callCost = effectiveIsMyTurn ? (legalActions?.call_amount || 0) : preCallCost;
       const effectivePot = totalPot + callCost;
       const raiseAdd = Math.round((effectivePot * ratio) / blindUnit) * blindUnit;
       const target = (selfSeat?.current_bet || selfRoundBet || 0) + callCost + raiseAdd;
@@ -327,7 +330,7 @@ export default function ActionBar({
   };
 
   const executeBetOrRaise = (targetAmount) => {
-    if (disabled || !isMyTurn || !legalActions) return;
+    if (disabled || !effectiveIsMyTurn || !legalActions) return;
     if (!legalActions.can_bet && !legalActions.can_raise && !legalActions.can_all_in) return;
 
     const amount = alignAmount(targetAmount);
@@ -348,7 +351,7 @@ export default function ActionBar({
   };
 
   const executeAllIn = () => {
-    if (disabled || !isMyTurn || !legalActions) return;
+    if (disabled || !effectiveIsMyTurn || !legalActions) return;
     if (legalActions.can_all_in) {
       setRaiseAmount(maxVal);
       onAction('ALL_IN', legalActions.all_in_amount || maxVal);
@@ -376,7 +379,7 @@ export default function ActionBar({
   ];
 
   const handlePresetClick = (amount, isMax) => {
-    if (isMyTurn) {
+    if (effectiveIsMyTurn) {
       if (isMax) {
         executeAllIn();
       } else {
@@ -434,10 +437,10 @@ export default function ActionBar({
     <div className="poker-action-bar flex flex-col gap-2 lg:gap-3 w-full h-full text-slate-100 select-none">
       {/* 1. Turn Status & Countdown Banner */}
       <div
-        className={`poker-action-turn-status ${isMyTurn ? 'poker-action-turn-status-self' : ''} p-2 lg:p-3 rounded-xl lg:rounded-2xl border transition-all duration-300 ${
-          isMyTurn && isUsingTimeBank
+        className={`poker-action-turn-status ${effectiveIsMyTurn ? 'poker-action-turn-status-self' : ''} p-2 lg:p-3 rounded-xl lg:rounded-2xl border transition-all duration-300 ${
+          effectiveIsMyTurn && isUsingTimeBank
             ? 'bg-gradient-to-r from-purple-950/90 via-slate-900 to-indigo-950 border-purple-400 shadow-glow-cyan'
-            : isMyTurn
+            : effectiveIsMyTurn
             ? 'bg-gradient-to-r from-amber-950/80 to-slate-900 border-amber-400 shadow-glow-gold'
             : currentTurnPlayer
             ? 'bg-slate-900/90 border-slate-700/80'
@@ -446,7 +449,7 @@ export default function ActionBar({
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 lg:gap-2">
-            {isMyTurn ? (
+            {effectiveIsMyTurn ? (
               <span className="flex h-2.5 w-2.5 lg:h-3 lg:w-3 relative">
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isUsingTimeBank ? 'bg-purple-400' : 'bg-amber-400'} opacity-75`}></span>
                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 lg:h-3 lg:w-3 ${isUsingTimeBank ? 'bg-purple-500' : 'bg-amber-500'}`}></span>
@@ -455,10 +458,12 @@ export default function ActionBar({
               <Clock className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-slate-400" />
             )}
             <span className="text-xs lg:text-sm font-black tracking-wide">
-              {isMyTurn && isUsingTimeBank
+              {effectiveIsMyTurn && isUsingTimeBank
                 ? '时间卡'
-                : isMyTurn
+                : effectiveIsMyTurn
                 ? '轮到你'
+                : selfSeat && !hasCards && !['IDLE', 'HAND_END'].includes(street)
+                ? (currentTurnPlayer ? `等下局 · 等待 ${currentTurnPlayer.name}` : '等待下一局')
                 : currentTurnPlayer
                 ? `等待 ${currentTurnPlayer.name}`
                 : street === 'HAND_END'
@@ -500,7 +505,7 @@ export default function ActionBar({
         )}
 
         {/* Manual Time Card Button inside My Turn banner */}
-        {isMyTurn && (
+        {effectiveIsMyTurn && (
           <div className="poker-action-time-card-row flex items-center justify-between mt-1.5 lg:mt-2 pt-1.5 lg:pt-2 border-t border-slate-800/80">
             <div className="flex items-center gap-1.5 text-[11px] lg:text-xs text-slate-300 font-bold">
               <span>时间卡:</span>
@@ -591,7 +596,13 @@ export default function ActionBar({
         <div className="flex items-center justify-between">
           <div className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
             <Zap className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-amber-400" />
-            <span>{canPreAction ? '预选' : '操作'}</span>
+            <span>
+              {selfSeat && !hasCards && !['IDLE', 'HAND_END'].includes(street)
+                ? '等待下局'
+                : canPreAction
+                ? '预选'
+                : '操作'}
+            </span>
           </div>
           {canPreAction && preAction && (
             <button
@@ -613,9 +624,16 @@ export default function ActionBar({
           )}
         </div>
 
+        {selfSeat && !hasCards && !['IDLE', 'HAND_END'].includes(street) && (
+          <div className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-slate-950/85 border border-amber-500/30 rounded-lg text-xs text-amber-300 font-bold">
+            <Clock className="w-3.5 h-3.5 text-amber-400" />
+            <span>本局未参与，等待下一局开始</span>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-1.5 lg:gap-2">
           {/* Fold / Check-Fold Button */}
-          {isMyTurn ? (
+          {effectiveIsMyTurn ? (
             <button
               onClick={() => onAction('FOLD')}
               disabled={disabled || !legalActions?.can_fold}
@@ -661,7 +679,7 @@ export default function ActionBar({
           )}
 
           {/* Check / Call / Check-Call Button */}
-          {isMyTurn ? (
+          {effectiveIsMyTurn ? (
             legalActions?.can_check ? (
               <button
                 onClick={() => onAction('CHECK')}
@@ -722,7 +740,7 @@ export default function ActionBar({
           {/* Row 2, Col 1: Horizontal Sizing Slider */}
           <div
             className={`poker-action-slider-container flex flex-col justify-between py-1.5 lg:py-2 px-2 lg:px-2.5 rounded-lg lg:rounded-xl border shadow-lg transition-all min-h-[52px] lg:min-h-[60px] ${
-              (isMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)
+              (effectiveIsMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)
                 ? isAllIn
                   ? 'bg-gradient-to-b from-slate-900 via-purple-950/40 to-slate-950 border-purple-500/60 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
                   : 'bg-slate-950/90 border-amber-500/40'
@@ -731,7 +749,7 @@ export default function ActionBar({
           >
             <div className="flex items-center justify-between text-[11px] lg:text-xs">
               <span className="text-slate-400 font-bold">
-                {isMyTurn
+                {effectiveIsMyTurn
                   ? (legalActions?.can_bet ? '下注' : '加注')
                   : (effectiveHighestBet === 0 ? '预设下注' : '预设加注')}
               </span>
@@ -745,7 +763,7 @@ export default function ActionBar({
               max={BET_SLIDER_STEPS}
               step={1}
               value={sliderValue}
-              disabled={disabled || (!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
+              disabled={disabled || (!effectiveIsMyTurn && !canPreAction) || (effectiveIsMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               onChange={(e) => {
                 const progress = Number(e.target.value);
                 const rawAmount = nonlinearProgressToAmount(
@@ -776,7 +794,7 @@ export default function ActionBar({
           </div>
 
           {/* Row 2, Col 2: Raise Button (dynamically turns to All-In when dragged to end) */}
-          {isMyTurn ? (
+          {effectiveIsMyTurn ? (
             <button
               onClick={handleRaiseSubmit}
               disabled={disabled || (!legalActions?.can_bet && !legalActions?.can_raise)}
@@ -853,12 +871,12 @@ export default function ActionBar({
       <div className="poker-action-sizing bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col gap-2 lg:gap-2.5 shadow-xl">
         <div className="flex items-center justify-between">
           <span className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider">
-            {canPreAction && !isMyTurn ? '预设额度' : '下注额'}
+            {canPreAction && !effectiveIsMyTurn ? '预设额度' : '下注额'}
           </span>
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => adjustBB(-1)}
-              disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
+              disabled={(!effectiveIsMyTurn && !canPreAction) || (effectiveIsMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
             >
               -1BB
@@ -871,7 +889,7 @@ export default function ActionBar({
                 max={sizingMax}
                 step={blindUnit}
                 value={currentAmount}
-                disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
+                disabled={(!effectiveIsMyTurn && !canPreAction) || (effectiveIsMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
                 onChange={(e) => {
                   const next = alignAmount(e.target.value);
                   setRaiseAmount(next);
@@ -884,7 +902,7 @@ export default function ActionBar({
             </div>
             <button
               onClick={() => adjustBB(1)}
-              disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
+              disabled={(!effectiveIsMyTurn && !canPreAction) || (effectiveIsMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
             >
               +1BB
@@ -897,10 +915,10 @@ export default function ActionBar({
           {potPresets.map((preset, idx) => {
             const amount = preset.isMax ? maxVal : calcPresetAmount(preset.ratio);
             const isTooSmall = !preset.isMax && amount < sizingMin;
-            const isSelected = (isMyTurn || canPreAction) && currentAmount === amount && (
-              isMyTurn ? (legalActions?.can_bet || legalActions?.can_raise) : maxVal > 0
+            const isSelected = (effectiveIsMyTurn || canPreAction) && currentAmount === amount && (
+              effectiveIsMyTurn ? (legalActions?.can_bet || legalActions?.can_raise) : maxVal > 0
             );
-            const isPresetDisabled = isMyTurn
+            const isPresetDisabled = effectiveIsMyTurn
               ? (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in)) || isTooSmall
               : (!canPreAction || maxVal <= 0 || isTooSmall);
 
@@ -942,10 +960,10 @@ export default function ActionBar({
             const rawAmount = calcBBAmount(preset.mult);
             const amount = alignAmount(rawAmount);
             const isTooSmall = rawAmount < sizingMin;
-            const isSelected = (isMyTurn || canPreAction) && currentAmount === amount && (
-              isMyTurn ? (legalActions?.can_bet || legalActions?.can_raise) : maxVal > 0
+            const isSelected = (effectiveIsMyTurn || canPreAction) && currentAmount === amount && (
+              effectiveIsMyTurn ? (legalActions?.can_bet || legalActions?.can_raise) : maxVal > 0
             );
-            const isBbDisabled = isMyTurn
+            const isBbDisabled = effectiveIsMyTurn
               ? (!legalActions?.can_bet && !legalActions?.can_raise) || isTooSmall
               : (!canPreAction || maxVal <= 0 || isTooSmall);
 

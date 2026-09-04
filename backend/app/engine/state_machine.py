@@ -122,7 +122,7 @@ class LegalActions:
     can_raise: bool = False
     min_raise_to: int = 0
     max_raise_to: int = 0
-    can_fold: bool = True
+    can_fold: bool = False
     can_all_in: bool = False
     all_in_amount: int = 0
 
@@ -247,7 +247,7 @@ class TableStateMachine:
         if self.current_turn_seat is None:
             return False
         player = self.seats[self.current_turn_seat]
-        if not player or player.time_bank_cards <= 0:
+        if not player or len(player.hole_cards) == 0 or player.time_bank_cards <= 0:
             return False
         if player.use_time_bank_card():
             self.is_using_time_bank = True
@@ -288,7 +288,7 @@ class TableStateMachine:
             if player.is_all_in or self.street in (Street.RIT_DECISION, Street.SHOWDOWN):
                 return None
 
-            if not player.is_folded:
+            if not player.is_folded and len(player.hole_cards) > 0:
                 if self.current_turn_seat == seat_index:
                     if not self.handle_action(player.player_id, ActionType.FOLD):
                         return None
@@ -510,7 +510,13 @@ class TableStateMachine:
         idx = (after_seat + 1) % self.max_seats
         for _ in range(self.max_seats):
             p = self.seats[idx]
-            if p is not None and not p.is_folded and not p.is_all_in and p.chips > 0:
+            if (
+                p is not None
+                and not p.is_folded
+                and not p.is_all_in
+                and p.chips > 0
+                and len(p.hole_cards) > 0
+            ):
                 return idx
             idx = (idx + 1) % self.max_seats
         return None
@@ -519,7 +525,14 @@ class TableStateMachine:
 
     def get_legal_actions(self, player_id: str) -> LegalActions:
         player = next((p for p in self.active_seated_players if p.player_id == player_id), None)
-        if not player or player.seat_index != self.current_turn_seat or player.is_folded or player.is_all_in:
+        if (
+            not player
+            or len(player.hole_cards) == 0
+            or player.seat_index != self.current_turn_seat
+            or player.is_folded
+            or player.is_all_in
+            or player.chips <= 0
+        ):
             return LegalActions()
 
         curr_round_bet = self.pot_manager.get_player_current_bet(player.player_id)
@@ -571,6 +584,9 @@ class TableStateMachine:
 
         current_player = self.seats[self.current_turn_seat]
         if not current_player or current_player.player_id != player_id:
+            return False
+
+        if len(current_player.hole_cards) == 0:
             return False
 
         legal = self.get_legal_actions(player_id)

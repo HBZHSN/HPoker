@@ -431,3 +431,89 @@ def test_equity_assistant_status_and_reset():
     table.start_new_hand()
     assert table.seats[0].using_assistant is False
     assert table.seats[1].using_assistant is False
+
+
+def test_player_joining_mid_hand_cannot_act_until_next_hand():
+    table = TableStateMachine(max_seats=6, small_blind=10, big_blind=20)
+    table.sit_down("p1", "Alice", seat_index=0, chips=100)
+    table.sit_down("p2", "Bob", seat_index=1, chips=100)
+
+    assert table.start_new_hand() is True
+    assert table.street == Street.PREFLOP
+
+    # p3 sits down while hand is in progress
+    assert table.sit_down("p3", "Charlie", seat_index=2, chips=100) is True
+    seat_p3 = table.seats[2]
+    assert seat_p3 is not None
+    assert len(seat_p3.hole_cards) == 0
+
+    # p3 cannot perform any legal actions
+    legal_p3 = table.get_legal_actions("p3")
+    assert legal_p3.can_check is False
+    assert legal_p3.can_call is False
+    assert legal_p3.can_bet is False
+    assert legal_p3.can_raise is False
+    assert legal_p3.can_fold is False
+    assert legal_p3.can_all_in is False
+
+    # p3 cannot execute any actions
+    assert table.handle_action("p3", ActionType.CHECK) is False
+    assert table.handle_action("p3", ActionType.CALL) is False
+    assert table.handle_action("p3", ActionType.RAISE, 40) is False
+    assert table.handle_action("p3", ActionType.FOLD) is False
+    assert table.handle_action("p3", ActionType.ALL_IN) is False
+
+    # Table state for p3 shows no cards and no legal actions
+    state_p3 = table.get_table_state("p3")
+    assert state_p3["current_turn_seat"] != 2
+    assert state_p3["legal_actions"]["can_check"] is False
+    assert state_p3["legal_actions"]["can_raise"] is False
+    assert state_p3["legal_actions"]["can_fold"] is False
+    assert state_p3["seats"][2]["has_cards"] is False
+
+    # Play out current hand with p1 and p2
+    # In Heads-up: Dealer is SB (seat 0, p1), other is BB (seat 1, p2)
+    assert table.current_turn_seat == 0
+    assert table.handle_action("p1", ActionType.CALL) is True
+    assert table.current_turn_seat == 1
+    assert table.handle_action("p2", ActionType.CHECK) is True
+
+    # Flop: turn goes to p2 (seat 1), not p3 (seat 2)
+    assert table.street == Street.FLOP
+    assert table.current_turn_seat == 1
+    assert table.handle_action("p2", ActionType.CHECK) is True
+    assert table.current_turn_seat == 0
+    assert table.handle_action("p1", ActionType.CHECK) is True
+
+    # Turn: turn goes to p2 (seat 1), not p3
+    assert table.street == Street.TURN
+    assert table.current_turn_seat == 1
+    assert table.handle_action("p2", ActionType.CHECK) is True
+    assert table.current_turn_seat == 0
+    assert table.handle_action("p1", ActionType.CHECK) is True
+
+    # River
+    assert table.street == Street.RIVER
+    assert table.current_turn_seat == 1
+    assert table.handle_action("p2", ActionType.CHECK) is True
+    assert table.current_turn_seat == 0
+    assert table.handle_action("p1", ActionType.CHECK) is True
+
+    # Showdown / Hand End
+    assert table.street == Street.HAND_END
+
+    # Start next hand (hand 2): p3 is now dealt cards and participates
+    assert table.start_new_hand() is True
+    assert table.hand_number == 2
+    assert len(table.seats[0].hole_cards) == 2
+    assert len(table.seats[1].hole_cards) == 2
+    assert len(table.seats[2].hole_cards) == 2
+
+    # In 3-player hand: dealer is seat 1, SB is seat 2 (p3), BB is seat 0 (p1), UTG is seat 2 (p3) or seat 1 (p2)
+    # The active turn is on one of the players with cards
+    assert table.current_turn_seat is not None
+    active_player_id = table.seats[table.current_turn_seat].player_id
+    legal_active = table.get_legal_actions(active_player_id)
+    assert legal_active.can_fold is True
+    assert (legal_active.can_call or legal_active.can_check) is True
+

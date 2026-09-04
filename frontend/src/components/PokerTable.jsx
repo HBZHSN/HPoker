@@ -229,7 +229,8 @@ export default function PokerTable({
   }, [table?.current_turn_seat, table?.seats]);
 
   const isMyTurn = useMemo(() => {
-    return !!(selfSeat && table?.current_turn_seat === selfSeat.seat_index);
+    const hasCards = Boolean(selfSeat?.has_cards || (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0));
+    return !!(selfSeat && hasCards && table?.current_turn_seat === selfSeat.seat_index);
   }, [selfSeat, table?.current_turn_seat]);
 
   // Turn Countdown Audio Effect (5 seconds remaining warning). RIT voting

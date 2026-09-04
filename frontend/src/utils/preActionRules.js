@@ -18,7 +18,8 @@ export function isEligibleForPreAction({
   street = 'IDLE',
 }) {
   if (disabled || isMyTurn || !selfSeat) return false;
-  if (!selfSeat.has_cards) return false;
+  const hasCards = Boolean(selfSeat.has_cards || (selfSeat.hole_cards && selfSeat.hole_cards.length > 0));
+  if (!hasCards) return false;
   if (selfSeat.is_folded || selfSeat.is_all_in || selfSeat.is_sitting_out) return false;
   if (!['PREFLOP', 'FLOP', 'TURN', 'RIVER'].includes(street)) return false;
   return true;

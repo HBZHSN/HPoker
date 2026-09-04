@@ -53,7 +53,7 @@ def choose_bot_action(
         (seat for seat in table.active_seated_players if seat.player_id == player_id),
         None,
     )
-    if not player or not player.is_bot:
+    if not player or not player.is_bot or len(player.hole_cards) == 0:
         return None
 
     legal = table.get_legal_actions(player_id)
