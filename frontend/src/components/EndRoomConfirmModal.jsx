@@ -40,7 +40,7 @@ export default function EndRoomConfirmModal({
 
         {pendingSettlementCount > 0 && (
           <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 px-3 py-2 text-xs font-bold text-amber-300">
-            本次将一并处理 {pendingSettlementCount} 名已离场玩家的待结算筹码。
+            另有 {pendingSettlementCount} 名离场玩家待结算。
           </div>
         )}
 
@@ -77,7 +77,7 @@ export default function EndRoomConfirmModal({
             </div>
             {hasBots && (
               <span className="text-[11px] font-bold text-amber-400/80 bg-amber-950/50 border border-amber-500/30 px-2 py-0.5 rounded-md">
-                含机器人不可用
+                不可用
               </span>
             )}
           </div>
@@ -103,11 +103,6 @@ export default function EndRoomConfirmModal({
               </div>
               <span className="text-sm font-black text-white">实时转账</span>
             </div>
-            {hasBots && (
-              <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/50 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                已锁定实时结算
-              </span>
-            )}
           </div>
         </div>
 
@@ -115,12 +110,7 @@ export default function EndRoomConfirmModal({
         {hasBots && (
           <div className="flex items-start gap-2.5 px-3.5 py-3 bg-amber-950/30 border border-amber-500/40 rounded-xl text-amber-300 text-xs leading-relaxed">
             <Bot className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <div className="font-bold text-amber-200">对局包含机器人</div>
-              <div className="text-[11px] text-amber-300/80 mt-0.5">
-                房间内含有机器人，为避免虚拟筹码污染玩家间结算与余额中心，禁止结算到余额，只能进行实时结算。
-              </div>
-            </div>
+            <span className="font-bold text-amber-200">含机器人，仅可实时转账</span>
           </div>
         )}
 

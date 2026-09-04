@@ -116,22 +116,11 @@ export default function HandResultModal({
 
         {/* Body: Player Profit/Loss & Hand Rankings List */}
         <div className="flex-1 overflow-y-auto p-4 md:p-6 flex flex-col gap-3">
-          <div className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center justify-between px-1">
-            <span>牌局结果</span>
+          <div className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center justify-end px-1">
             <span>
               准备 <strong className="text-amber-300 font-black">{readyCount}</strong> / {totalEligible}
             </span>
           </div>
-
-          {/* Assistant Adjustment Banner */}
-          {(handResults || []).some((r) => r.assistant_adjustment && r.assistant_adjustment !== 0) && (
-            <div className="flex items-center gap-2 px-3.5 py-2 bg-purple-950/50 border border-purple-500/40 rounded-2xl text-xs text-purple-200">
-              <span className="text-base select-none">⚖️</span>
-              <span className="leading-snug">
-                本局赢家使用了胜率辅助，本金全额返还，仅对净盈利按房间规则折算并补偿给对手（详见下方<strong>「原应 ➔ 调整」</strong>明细）。
-              </span>
-            </div>
-          )}
 
           <div className="flex flex-col gap-2">
             {(handResults || []).map((res, idx) => {
@@ -174,23 +163,23 @@ export default function HandResultModal({
                         )}
                         {res.using_assistant && (
                           <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 rounded font-bold">
-                            已用辅助
+                            辅助
                           </span>
                         )}
                       </div>
                       <div className="flex flex-col gap-0.5 mt-0.5">
                         {!hasTwoBoards ? (
                           <span className="text-xs font-bold text-amber-300">
-                            牌型: <strong className="text-white">{res.hand_desc || '未知牌型'}</strong>
+                            牌型: <strong className="text-white">{res.hand_desc || '—'}</strong>
                           </span>
                         ) : (
                           <>
                             <span className="text-xs font-bold text-purple-300">
-                              第1次牌型: <strong className="text-white">{res.hand_desc || '未知'}</strong>
+                              第1次牌型: <strong className="text-white">{res.hand_desc || '—'}</strong>
                               {res.payout_board_1 > 0 && <span className="text-emerald-400 ml-1">(分池 +${res.payout_board_1})</span>}
                             </span>
                             <span className="text-xs font-bold text-indigo-300">
-                              第2次牌型: <strong className="text-white">{res.hand_desc_2 || '未知'}</strong>
+                              第2次牌型: <strong className="text-white">{res.hand_desc_2 || '—'}</strong>
                               {res.payout_board_2 > 0 && <span className="text-emerald-400 ml-1">(分池 +${res.payout_board_2})</span>}
                             </span>
                           </>
@@ -288,14 +277,12 @@ export default function HandResultModal({
                           {res.assistant_adjustment < 0 ? (
                             <span
                               className="bg-purple-950/80 text-purple-300 border border-purple-500/40 rounded px-1.5 py-0.5 shadow-sm"
-                              title={`使用辅助获胜折让：原应净赢 ${res.original_net_profit > 0 ? `+$${res.original_net_profit}` : `$${res.original_net_profit}`}，折让 -$${Math.abs(res.assistant_adjustment)}`}
                             >
                               原应 {res.original_net_profit > 0 ? `+$${res.original_net_profit}` : res.original_net_profit < 0 ? `-$${Math.abs(res.original_net_profit)}` : '$0'} · 折让 -${Math.abs(res.assistant_adjustment)}
                             </span>
                           ) : (
                             <span
                               className="bg-sky-950/80 text-sky-300 border border-sky-500/40 rounded px-1.5 py-0.5 shadow-sm"
-                              title={`对手使用辅助补偿：原应净输/得 ${res.original_net_profit > 0 ? `+$${res.original_net_profit}` : `$${res.original_net_profit}`}，获得补偿 +$${res.assistant_adjustment}`}
                             >
                               原应 {res.original_net_profit > 0 ? `+$${res.original_net_profit}` : res.original_net_profit < 0 ? `-$${Math.abs(res.original_net_profit)}` : '$0'} · 补偿 +${res.assistant_adjustment}
                             </span>
@@ -310,7 +297,7 @@ export default function HandResultModal({
                           </span>
                         )}
                         <span className={`text-[11px] font-medium ${res.chips === 0 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
-                          余额: ${res.chips}
+                          筹码: ${res.chips}
                         </span>
                       </div>
                     </div>
@@ -369,7 +356,6 @@ export default function HandResultModal({
                       className={`relative group cursor-pointer transition-transform active:scale-95 ${
                         isCardShown ? 'ring-4 ring-amber-400 rounded-lg scale-105' : 'opacity-80 hover:opacity-100'
                       }`}
-                      title={isCardShown ? '点击隐藏此牌' : '点击亮出此牌'}
                     >
                       <CardView card={card} size="md" />
                       <div

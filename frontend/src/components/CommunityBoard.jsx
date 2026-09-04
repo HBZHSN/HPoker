@@ -40,9 +40,9 @@ function BoardRow({
               disabled={!isClickable}
               aria-label={
                 isHidden
-                  ? '点击翻开公共牌'
+                  ? '翻开公共牌'
                   : isPostHandRevealed
-                  ? `公共牌第 ${index + 1} 张（牌局结束后揭示）`
+                  ? `公共牌第 ${index + 1} 张`
                   : `公共牌第 ${index + 1} 张`
               }
               className={`relative flex-shrink-0 rounded-lg p-0 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
@@ -131,7 +131,7 @@ export default function CommunityBoard({
             accentClass="text-purple-300 bg-purple-950/90 border-purple-500/30"
           />
           <BoardRow
-            label={sharedCount === 0 ? '第 2 次' : sharedCount === 3 ? '第 2 次 (转/河)' : '第 2 次 (河)'}
+            label="第 2 次"
             cards={secondBoard}
             size={compact ? 'xs' : 'md'}
             compact={compact}
