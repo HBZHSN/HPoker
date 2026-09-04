@@ -138,7 +138,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
   const handleClearAllRecords = async () => {
     if (
       !window.confirm(
-        '⚠️ 警告：确定要清空所有结算记录与账单数据吗？\n\n此操作将彻底清除所有未结账单、已结账单和历史结算批次，所有玩家余额归零重新起算，数据无法恢复！\n\n是否确认清空？'
+        '确认清空所有结算与账单数据？\n\n此操作不可恢复。'
       )
     ) {
       return;
@@ -156,7 +156,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
         throw new Error(errData.detail || '清空失败');
       }
       const data = await res.json();
-      setSuccess(data.message || '已成功清空所有结算与账单记录，重新开始计算！');
+      setSuccess(data.message || '结算数据已清空');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -184,7 +184,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
               className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black shadow transition active:scale-95 cursor-pointer"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              {showAddForm ? '收起添加' : '新建账号'}
+              {showAddForm ? '收起' : '新建账号'}
             </button>
             <button
               onClick={onClose}
@@ -358,14 +358,9 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
 
         {/* Settlement Data Reset Panel */}
         <div className="p-3 bg-slate-900/90 border border-red-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <div className="text-xs font-black text-red-300 flex items-center gap-1.5">
-              <RotateCcw className="w-3.5 h-3.5 text-red-400" />
-              战局结算与账单数据管理
-            </div>
-            <div className="text-[11px] text-slate-400">
-              一键清除所有对局结算与账单记录，所有玩家余额归零重新起算
-            </div>
+          <div className="text-xs font-black text-red-300 flex items-center gap-1.5">
+            <RotateCcw className="w-3.5 h-3.5 text-red-400" />
+            结算数据
           </div>
           <button
             onClick={handleClearAllRecords}
@@ -373,7 +368,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
             className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black shadow transition active:scale-95 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            {clearingData ? '正在清空...' : '一键清空数据'}
+            {clearingData ? '清空中...' : '清空数据'}
           </button>
         </div>
       </div>
