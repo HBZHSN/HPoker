@@ -7,7 +7,7 @@ import HandResultModal from './HandResultModal';
 import SettlementModal from './SettlementModal';
 import EndRoomConfirmModal from './EndRoomConfirmModal';
 import TableSocialControls from './TableSocialControls';
-import EquityDrawer from './EquityDrawer';
+import EquityDrawer, { EquityTrigger } from './EquityDrawer';
 import { sortCardsLowToHigh } from '../utils/cards';
 import { soundEngine } from '../sound/SoundEngine';
 import {
@@ -60,6 +60,7 @@ export default function PokerTable({
   const [handResultDismissed, setHandResultDismissed] = useState(false);
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
   const [leaveRequested, setLeaveRequested] = useState(false);
+  const [isEquityOpen, setIsEquityOpen] = useState(false);
 
   const table = room?.table;
   const isHost = room?.host_player_id === currentUser?.user_id;
@@ -385,18 +386,13 @@ export default function PokerTable({
             </button>
           )}
 
-          {/* Equity / Win Rate Analysis Drawer */}
-          <EquityDrawer
+          {/* Equity / Win Rate Trigger Button */}
+          <EquityTrigger
+            isOpen={isEquityOpen}
+            onToggle={() => setIsEquityOpen((v) => !v)}
             holeCards={selfSeat?.hole_cards || []}
             boardCards={table?.board_cards || []}
             street={table?.street || 'IDLE'}
-            numOpponents={numOpponents}
-            potSize={table?.total_pot || 0}
-            toCall={Math.max(
-              0,
-              (table?.current_round_highest_bet || 0) -
-                (selfSeat?.current_round_bet || 0)
-            )}
           />
 
           {/* Host End Room Button */}
@@ -424,12 +420,34 @@ export default function PokerTable({
         </div>
       </header>
 
-      {/* Main Body: Left Poker Table Felt + Right Action Console Sidebar */}
+      {/* Main Body: Left Equity Panel + Center Poker Table Felt + Right Action Console Sidebar */}
       <div className="poker-table-body flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
-        {/* Left Side: Main Poker Table Felt Area */}
-        <main className="poker-table-main relative flex-1 w-full h-full flex items-center justify-center p-3 pb-8 md:p-6 md:pb-12 select-none min-h-0 min-w-0 overflow-visible">
+        {/* Left Side: Equity / Win Rate Panel (Auto-compresses poker table) */}
+        {isEquityOpen && (
+          <EquityDrawer
+            isOpen={isEquityOpen}
+            onClose={() => setIsEquityOpen(false)}
+            holeCards={selfSeat?.hole_cards || []}
+            boardCards={table?.board_cards || []}
+            street={table?.street || 'IDLE'}
+            numOpponents={numOpponents}
+            potSize={table?.total_pot || 0}
+            toCall={Math.max(
+              0,
+              (table?.current_round_highest_bet || 0) -
+                (selfSeat?.current_round_bet || 0)
+            )}
+            isSeated={Boolean(selfSeat)}
+            isFolded={Boolean(selfSeat?.is_folded)}
+          />
+        )}
+
+        {/* Center: Main Poker Table Felt Area */}
+        <main className="poker-table-main relative flex-1 w-full h-full flex items-center justify-center p-3 pb-8 md:p-6 md:pb-12 select-none min-h-0 min-w-0 overflow-visible transition-all duration-300">
           {/* Table Exterior Border Ring (Leather & Wood Armrest) */}
-          <div className="poker-table-shell relative w-full h-[88%] md:h-[90%] max-h-[660px] rounded-[170px] md:rounded-[230px] bg-gradient-to-b from-[#2e2018] via-[#1a130e] to-[#0c0806] p-3 md:p-4 shadow-table border-[4px] border-[#3f2e24] overflow-visible">
+          <div className={`poker-table-shell relative w-full h-[88%] md:h-[90%] max-h-[660px] rounded-[170px] md:rounded-[230px] bg-gradient-to-b from-[#2e2018] via-[#1a130e] to-[#0c0806] p-3 md:p-4 shadow-table border-[4px] border-[#3f2e24] overflow-visible transition-all duration-300 ${
+            isEquityOpen ? 'max-w-[1100px]' : ''
+          }`}>
             {/* Table Felt Background & Texture (clipped cleanly inside the inner oval) */}
             <div className="absolute inset-3 md:inset-4 rounded-[155px] md:rounded-[215px] border-2 border-amber-600/35 bg-gradient-to-b from-[#0a2318] via-[#061810] to-[#030e09] shadow-inner overflow-hidden pointer-events-none">
               {/* Felt Texture Pattern */}
@@ -489,7 +507,7 @@ export default function PokerTable({
                     boardCardsRevealed={table?.board_cards_revealed || false}
                     onReveal={handleRevealBoard}
                     isRevealing={isRevealingBoard}
-                    size="lg"
+                    size={isEquityOpen ? 'md' : 'lg'}
                   />
                 </div>
 
@@ -702,7 +720,9 @@ export default function PokerTable({
         </main>
 
         {/* Right Side: Action & Betting Console Sidebar */}
-        <aside className="poker-table-actions w-full lg:w-96 xl:w-[410px] h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20">
+        <aside className={`poker-table-actions w-full h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20 transition-all duration-300 ${
+          isEquityOpen ? 'lg:w-80 xl:w-96 2xl:w-[410px]' : 'lg:w-96 xl:w-[410px]'
+        }`}>
           {/* On mobile this becomes the sticky summary while the action console scrolls. */}
           <div className="poker-mobile-sticky-info" aria-label="牌局重要信息">
             <div className="poker-mobile-sticky-info__header">
