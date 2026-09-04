@@ -998,9 +998,9 @@ class TestPokerCliController:
             room = create_resp.json()
             r_id = room["room_id"]
 
-            # 4. Connect WebSockets for both players
-            with client.websocket_connect(f"/ws/{r_id}/{t1_data['user']['user_id']}") as ws_t1, \
-                 client.websocket_connect(f"/ws/{r_id}/{t2_data['user']['user_id']}") as ws_t2:
+            # 4. Connect WebSockets for both players with tokens
+            with client.websocket_connect(f"/ws/{r_id}/{t1_data['user']['user_id']}?token={t1_data['token']}") as ws_t1, \
+                 client.websocket_connect(f"/ws/{r_id}/{t2_data['user']['user_id']}?token={t2_data['token']}") as ws_t2:
 
                 # Drain initial state messages
                 msg_t1 = ws_t1.receive_json()

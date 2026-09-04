@@ -10,6 +10,7 @@ from backend.app.engine.state_machine import ActionType
 from backend.app.models.room import RoomConfig
 from backend.app.services.room_manager import room_manager
 from backend.app.services.timeout_manager import timeout_manager
+from backend.app.services.user_manager import user_manager
 from backend.app.websocket.protocol import EventType
 from backend.app.websocket.router import trigger_room_after_action, websocket_endpoint
 
@@ -86,14 +87,17 @@ async def test_websocket_add_test_bot_is_host_only():
         ),
     )
     room_id = room.room_id
+    t1_token = user_manager.get_or_create_token("u_test1")
+    t2_token = user_manager.get_or_create_token("u_test2")
+
     guest_ws = FakeWebSocket([{"event": EventType.ADD_TEST_BOT.value}])
-    await websocket_endpoint(guest_ws, room_id, "u_test2")
+    await websocket_endpoint(guest_ws, room_id, "u_test2", token=t2_token)
     room = room_manager.get_room(room_id)
     assert room is not None
     assert not any(seat and seat.is_bot for seat in room.table.seats)
 
     host_ws = FakeWebSocket([{"event": EventType.ADD_TEST_BOT.value}])
-    await websocket_endpoint(host_ws, room_id, "u_test1")
+    await websocket_endpoint(host_ws, room_id, "u_test1", token=t1_token)
     sound_messages = [
         message for message in host_ws.messages if message["event"] == EventType.SOUND_EFFECT.value
     ]

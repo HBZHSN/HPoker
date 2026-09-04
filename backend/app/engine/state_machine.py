@@ -86,7 +86,7 @@ class PlayerSeat:
         self.last_action = None
         self.using_assistant = False
 
-    def to_dict(self, include_private_cards: bool = True) -> dict:
+    def to_dict(self, include_private_cards: bool = False) -> dict:
         return {
             "player_id": self.player_id,
             "name": self.name,

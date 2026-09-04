@@ -6,7 +6,7 @@ import json
 import logging
 import secrets
 import time
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from typing import Optional
 
 from backend.app.websocket.protocol import (
@@ -345,7 +345,19 @@ async def broadcast_lobby_online_users():
 
 
 @ws_router.websocket("/ws/lobby/{user_id}")
-async def lobby_websocket_endpoint(websocket: WebSocket, user_id: str):
+async def lobby_websocket_endpoint(websocket: WebSocket, user_id: str, token: Optional[str] = Query(None)):
+    user = user_manager.get_user(user_id)
+    if user is not None:
+        if not token or not user_manager.verify_user_token(user_id, token):
+            await websocket.accept()
+            await websocket.send_text(json.dumps(make_message(
+                EventType.ERROR_MESSAGE,
+                {"message": "认证失败：请提供有效的用户 Token"},
+                room_id="lobby",
+            )))
+            await websocket.close(code=4003, reason="Authentication failed")
+            return
+
     await ws_manager.connect(websocket, "lobby", user_id)
     await broadcast_lobby_online_users()
     try:
@@ -371,9 +383,9 @@ async def lobby_websocket_endpoint(websocket: WebSocket, user_id: str):
 
 
 @ws_router.websocket("/ws/{room_id}/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
+async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, token: Optional[str] = Query(None)):
     if room_id == "lobby":
-        await lobby_websocket_endpoint(websocket, user_id)
+        await lobby_websocket_endpoint(websocket, user_id, token=token)
         return
 
     room = room_manager.get_room(room_id)
@@ -382,6 +394,19 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
         await websocket.send_text(json.dumps(make_message(EventType.ERROR_MESSAGE, {"message": "Room not found"})))
         await websocket.close()
         return
+
+    user = user_manager.get_user(user_id)
+    # Security: If claiming a registered user account, token is strictly verified
+    if user is not None:
+        if not token or not user_manager.verify_user_token(user_id, token):
+            await websocket.accept()
+            await websocket.send_text(json.dumps(make_message(
+                EventType.ERROR_MESSAGE,
+                {"message": "认证失败：未提供有效 Token 或身份不匹配"},
+                room_id=room_id,
+            )))
+            await websocket.close(code=4003, reason="Authentication failed")
+            return
 
     if room.is_player_kicked(user_id):
         await websocket.accept()
@@ -393,12 +418,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
         await websocket.close(reason="Removed by room host")
         return
 
-    user = user_manager.get_user(user_id)
-    nickname = user.nickname if user else f"Player_{user_id[-4:]}"
-    avatar = user.avatar if user else "👤"
+    nickname = user.nickname if user else f"Spectator_{user_id[-4:]}"
+    avatar = user.avatar if user else "👀"
 
-    # Auto-seat player if room is active and player is not yet seated
-    if not room.is_ended:
+    # Auto-seat player only if room is active and user is an authenticated registered account
+    if not room.is_ended and user is not None:
         is_already_seated = any(s and s.player_id == user_id for s in room.table.seats)
         if not is_already_seated:
             for idx in range(room.config.max_seats):
@@ -483,7 +507,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
 
             elif event == EventType.SIT_DOWN:
                 seat_index = payload.get("seat_index")
-                if seat_index is not None:
+                if seat_index is not None and user is not None:
                     ok = room.sit_down_player(user_id, nickname, seat_index, avatar=avatar)
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "sit")
