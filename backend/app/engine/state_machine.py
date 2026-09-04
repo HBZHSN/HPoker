@@ -62,6 +62,7 @@ class PlayerSeat:
     shown_cards: List[Card] = field(default_factory=list)
     last_action: Optional[str] = None
     time_bank_cards: int = 3
+    hands_played: int = 0
     using_assistant: bool = False
 
     def add_time_bank_card(self, amount: int = 1, max_cards: int = 5) -> bool:
@@ -107,6 +108,7 @@ class PlayerSeat:
             "shown_cards": [c.to_dict() for c in self.shown_cards],
             "last_action": self.last_action,
             "time_bank_cards": self.time_bank_cards,
+            "hands_played": self.hands_played,
             "using_assistant": self.using_assistant,
         }
 
@@ -153,12 +155,18 @@ class TableStateMachine:
         big_blind: int = 2,
         action_timeout: int = 15,
         assistant_win_ratio: float = 0.70,
+        max_time_cards: int = 5,
+        hands_per_time_card: int = 15,
     ):
         self.max_seats = max_seats
         self.small_blind = small_blind
         self.big_blind = big_blind
         self.action_timeout = action_timeout
         self.assistant_win_ratio = assistant_win_ratio
+        self.max_time_cards = max_time_cards
+        self.hands_per_time_card = hands_per_time_card
+        self.time_card_rewarded_players: List[str] = []
+        self._last_settled_hand_number: int = 0
 
         self.seats: List[Optional[PlayerSeat]] = [None] * max_seats
         self.deck = Deck()
@@ -218,6 +226,8 @@ class TableStateMachine:
         avatar: str = "👤",
         is_bot: bool = False,
         is_test: bool = False,
+        time_bank_cards: int = 3,
+        hands_played: int = 0,
     ) -> bool:
         if not (0 <= seat_index < self.max_seats):
             return False
@@ -235,7 +245,8 @@ class TableStateMachine:
             chips=chips,
             total_buyin_chips=total_buyin or chips,
             rebuy_count=1,
-            time_bank_cards=3,
+            time_bank_cards=time_bank_cards,
+            hands_played=hands_played,
             avatar=avatar or "👤",
             is_bot=is_bot,
             is_test=is_test,
@@ -258,13 +269,30 @@ class TableStateMachine:
             return True
         return False
 
-    def add_periodic_time_cards(self, max_cards: int = 5) -> int:
+    def add_periodic_time_cards(self, max_cards: Optional[int] = None) -> int:
         """Add 1 time bank card to all active seated players up to max_cards."""
+        if max_cards is None:
+            max_cards = self.max_time_cards
         count = 0
         for player in self.active_seated_players:
             if player.add_time_bank_card(1, max_cards=max_cards):
                 count += 1
         return count
+
+    def _finalize_hand_completion(self) -> List[str]:
+        """Reward time cards to players who played in this hand upon reaching hands threshold."""
+        if self._last_settled_hand_number == self.hand_number:
+            return list(self.time_card_rewarded_players)
+        self._last_settled_hand_number = self.hand_number
+        self.time_card_rewarded_players.clear()
+        for p in self.active_seated_players:
+            if not p.hole_cards:
+                continue
+            p.hands_played += 1
+            if self.hands_per_time_card > 0 and p.hands_played % self.hands_per_time_card == 0:
+                if p.add_time_bank_card(1, max_cards=self.max_time_cards):
+                    self.time_card_rewarded_players.append(p.player_id)
+        return list(self.time_card_rewarded_players)
 
     def stand_up(self, seat_index: int) -> Optional[PlayerSeat]:
         """Remove a player from the table after folding any live hand.
@@ -403,6 +431,7 @@ class TableStateMachine:
         self.original_payouts.clear()
         self.last_action_history.clear()
         self.ready_player_ids.clear()
+        self.time_card_rewarded_players.clear()
         self.pot_manager.reset()
         self.deck.reset()
         self.is_using_time_bank = False
@@ -984,6 +1013,7 @@ class TableStateMachine:
         self.street = Street.HAND_END
         self.is_all_in_runout = False
         self.rit_status = "COMPLETED" if self.rit_enabled else None
+        self._finalize_hand_completion()
 
     def _enter_showdown(self) -> None:
         self.enter_showdown()
@@ -1121,6 +1151,7 @@ class TableStateMachine:
                         pot_name=pot.name,
                         hand_description="其他玩家弃牌获胜"
                     ))
+        self._finalize_hand_completion()
 
     def _prepare_final_board_cards(self) -> None:
         """Reserve the remaining board cards for an ended uncontested hand.
@@ -1288,6 +1319,8 @@ class TableStateMachine:
                     "shown_cards": [c.to_dict() for c in p.shown_cards],
                     "is_ready": p.player_id in self.ready_player_ids,
                     "using_assistant": p.using_assistant,
+                    "hands_played": p.hands_played,
+                    "time_bank_cards": p.time_bank_cards,
                 })
 
         return {
@@ -1324,6 +1357,8 @@ class TableStateMachine:
             "small_blind": self.small_blind,
             "big_blind": self.big_blind,
             "assistant_win_ratio": self.assistant_win_ratio,
+            "hands_per_time_card": self.hands_per_time_card,
+            "time_card_rewarded_players": list(self.time_card_rewarded_players),
             "current_round_highest_bet": self.current_round_highest_bet,
             "total_pot": self.pot_manager.total_pot_amount,
             "pots": [p.to_dict() for p in pots],
