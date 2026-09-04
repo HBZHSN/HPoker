@@ -112,15 +112,11 @@ def test_bot_action_delay_range():
     from backend.app.websocket.router import get_bot_action_delay
     for _ in range(50):
         delay = get_bot_action_delay()
-        assert 3.0 <= delay <= 5.0
+        assert delay == 0.0
 
 
 @pytest.mark.asyncio
-async def test_bot_automatically_acts_when_its_turn(monkeypatch):
-    import backend.app.websocket.router as router_mod
-    monkeypatch.setattr(router_mod, "BOT_ACTION_DELAY_MIN", 0.05)
-    monkeypatch.setattr(router_mod, "BOT_ACTION_DELAY_MAX", 0.1)
-
+async def test_bot_automatically_acts_when_its_turn():
     room = room_manager.create_room(
         host_player_id="u_test1",
         config=RoomConfig(
@@ -145,7 +141,8 @@ async def test_bot_automatically_acts_when_its_turn(monkeypatch):
     assert room.table.current_turn_seat == 1
 
     await trigger_room_after_action(room_id)
-    await asyncio.sleep(0.2)
+    # Bot acts immediately as soon as equity calculation completes in worker thread
+    await asyncio.sleep(1.5)
 
     bot_seat = next(
         seat for seat in room.table.seats if seat and seat.player_id == bot_id

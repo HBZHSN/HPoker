@@ -228,6 +228,7 @@ def test_showdown_hand_results_assistant_impact():
 
     # Force board and hole cards
     table.board_cards = cards("2c 3d 4s")
+    table.deck.cards = [Card.from_str("7s"), Card.from_str("8s")]
     seat_p1.hole_cards = cards("Ah Ad")  # Pair of Aces
     seat_p2.hole_cards = cards("Kh Kd")  # Pair of Kings
 
