@@ -1,7 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import CardView from './CardView';
 import CommunityBoard from './CommunityBoard';
 import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
+import {
+  DEFAULT_AUTO_READY_SECONDS,
+  getInitialAutoReady,
+  saveAutoReadyPreference,
+  formatAutoReadyCheckboxLabel,
+  formatReadyButtonLabel,
+} from '../utils/autoReady';
 import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers, LogOut } from 'lucide-react';
 
 export default function HandResultModal({
@@ -32,11 +39,66 @@ export default function HandResultModal({
 }) {
   if (!isOpen) return null;
 
-  const isSelfReady = selfSeat && readyPlayerIds?.includes(selfSeat.player_id);
-  const isBusted = selfSeat && selfSeat.chips === 0;
+  const [autoReady, setAutoReady] = useState(getInitialAutoReady);
+  const [countdown, setCountdown] = useState(DEFAULT_AUTO_READY_SECONDS);
+  const hasAutoReadiedRef = useRef(false);
+  const onToggleReadyRef = useRef(onToggleReady);
+
+  useEffect(() => {
+    onToggleReadyRef.current = onToggleReady;
+  });
+
+  const isSelfReady = Boolean(selfSeat && readyPlayerIds?.includes(selfSeat.player_id));
+  const isBusted = Boolean(selfSeat && selfSeat.chips === 0);
   const eligiblePlayers = (handResults || []).filter((r) => !r.is_folded || (r.total_bet || 0) > 0);
   const readyCount = eligiblePlayers.filter((r) => readyPlayerIds?.includes(r.player_id)).length;
   const totalEligible = eligiblePlayers.length;
+
+  // Reset countdown & trigger flag on new hand or when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      hasAutoReadiedRef.current = false;
+      setCountdown(DEFAULT_AUTO_READY_SECONDS);
+    }
+  }, [isOpen, handNumber]);
+
+  // 5-second countdown timer for auto-ready
+  useEffect(() => {
+    if (!isOpen || !autoReady || isSelfReady || isBusted || !selfSeat) {
+      return;
+    }
+
+    if (countdown <= 0) {
+      if (!hasAutoReadiedRef.current) {
+        hasAutoReadiedRef.current = true;
+        onToggleReadyRef.current?.();
+      }
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isOpen, autoReady, isSelfReady, isBusted, Boolean(selfSeat), countdown]);
+
+  const handleAutoReadyToggle = (e) => {
+    const checked = e.target.checked;
+    setAutoReady(checked);
+    saveAutoReadyPreference(checked);
+    if (checked && !isSelfReady) {
+      hasAutoReadiedRef.current = false;
+      setCountdown(DEFAULT_AUTO_READY_SECONDS);
+    }
+  };
+
+  const handleManualToggleReady = () => {
+    hasAutoReadiedRef.current = true;
+    if (onToggleReady) {
+      onToggleReady();
+    }
+  };
 
   const handleToggleCard = (idx) => {
     if (onShowCard) {
@@ -103,16 +165,31 @@ export default function HandResultModal({
               compact
             />
 
-            {/* Close Button */}
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
-                title="返回牌桌"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Leave Room Button */}
+              {onLeaveTable && (
+                <button
+                  onClick={onLeaveTable}
+                  disabled={isLeaving}
+                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl bg-slate-800/90 hover:bg-red-950/60 disabled:opacity-50 disabled:cursor-wait text-slate-200 hover:text-red-300 font-bold text-xs sm:text-sm border border-slate-700 hover:border-red-500/50 transition active:scale-95 cursor-pointer flex items-center gap-1.5 shadow"
+                  title="离开房间"
+                >
+                  <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                  <span>{isLeaving ? '离开中…' : '离开房间'}</span>
+                </button>
+              )}
+
+              {/* Close Button */}
+              {onClose && (
+                <button
+                  onClick={onClose}
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer flex-shrink-0 border border-slate-700/60"
+                  title="返回牌桌"
+                >
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -393,32 +470,51 @@ export default function HandResultModal({
           )}
         </div>
 
-        {/* Footer: Confirm Ready / Start Hand Controls */}
+        {/* Footer: Bottom-Left (Host Start Hand) & Bottom-Right (Auto-ready Checkbox + Ready / Rebuy Button) */}
         <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-slate-800 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            {onLeaveTable && (
+          {/* Bottom-Left: Host Start Next Hand Button */}
+          <div className="flex items-center justify-start w-full sm:w-auto">
+            {isHost && onStartNextHand && (
               <button
-                onClick={onLeaveTable}
-                disabled={isLeaving}
-                className="flex-1 sm:flex-none px-5 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait text-slate-200 font-black text-sm rounded-xl border border-slate-700 hover:border-amber-500/60 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                onClick={onStartNextHand}
+                className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <LogOut className="w-4 h-4 text-amber-400" />
-                {isLeaving ? '离开中…' : '离开牌桌'}
+                <Play className="w-4 h-4 fill-slate-950" />
+                开始下一局
               </button>
             )}
+          </div>
 
+          {/* Bottom-Right: Auto-ready Checkbox + Ready / Rebuy Button */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center justify-end w-full sm:w-auto gap-3 sm:gap-4 ml-auto">
+            {/* Auto-ready Checkbox */}
+            {selfSeat && !isBusted && (
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 hover:text-white transition py-1">
+                <input
+                  type="checkbox"
+                  checked={autoReady}
+                  onChange={handleAutoReadyToggle}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-400 focus:ring-offset-slate-900 cursor-pointer accent-amber-500"
+                />
+                <span>
+                  {formatAutoReadyCheckboxLabel({ autoReady, isSelfReady, countdown })}
+                </span>
+              </label>
+            )}
+
+            {/* Rebuy (if busted) or Ready Button */}
             {isBusted && onRebuy ? (
               <button
                 onClick={onRebuy}
-                className="flex-1 sm:flex-none px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 animate-pulse"
+                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 animate-pulse"
               >
                 <RefreshCw className="w-4 h-4" />
                 补码 (${buyinChips})
               </button>
             ) : selfSeat ? (
               <button
-                onClick={onToggleReady}
-                className={`flex-1 sm:flex-none px-6 py-3 rounded-xl font-black text-sm transition shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                onClick={handleManualToggleReady}
+                className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black text-sm transition shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
                   isSelfReady
                     ? 'bg-slate-800 text-emerald-300 border border-emerald-500/50'
                     : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-glow-cyan'
@@ -432,21 +528,11 @@ export default function HandResultModal({
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    准备下一局
+                    {formatReadyButtonLabel({ isSelfReady, autoReady, countdown })}
                   </>
                 )}
               </button>
             ) : null}
-
-            {isHost && onStartNextHand && (
-              <button
-                onClick={onStartNextHand}
-                className="flex-1 sm:flex-none px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Play className="w-4 h-4 fill-slate-950" />
-                开局
-              </button>
-            )}
           </div>
         </div>
       </div>
