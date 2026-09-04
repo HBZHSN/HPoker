@@ -473,7 +473,7 @@ export default function HandResultModal({
         {/* Footer: Bottom-Left (Host Start Hand) & Bottom-Right (Auto-ready Checkbox + Ready / Rebuy Button) */}
         <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-slate-800 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Bottom-Left: Host Start Next Hand Button */}
-          <div className="flex items-center justify-start w-full sm:w-auto">
+          <div className="flex items-center justify-start w-full sm:w-auto pl-28 sm:pl-0">
             {isHost && onStartNextHand && (
               <button
                 onClick={onStartNextHand}

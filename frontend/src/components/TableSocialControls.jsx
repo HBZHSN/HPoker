@@ -122,7 +122,7 @@ export default function TableSocialControls({
   };
 
   return (
-    <div className="poker-social-controls absolute bottom-4 left-4 z-50 flex items-end gap-2">
+    <div className="poker-social-controls fixed bottom-4 left-4 z-[60] flex items-end gap-2">
       {chatOpen && (
         <section
           className="poker-chat-window absolute bottom-14 left-0 w-[min(340px,calc(100vw-32px))] overflow-hidden rounded-2xl border border-amber-500/35 bg-slate-950/95 shadow-2xl backdrop-blur-xl"
