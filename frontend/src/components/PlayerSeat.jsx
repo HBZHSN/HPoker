@@ -74,55 +74,55 @@ export default function PlayerSeat({
   const isAllIn = seatData.is_all_in;
 
   return (
-    <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
-      {/* Anchor Container for Avatar Card & Floating Badges */}
-      <div className="relative w-full h-full flex flex-col items-center justify-center">
-        {/* === SOCIAL REACTION / CHAT BUBBLE (Displayed beside avatar, not blocking top status) === */}
-        {socialBubble?.type === 'emoji' ? (
+    <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none`}>
+      {/* === SOCIAL REACTION / CHAT BUBBLE (Independent of folded opacity) === */}
+      {socialBubble?.type === 'emoji' ? (
+        <div
+          key={socialBubble.activity_id}
+          className={`poker-seat-bubble-anchor absolute top-1/2 -translate-y-1/2 z-40 pointer-events-none ${
+            bubblePlacement === 'left'
+              ? 'right-[calc(100%+8px)] md:right-[calc(100%+14px)] flex justify-end'
+              : 'left-[calc(100%+8px)] md:left-[calc(100%+14px)] flex justify-start'
+          }`}
+        >
           <div
-            key={socialBubble.activity_id}
-            className={`poker-seat-bubble-anchor absolute top-1/2 -translate-y-1/2 z-40 pointer-events-none ${
-              bubblePlacement === 'left'
-                ? 'right-[calc(100%+8px)] md:right-[calc(100%+12px)] flex justify-end'
-                : 'left-[calc(100%+8px)] md:left-[calc(100%+12px)] flex justify-start'
-            }`}
+            className="poker-seat-side-emoji text-3xl md:text-4xl lg:text-5xl select-none filter drop-shadow-[0_4px_10px_rgba(0,0,0,0.85)]"
+            role="status"
+            aria-label={`${seatData.name} 发送了表情 ${socialBubble.emoji}`}
           >
-            <div
-              className="poker-seat-side-emoji text-3xl md:text-4xl lg:text-5xl select-none filter drop-shadow-[0_4px_10px_rgba(0,0,0,0.85)]"
-              role="status"
-              aria-label={`${seatData.name} 发送了表情 ${socialBubble.emoji}`}
-            >
-              {socialBubble.emoji}
-            </div>
+            {socialBubble.emoji}
           </div>
-        ) : socialBubble?.type === 'chat' ? (
+        </div>
+      ) : socialBubble?.type === 'chat' ? (
+        <div
+          key={socialBubble.activity_id}
+          className={`poker-seat-bubble-anchor absolute top-1/2 -translate-y-1/2 z-40 pointer-events-none flex ${
+            bubblePlacement === 'left'
+              ? 'right-[calc(100%+8px)] md:right-[calc(100%+14px)] justify-end'
+              : 'left-[calc(100%+8px)] md:left-[calc(100%+14px)] justify-start'
+          }`}
+        >
           <div
-            key={socialBubble.activity_id}
-            className={`poker-seat-bubble-anchor absolute top-1/2 -translate-y-1/2 z-40 pointer-events-none flex ${
-              bubblePlacement === 'left'
-                ? 'right-[calc(100%+8px)] md:right-[calc(100%+12px)] justify-end'
-                : 'left-[calc(100%+8px)] md:left-[calc(100%+12px)] justify-start'
+            className={`poker-seat-side-chat relative w-max min-w-[44px] md:min-w-[56px] max-w-[140px] sm:max-w-[190px] md:max-w-[280px] lg:max-w-[340px] xl:max-w-[380px] break-words rounded-2xl border border-amber-400/80 md:border-amber-400/90 bg-slate-950/95 px-2.5 py-1.5 md:px-4 md:py-2.5 lg:px-4.5 lg:py-3 text-xs md:text-sm lg:text-[15px] xl:text-base font-bold leading-relaxed text-slate-100 shadow-[0_8px_25px_rgba(0,0,0,0.85)] md:shadow-[0_12px_32px_rgba(0,0,0,0.9)] backdrop-blur-md ${
+              bubblePlacement === 'left' ? 'rounded-tr-sm' : 'rounded-tl-sm'
             }`}
+            role="status"
+            aria-label={`${seatData.name} 说：${socialBubble.message}`}
           >
-            <div
-              className={`poker-seat-side-chat relative w-max max-w-[130px] sm:max-w-[170px] md:max-w-[210px] break-words rounded-2xl border border-amber-400/80 bg-slate-950/95 px-2.5 py-1.5 md:px-3 md:py-2 text-[11px] md:text-xs font-bold leading-relaxed text-slate-100 shadow-[0_8px_25px_rgba(0,0,0,0.85)] backdrop-blur-md ${
-                bubblePlacement === 'left' ? 'rounded-tr-sm' : 'rounded-tl-sm'
+            <span
+              className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 border-y-[5px] md:border-y-[7px] border-y-transparent ${
+                bubblePlacement === 'left'
+                  ? '-right-[5px] md:-right-[7px] border-l-[5px] md:border-l-[7px] border-l-amber-400/80 md:border-l-amber-400/90'
+                  : '-left-[5px] md:-left-[7px] border-r-[5px] md:border-r-[7px] border-r-amber-400/80 md:border-r-amber-400/90'
               }`}
-              role="status"
-              aria-label={`${seatData.name} 说：${socialBubble.message}`}
-            >
-              <span
-                className={`absolute top-1/2 -translate-y-1/2 w-0 h-0 border-y-[5px] border-y-transparent ${
-                  bubblePlacement === 'left'
-                    ? '-right-[5px] border-l-[5px] border-l-amber-400/80'
-                    : '-left-[5px] border-r-[5px] border-r-amber-400/80'
-                }`}
-              />
-              {socialBubble.message}
-            </div>
+            />
+            {socialBubble.message}
           </div>
-        ) : null}
+        </div>
+      ) : null}
 
+      {/* Anchor Container for Avatar Card & Floating Badges & Cards (Dimmed & grayscale when folded) */}
+      <div className={`poker-player-seat-body relative w-full h-full flex flex-col items-center justify-center transition-all duration-300 ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {isCurrentTurn ? (
           isUsingTimeBank ? (
@@ -319,87 +319,86 @@ export default function PlayerSeat({
             </div>
           )}
         </div>
-      </div>
 
-      {/* Cards Display - displayed directly below the avatar */}
-      {(() => {
-        const shownCards = sortCardsLowToHigh(seatData.shown_cards || []);
-        const holeCards = sortCardsLowToHigh(seatData.hole_cards || []);
+        {/* Cards Display - displayed directly below the avatar */}
+        {(() => {
+          const shownCards = sortCardsLowToHigh(seatData.shown_cards || []);
+          const holeCards = sortCardsLowToHigh(seatData.hole_cards || []);
 
-        if (shownCards.length > 0) {
-          if (isSelf && holeCards.length > 0) {
-            // For self: show all hole cards, with revealed cards highlighted
-            return (
-              <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3.5 z-10">
-                {holeCards.map((c, i) => {
-                  const isShown = shownCards.some(
-                    (sc) =>
-                      (sc.rank === c.rank && sc.suit === c.suit) ||
-                      (sc.notation && sc.notation === c.notation)
-                  );
-                  return (
-                    <div key={i} className="relative">
-                      <CardView
-                        card={c}
-                        size="md"
-                        className={`shadow-lg transition-all ${
-                          isShown ? 'ring-2 ring-amber-400 shadow-glow-gold' : 'opacity-50'
-                        }`}
-                      />
-                      <div
-                        className={`absolute -bottom-1.5 inset-x-0 py-0.2 text-[8px] font-black text-center rounded ${
-                          isShown ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {isShown ? '已亮' : '私密'}
+          if (shownCards.length > 0) {
+            if (isSelf && holeCards.length > 0) {
+              // For self: show all hole cards, with revealed cards highlighted
+              return (
+                <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3.5 z-10">
+                  {holeCards.map((c, i) => {
+                    const isShown = shownCards.some(
+                      (sc) =>
+                        (sc.rank === c.rank && sc.suit === c.suit) ||
+                        (sc.notation && sc.notation === c.notation)
+                    );
+                    return (
+                      <div key={i} className="relative">
+                        <CardView
+                          card={c}
+                          size="md"
+                          className={`shadow-lg transition-all ${
+                            isShown ? 'ring-2 ring-amber-400 shadow-glow-gold' : 'opacity-50'
+                          }`}
+                        />
+                        <div
+                          className={`absolute -bottom-1.5 inset-x-0 py-0.2 text-[8px] font-black text-center rounded ${
+                            isShown ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {isShown ? '已亮' : '私密'}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          } else {
-            // For opponents: show ONLY revealed cards (+ 1 card back if only 1 of 2 was revealed)
+                    );
+                  })}
+                </div>
+              );
+            } else {
+              // For opponents: show ONLY revealed cards (+ 1 card back if only 1 of 2 was revealed)
+              return (
+                <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3 z-10">
+                  {shownCards.map((c, i) => (
+                    <CardView key={i} card={c} size="sm" className="shadow-xl ring-2 ring-amber-400" />
+                  ))}
+                  {shownCards.length === 1 && seatData.has_cards && (
+                    <CardView isBack size="sm" className="shadow-md rotate-6" />
+                  )}
+                </div>
+              );
+            }
+          }
+
+          if (holeCards.length > 0) {
             return (
-              <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3 z-10">
-                {shownCards.map((c, i) => (
-                  <CardView key={i} card={c} size="sm" className="shadow-xl ring-2 ring-amber-400" />
+              <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
+                {holeCards.map((c, i) => (
+                  <CardView
+                    key={i}
+                    card={c}
+                    size={isSelf ? 'md' : 'sm'}
+                    className="shadow-lg"
+                  />
                 ))}
-                {shownCards.length === 1 && seatData.has_cards && (
-                  <CardView isBack size="sm" className="shadow-md rotate-6" />
-                )}
               </div>
             );
           }
-        }
 
-        if (holeCards.length > 0) {
-          return (
-            <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
-              {holeCards.map((c, i) => (
-                <CardView
-                  key={i}
-                  card={c}
-                  size={isSelf ? 'md' : 'sm'}
-                  className="shadow-lg"
-                />
-              ))}
-            </div>
-          );
-        }
+          if (seatData.has_cards && !isFolded) {
+            return (
+              <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
+                <CardView isBack size={isSelf ? 'md' : 'sm'} className="-rotate-6 shadow-md" />
+                <CardView isBack size={isSelf ? 'md' : 'sm'} className="rotate-6 shadow-md" />
+              </div>
+            );
+          }
 
-        if (seatData.has_cards && !isFolded) {
-          return (
-            <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
-              <CardView isBack size={isSelf ? 'md' : 'sm'} className="-rotate-6 shadow-md" />
-              <CardView isBack size={isSelf ? 'md' : 'sm'} className="rotate-6 shadow-md" />
-            </div>
-          );
-        }
-
-        return null;
-      })()}
-
+          return null;
+        })()}
+      </div>
     </div>
   );
 }

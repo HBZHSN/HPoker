@@ -641,7 +641,7 @@ export default function PokerTable({
                   <div
                     key={screenIdx}
                     className={`poker-table-seat-anchor absolute -translate-x-1/2 -translate-y-1/2 ${
-                      socialBubble ? 'z-35' : 'z-20'
+                      socialBubble ? 'z-40' : 'z-20'
                     }`}
                     data-screen-position={screenIdx}
                     style={{ top: pos.top, left: pos.left }}
