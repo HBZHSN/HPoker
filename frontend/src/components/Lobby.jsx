@@ -120,7 +120,6 @@ export default function Lobby({
             <button
               onClick={onOpenProfile}
               className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs font-bold rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer"
-              title="个人设置"
             >
               个人设置
             </button>
@@ -130,7 +129,6 @@ export default function Lobby({
               <button
                 onClick={onOpenAdmin}
                 className="px-2.5 py-1.5 bg-amber-950 hover:bg-amber-900 text-amber-300 text-xs font-bold rounded-xl border border-amber-500/40 transition active:scale-95 cursor-pointer flex items-center gap-1 shadow"
-                title="账号管理"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 账号管理
@@ -141,7 +139,6 @@ export default function Lobby({
             <button
               onClick={onLogout}
               className="px-2.5 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 text-xs font-bold rounded-xl border border-red-500/40 transition active:scale-95 cursor-pointer"
-              title="退出登录"
             >
               退出
             </button>
@@ -231,13 +228,13 @@ export default function Lobby({
                           <span className="text-slate-600">·</span>
                           <span className="flex items-center gap-1 text-slate-400">
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            思考: {r.action_timeout}s
+                            限时: {r.action_timeout}s
                           </span>
                           {r.assistant_win_ratio !== undefined && (
                             <>
                               <span className="text-slate-600">·</span>
                               <span className="flex items-center gap-1 text-purple-300 font-medium">
-                                辅助净盈利: {Math.round(r.assistant_win_ratio * 100)}%
+                                辅助折算: {Math.round(r.assistant_win_ratio * 100)}%
                               </span>
                             </>
                           )}
@@ -299,7 +296,7 @@ export default function Lobby({
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                在线 ({onlineCount})
+                在线
               </button>
               <button
                 onClick={() => setUserFilter('all')}
@@ -309,7 +306,7 @@ export default function Lobby({
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                全部 ({visibleUsers.length})
+                全部
               </button>
             </div>
           </div>
@@ -342,7 +339,6 @@ export default function Lobby({
                               ? 'bg-emerald-400 shadow-sm shadow-emerald-400/80 ring-1 ring-emerald-300 animate-pulse'
                               : 'bg-slate-600'
                           }`}
-                          title={u.is_online ? '在线 (WebSocket长连接活跃)' : '离线'}
                         />
                       </div>
 
@@ -376,7 +372,7 @@ export default function Lobby({
                               </span>
                             ) : (
                               <span className="text-emerald-400 font-medium">
-                                大厅空闲中
+                                大厅
                               </span>
                             )
                           ) : (
@@ -426,7 +422,7 @@ export default function Lobby({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">买入筹码数</label>
+                  <label className="text-slate-400 font-semibold block mb-1">买入筹码</label>
                   <input
                     type="number"
                     value={buyinChips}
@@ -437,7 +433,7 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">对应现金 (¥)</label>
+                  <label className="text-slate-400 font-semibold block mb-1">现金 (¥)</label>
                   <input
                     type="number"
                     value={cashValue}
@@ -451,7 +447,7 @@ export default function Lobby({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">小盲 (SB)</label>
+                  <label className="text-slate-400 font-semibold block mb-1">小盲 SB</label>
                   <input
                     type="number"
                     value={smallBlind}
@@ -462,17 +458,16 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">大盲 (BB)</label>
+                  <label className="text-slate-400 font-semibold block mb-1">大盲 BB</label>
                   <div className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-amber-300 font-black">
                     {Number(smallBlind) > 0 ? Number(smallBlind) * 2 : '—'}
-                    <span className="ml-1 text-[10px] text-slate-500 font-medium">SB × 2</span>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">思考超时 (秒)</label>
+                  <label className="text-slate-400 font-semibold block mb-1">行动限时 (秒)</label>
                   <input
                     type="number"
                     value={actionTimeout}
@@ -484,7 +479,7 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">房间人数</label>
+                  <label className="text-slate-400 font-semibold block mb-1">人数</label>
                   <select
                     value={maxSeats}
                     onChange={(e) => setMaxSeats(Number(e.target.value))}
@@ -499,8 +494,7 @@ export default function Lobby({
 
               <div>
                 <label className="text-slate-400 font-semibold block mb-1">
-                  辅助净盈利保留比例 (%)
-                  <span className="text-slate-500 font-normal ml-1">(使用辅助获胜时本金全额返还，仅对净盈利按此比例分配)</span>
+                  辅助折算 (%)
                 </label>
                 <div className="flex items-center gap-3">
                   <input
@@ -523,7 +517,7 @@ export default function Lobby({
                   type="submit"
                   className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl transition"
                 >
-                  确认创建
+                  创建
                 </button>
                 <button
                   type="button"

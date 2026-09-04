@@ -135,7 +135,6 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-300">登录账号</label>
-              <span className="text-[10px] text-slate-500 font-mono">管理员分配，不可修改</span>
             </div>
             <input
               type="text"
@@ -152,7 +151,6 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
               type="text"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              placeholder="在牌桌和结算单中显示的名称"
               className="w-full bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none"
             />
           </div>
@@ -164,7 +162,6 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
                 <KeyRound className="w-3.5 h-3.5" />
                 修改密码
               </span>
-              <span className="text-[10px] text-slate-500 font-normal">不修改请留空</span>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -173,7 +170,6 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
                 type="password"
                 value={oldPassword}
                 onChange={(e) => setOldPassword(e.target.value)}
-                placeholder="输入当前密码"
                 className="w-full bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 text-slate-100 text-xs focus:border-amber-400 focus:outline-none"
               />
             </div>
@@ -185,7 +181,6 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="至少3位"
                   className="w-full bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 text-slate-100 text-xs focus:border-amber-400 focus:outline-none"
                 />
               </div>
@@ -196,7 +191,6 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="再次输入新密码"
                   className="w-full bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700 text-slate-100 text-xs focus:border-amber-400 focus:outline-none"
                 />
               </div>

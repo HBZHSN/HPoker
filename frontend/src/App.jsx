@@ -429,7 +429,6 @@ export default function App() {
             <div className="text-sm font-black text-amber-300">
               {connectionStatus === 'retrying' ? '正在重新连接牌桌' : '正在恢复上次牌桌'}
             </div>
-            <div className="mt-1 text-xs text-slate-500 font-mono">{activeRoomId}</div>
           </div>
           <button
             onClick={handleLeaveRoom}
