@@ -388,6 +388,55 @@ def test_rebuy_only_allowed_when_chips_zero_ws():
         assert state_msg["payload"]["table"]["seats"][0]["rebuy_count"] == 2
 
 
+def test_repeated_ws_room_entry_keeps_rebuy_count_at_one():
+    client = TestClient(app)
+    resp = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Rebuy Count Room",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 10,
+        "action_timeout": 15,
+        "max_seats": 6,
+    })
+    room_id = resp.json()["room_id"]
+
+    with client.websocket_connect(f"/ws/{room_id}/u_test1") as ws_host:
+        _ = ws_host.receive_json()
+
+        # Entry 1: User 2 connects to the room
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws:
+            _ = ws_host.receive_json()
+            msg = ws.receive_json()
+            seat = next(s for s in msg["payload"]["table"]["seats"] if s and s["player_id"] == "u_test2")
+            assert seat["rebuy_count"] == 1
+
+            # User 2 leaves the table (STAND_UP)
+            ws.send_json({"event": EventType.STAND_UP.value})
+            _ = ws_host.receive_json()
+            leave_msg = ws.receive_json()
+            assert not any(s and s["player_id"] == "u_test2" for s in leave_msg["payload"]["table"]["seats"])
+
+        # Entry 2: User 2 reconnects / re-enters the room
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws2:
+            _ = ws_host.receive_json()
+            msg2 = ws2.receive_json()
+            seat2 = next(s for s in msg2["payload"]["table"]["seats"] if s and s["player_id"] == "u_test2")
+            assert seat2["rebuy_count"] == 1
+
+            # User 2 leaves again
+            ws2.send_json({"event": EventType.STAND_UP.value})
+            _ = ws_host.receive_json()
+            _ = ws2.receive_json()
+
+        # Entry 3: User 2 re-enters again
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as ws3:
+            _ = ws_host.receive_json()
+            msg3 = ws3.receive_json()
+            seat3 = next(s for s in msg3["payload"]["table"]["seats"] if s and s["player_id"] == "u_test2")
+            assert seat3["rebuy_count"] == 1
+
+
 def test_auto_seating_when_room_full():
     client = TestClient(app)
 

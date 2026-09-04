@@ -523,8 +523,6 @@ class Room:
             )
             history = self.historical_players.get(player_id)
             if seat and history:
-                seat.rebuy_count = int(history["rebuy_count"])
-                seat.total_buyin_chips = int(history["total_buyin_chips"])
                 if self.money_mode == "real" and not self.has_active_test_players:
                     self._record_wallet_change(seat, -buyin, "buyin")
             self.sync_money_mode()

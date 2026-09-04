@@ -269,6 +269,41 @@ def test_player_can_buy_in_again_without_losing_previous_cash_out():
     assert records["host1"].final_chips == 140
 
 
+def test_repeated_room_entry_does_not_increment_seat_rebuy_count():
+    room = Room(
+        host_player_id="host1",
+        config=RoomConfig(buyin_chips=1000, cash_value=100, small_blind=10),
+    )
+    # First entry / sit down
+    assert room.sit_down_player("host1", "Alice", seat_index=0)
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    assert room.table.seats[1].rebuy_count == 1
+    assert room.table.seats[1].total_buyin_chips == 1000
+
+    # Bob leaves table
+    assert room.leave_player("user2") is not None
+
+    # Bob re-enters table a second time
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    assert room.table.seats[1].rebuy_count == 1
+    assert room.table.seats[1].total_buyin_chips == 1000
+    assert room.table.get_table_state()["seats"][1]["rebuy_count"] == 1
+
+    # Bob leaves and re-enters a third time
+    assert room.leave_player("user2") is not None
+    assert room.sit_down_player("user2", "Bob", seat_index=1)
+    assert room.table.seats[1].rebuy_count == 1
+    assert room.table.seats[1].total_buyin_chips == 1000
+    assert room.table.get_table_state()["seats"][1]["rebuy_count"] == 1
+
+    # Bob rebuys at table when chips reach 0
+    room.table.seats[1].chips = 0
+    assert room.rebuy_player("user2") is True
+    assert room.table.seats[1].rebuy_count == 2
+    assert room.table.seats[1].total_buyin_chips == 2000
+    assert room.table.get_table_state()["seats"][1]["rebuy_count"] == 2
+
+
 def test_all_in_player_cannot_leave_before_hand_end():
     room = Room(
         host_player_id="host1",
