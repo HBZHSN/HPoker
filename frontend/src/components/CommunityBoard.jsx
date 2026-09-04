@@ -1,5 +1,6 @@
 import React from 'react';
 import CardView from './CardView';
+import { hasSecondCommunityBoard } from '../utils/communityBoard';
 
 const BOARD_SIZE = 5;
 
@@ -88,11 +89,11 @@ export default function CommunityBoard({
   compact = false,
 }) {
   const isHandEnd = street === 'HAND_END';
-  const hasSecondBoard =
-    ritEnabled ||
-    street === 'RIT_DECISION' ||
-    boardCards2.length > 0 ||
-    boardCards2Full.length > 0;
+  const hasSecondBoard = hasSecondCommunityBoard({
+    ritEnabled,
+    boardCards2,
+    boardCards2Full,
+  });
   const sharedCount = Math.max(0, Math.min(BOARD_SIZE, allInInitialBoardCount || 0));
 
   const firstBoard = boardCardsRevealed && boardCardsFull.length > 0 ? boardCardsFull : boardCards;
