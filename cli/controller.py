@@ -633,6 +633,8 @@ class PokerCliController:
         scheme = "wss" if parsed.scheme == "https" else "ws"
         netloc = parsed.netloc or parsed.path
         ws_url = f"{scheme}://{netloc}/ws/{quote(room_id, safe='')}/{quote(self._current_user_id(), safe='')}"
+        if self.auth_token:
+            ws_url += f"?token={quote(self.auth_token, safe='')}"
         client = PokerWsClient(ws_url=ws_url)
         client.on_room_state = self._on_ws_room_state
         client.on_action_event = self._on_ws_action_event

@@ -276,11 +276,28 @@ async def create_room(req: CreateRoomRequest):
 
 
 @api_router.get("/rooms/{room_id}")
-def get_room_details(room_id: str, viewer_id: Optional[str] = None):
+def get_room_details(
+    room_id: str,
+    viewer_id: Optional[str] = None,
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
     room = room_manager.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    return room.to_dict(viewer_player_id=viewer_id)
+
+    auth_token = token
+    if not auth_token and authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.split("Bearer ")[1].strip()
+
+    auth_user = user_manager.get_user_by_token(auth_token) if auth_token else None
+
+    # Security: A requester can ONLY view their own private cards.
+    # If unauthenticated, viewer_player_id must be None (spectator snapshot, no private cards).
+    # If authenticated, viewer_player_id is strictly auth_user.user_id,
+    # preventing any caller from spoofing viewer_id to peek at opponents' cards.
+    effective_viewer_id = auth_user.user_id if auth_user else None
+    return room.to_dict(viewer_player_id=effective_viewer_id)
 
 
 @api_router.post("/rooms/{room_id}/test-bots")

@@ -5,9 +5,34 @@ from fastapi.testclient import TestClient
 
 from backend.main import app
 from backend.app.services.room_manager import room_manager
+from backend.app.services.user_manager import user_manager
 from backend.app.websocket.protocol import EventType
 from backend.app.models.room import RoomConfig
 from backend.app.engine.state_machine import ActionType, Street
+
+
+def _auth_ws_url(path: str) -> str:
+    """Helper to append user's valid token to test websocket paths unless explicitly bypassed."""
+    if "?token=" in path or "no_auth=1" in path:
+        return path.replace("?no_auth=1", "").replace("&no_auth=1", "")
+    parts = path.split("?")[0].strip("/").split("/")
+    if len(parts) == 3 and parts[0] == "ws":
+        user_id = parts[2]
+        token = user_manager.get_or_create_token(user_id)
+        if token:
+            sep = "&" if "?" in path else "?"
+            return f"{path}{sep}token={token}"
+    return path
+
+
+@pytest.fixture(autouse=True)
+def auto_auth_ws(monkeypatch):
+    orig_ws_connect = TestClient.websocket_connect
+
+    def _ws_connect(self, url, *args, **kwargs):
+        return orig_ws_connect(self, _auth_ws_url(url), *args, **kwargs)
+
+    monkeypatch.setattr(TestClient, "websocket_connect", _ws_connect)
 
 
 def test_rest_api_users_and_rooms():
@@ -681,4 +706,118 @@ def test_use_equity_assistant_ws_event():
             bcast_ws2 = _recv_room_state(ws2)
             assert bcast_ws1["payload"]["table"]["seats"][1]["using_assistant"] is True
             assert bcast_ws2["payload"]["table"]["seats"][1]["using_assistant"] is True
+
+
+def test_security_ws_authentication_and_rejection():
+    client = TestClient(app)
+    resp = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Security Test Room",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 5,
+        "big_blind": 10,
+        "action_timeout": 15,
+        "max_seats": 6,
+    })
+    room_id = resp.json()["room_id"]
+
+    # 1. Reject unauthenticated connection for registered user
+    with client.websocket_connect(f"/ws/{room_id}/u_test2?no_auth=1") as ws:
+        msg = ws.receive_json()
+        assert msg["event"] == EventType.ERROR_MESSAGE.value
+        assert "认证失败" in msg["payload"]["message"]
+
+    # 2. Reject connection with invalid token
+    with client.websocket_connect(f"/ws/{room_id}/u_test2?token=invalid_token_999") as ws:
+        msg = ws.receive_json()
+        assert msg["event"] == EventType.ERROR_MESSAGE.value
+        assert "认证失败" in msg["payload"]["message"]
+
+    # 3. Reject spoofed connection: using u_test1's token to connect as u_test2
+    t1_token = user_manager.get_or_create_token("u_test1")
+    with client.websocket_connect(f"/ws/{room_id}/u_test2?token={t1_token}") as ws:
+        msg = ws.receive_json()
+        assert msg["event"] == EventType.ERROR_MESSAGE.value
+        assert "认证失败" in msg["payload"]["message"]
+
+    # 4. Reject unauthenticated connection to lobby for registered user
+    with client.websocket_connect("/ws/lobby/u_test2?no_auth=1") as ws:
+        msg = ws.receive_json()
+        assert msg["event"] == EventType.ERROR_MESSAGE.value
+        assert "认证失败" in msg["payload"]["message"]
+
+
+def test_security_rest_room_details_card_isolation():
+    client = TestClient(app)
+    # 1. Login test1 and test2
+    t1_login = client.post("/api/auth/login", json={"username": "test1", "password": "123"}).json()
+    t2_login = client.post("/api/auth/login", json={"username": "test2", "password": "123"}).json()
+    t1_token = t1_login["token"]
+    t2_token = t2_login["token"]
+
+    # 2. Create room
+    resp = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Cards Isolation Room",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 5,
+        "big_blind": 10,
+        "action_timeout": 15,
+        "max_seats": 6,
+    })
+    room_id = resp.json()["room_id"]
+
+    # 3. Connect both players and start game
+    with client.websocket_connect(f"/ws/{room_id}/u_test1?token={t1_token}") as ws1, \
+         client.websocket_connect(f"/ws/{room_id}/u_test2?token={t2_token}") as ws2:
+
+        # Start game to deal cards
+        ws1.send_json({"event": EventType.START_GAME, "payload": {}})
+
+        # Drain until PREFLOP state received
+        while True:
+            msg1 = ws1.receive_json()
+            if (
+                msg1.get("event") == EventType.ROOM_STATE.value
+                and msg1.get("payload", {}).get("table", {}).get("street") == Street.PREFLOP.value
+            ):
+                break
+
+        # In ws1 snapshot: seat 0 (test1) has hole_cards, seat 1 (test2) has []
+        seats = msg1["payload"]["table"]["seats"]
+        assert len(seats[0]["hole_cards"]) == 2
+        assert seats[1]["hole_cards"] == []
+
+        # 4. REST query test:
+        # A) Unauthenticated caller -> no hole cards visible for anyone
+        unauth_resp = client.get(f"/api/rooms/{room_id}").json()
+        for seat in unauth_resp["table"]["seats"]:
+            if seat:
+                assert seat["hole_cards"] == []
+
+        # B) Unauthenticated caller spoofing viewer_id=u_test1 -> still no hole cards!
+        spoof_unauth = client.get(f"/api/rooms/{room_id}?viewer_id=u_test1").json()
+        for seat in spoof_unauth["table"]["seats"]:
+            if seat:
+                assert seat["hole_cards"] == []
+
+        # C) Authenticated test2 trying to spoof viewer_id=u_test1 -> only sees test2's own cards!
+        t2_headers = {"Authorization": f"Bearer {t2_token}"}
+        snoop_resp = client.get(f"/api/rooms/{room_id}?viewer_id=u_test1", headers=t2_headers).json()
+        snoop_seats = snoop_resp["table"]["seats"]
+        # test1's cards MUST be empty []
+        assert snoop_seats[0]["hole_cards"] == []
+        # test2 sees their own cards
+        assert len(snoop_seats[1]["hole_cards"]) == 2
+
+        # D) Anonymous spectator via websocket
+        with client.websocket_connect(f"/ws/{room_id}/spectator_guest1") as ws_spec:
+            spec_msg = ws_spec.receive_json()
+            assert spec_msg["event"] == EventType.ROOM_STATE.value
+            for seat in spec_msg["payload"]["table"]["seats"]:
+                if seat:
+                    assert seat["hole_cards"] == []
+
 

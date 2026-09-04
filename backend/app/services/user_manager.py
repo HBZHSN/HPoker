@@ -136,6 +136,31 @@ class UserManager:
             return None
         return self._users.get(user_id)
 
+    def verify_user_token(self, user_id: str, token: Optional[str]) -> bool:
+        """Verify whether the provided token belongs to the given user_id."""
+        if not token or not user_id:
+            return False
+        bound_user_id = self._tokens.get(token)
+        return bound_user_id == user_id
+
+    def get_token_for_user(self, user_id: str) -> Optional[str]:
+        """Get an active token for the given user_id, if one exists."""
+        for token, uid in self._tokens.items():
+            if uid == user_id:
+                return token
+        return None
+
+    def get_or_create_token(self, user_id: str) -> Optional[str]:
+        """Return an existing token or create a valid persistent token for a user."""
+        if user_id not in self._users:
+            return None
+        token = self.get_token_for_user(user_id)
+        if not token:
+            token = f"token_{uuid.uuid4().hex}"
+            self._tokens[token] = user_id
+            self.save_to_storage()
+        return token
+
     def get_user(self, user_id: str) -> Optional[User]:
         return self._users.get(user_id)
 

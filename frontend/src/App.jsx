@@ -228,9 +228,10 @@ export default function App() {
       if (disposed || terminalClose) return;
       setConnectionStatus(retryCount > 0 ? 'retrying' : 'connecting');
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
       const wsUrl = activeRoomId
-        ? `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}`
-        : `${protocol}//${window.location.host}/ws/lobby/${currentUser.user_id}`;
+        ? `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}${tokenParam}`
+        : `${protocol}//${window.location.host}/ws/lobby/${currentUser.user_id}${tokenParam}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
