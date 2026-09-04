@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { User, KeyRound, CheckCircle2, AlertCircle, X } from 'lucide-react';
-
-const AVATAR_OPTIONS = ['👑', '🦈', '🦁', '🐺', '🦅', '🦊', '🐯', '🐉', '🐼', '👤', '🤠', '🦄'];
+import { AVATAR_OPTIONS } from '../utils/avatarOptions';
 
 export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClose }) {
   if (!isOpen || !user) return null;
@@ -119,6 +118,7 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
                   key={idx}
                   type="button"
                   onClick={() => setAvatar(av)}
+                  aria-label={`选择头像 ${av}`}
                   className={`w-8 h-8 rounded-lg text-lg flex items-center justify-center transition active:scale-90 cursor-pointer ${
                     avatar === av
                       ? 'bg-amber-500/30 border-2 border-amber-400 shadow'

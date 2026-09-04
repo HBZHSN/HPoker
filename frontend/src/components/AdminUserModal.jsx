@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, UserPlus, KeyRound, Trash2, Edit3, X, CheckCircle2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import { AVATAR_OPTIONS } from '../utils/avatarOptions';
 
 export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
   if (!isOpen || !adminUser || !adminUser.is_admin) return null;
@@ -236,6 +237,26 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
                 placeholder="初始密码"
                 className="bg-slate-950 px-3 py-2 rounded-xl border border-slate-700 text-slate-100 font-bold text-xs focus:border-amber-400 focus:outline-none"
               />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-bold text-slate-300">头像</label>
+              <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto rounded-xl border border-slate-800 bg-slate-950 p-2">
+                {AVATAR_OPTIONS.map((av) => (
+                  <button
+                    key={av}
+                    type="button"
+                    onClick={() => setNewAvatar(av)}
+                    aria-label={`选择头像 ${av}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg text-lg transition active:scale-90 cursor-pointer ${
+                      newAvatar === av
+                        ? 'border-2 border-amber-400 bg-amber-500/30 shadow'
+                        : 'border border-transparent hover:bg-slate-800'
+                    }`}
+                  >
+                    {av}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">
