@@ -355,6 +355,14 @@ export default function PokerTable({
               <span className="poker-table-room-blinds text-[11px] bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-bold">
                 盲注: ${room?.config?.small_blind}/${room?.config?.big_blind}
               </span>
+              {room?.config?.assistant_win_ratio !== undefined && room?.config?.assistant_win_ratio < 1.0 && (
+                <span
+                  className="text-[11px] bg-purple-950/90 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/40 font-bold"
+                  title="使用胜率辅助获胜时按此比例折让"
+                >
+                  辅助赢额: {Math.round(room.config.assistant_win_ratio * 100)}%
+                </span>
+              )}
             </div>
             <span className="poker-table-room-buyin text-[11px] text-slate-400">
               买入: ${room?.config?.buyin_chips} = ¥{room?.config?.cash_value} · 超时: {room?.config?.action_timeout}s

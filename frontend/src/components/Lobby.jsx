@@ -23,6 +23,7 @@ export default function Lobby({
   const [smallBlind, setSmallBlind] = useState(10);
   const [actionTimeout, setActionTimeout] = useState(15);
   const [maxSeats, setMaxSeats] = useState(6);
+  const [assistantWinPct, setAssistantWinPct] = useState(70);
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'online'
 
   const visibleUsers = useMemo(() => filterVisibleLobbyUsers(users), [users]);
@@ -66,6 +67,7 @@ export default function Lobby({
       small_blind: Number(smallBlind),
       action_timeout: Number(actionTimeout),
       max_seats: Number(maxSeats),
+      assistant_win_ratio: Number(assistantWinPct) / 100,
     });
     setCreateModalOpen(false);
   };
@@ -231,6 +233,14 @@ export default function Lobby({
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
                             思考: {r.action_timeout}s
                           </span>
+                          {r.assistant_win_ratio !== undefined && (
+                            <>
+                              <span className="text-slate-600">·</span>
+                              <span className="flex items-center gap-1 text-purple-300 font-medium">
+                                辅助赢额: {Math.round(r.assistant_win_ratio * 100)}%
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -484,6 +494,27 @@ export default function Lobby({
                       <option key={seatCount} value={seatCount}>{seatCount} 人桌</option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-slate-400 font-semibold block mb-1">
+                  辅助获胜比例 (%)
+                  <span className="text-slate-500 font-normal ml-1">(开启胜率辅助获胜时按此比例分池，剩余补偿给对手)</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    step="5"
+                    value={assistantWinPct}
+                    onChange={(e) => setAssistantWinPct(Number(e.target.value))}
+                    className="flex-1 accent-amber-500 cursor-pointer"
+                  />
+                  <div className="w-16 bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-center font-bold text-amber-400 text-xs">
+                    {assistantWinPct}%
+                  </div>
                 </div>
               </div>
 

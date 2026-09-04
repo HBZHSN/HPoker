@@ -222,6 +222,7 @@ class CreateRoomRequest(BaseModel):
     small_blind: int = Field(default=10, ge=1)
     action_timeout: int = Field(default=15, ge=5, le=60)
     max_seats: int = Field(default=6, ge=2, le=9)
+    assistant_win_ratio: float = Field(default=0.70, ge=0.1, le=1.0)
 
 
 @api_router.get("/lobby/users")
@@ -268,6 +269,7 @@ async def create_room(req: CreateRoomRequest):
         small_blind=req.small_blind,
         action_timeout=req.action_timeout,
         max_seats=req.max_seats,
+        assistant_win_ratio=req.assistant_win_ratio,
     )
     room = room_manager.create_room(host_player_id=req.host_player_id, config=cfg)
     return room.to_dict()
