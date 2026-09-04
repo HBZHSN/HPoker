@@ -192,3 +192,81 @@ def test_uncontested_fold_assistant_winner_deduction():
     # p2 chips: 1000 - 20 + 10(comp) = 990
     assert seat_p1.chips == 1010
     assert seat_p2.chips == 990
+
+    # Verify hand_results shows original vs adjusted profit
+    state = table.get_table_state()
+    res_p1 = next(r for r in state["hand_results"] if r["player_id"] == "p1")
+    res_p2 = next(r for r in state["hand_results"] if r["player_id"] == "p2")
+
+    assert res_p1["original_net_profit"] == 20
+    assert res_p1["net_profit"] == 10
+    assert res_p1["assistant_adjustment"] == -10
+    assert res_p1["using_assistant"] is True
+
+    assert res_p2["original_net_profit"] == -20
+    assert res_p2["net_profit"] == -10
+    assert res_p2["assistant_adjustment"] == 10
+    assert res_p2["using_assistant"] is False
+
+
+def test_showdown_hand_results_assistant_impact():
+    """Verify that showdown hand_results includes original profit and assistant adjustment."""
+    table = TableStateMachine(small_blind=10, big_blind=20, assistant_win_ratio=0.70)
+    table.sit_down("p1", "Alice", 0, chips=1000)
+    table.sit_down("p2", "Bob", 1, chips=1000)
+    table.start_new_hand()
+
+    # Both players put in 100
+    seat_p1 = table.seats[0]
+    seat_p2 = table.seats[1]
+    seat_p1.using_assistant = True
+
+    # Preflop: p1 call BB (20), p2 checks -> deals Flop
+    assert table.handle_action("p1", ActionType.CALL) is True
+    assert table.handle_action("p2", ActionType.CHECK) is True
+    assert table.street == Street.FLOP
+
+    # Force board and hole cards
+    table.board_cards = cards("2c 3d 4s")
+    seat_p1.hole_cards = cards("Ah Ad")  # Pair of Aces
+    seat_p2.hole_cards = cards("Kh Kd")  # Pair of Kings
+
+    # Flop: p2 checks, p1 bets 80 (total 100), p2 calls -> deals Turn
+    assert table.handle_action("p2", ActionType.CHECK) is True
+    assert table.handle_action("p1", ActionType.BET, 80) is True
+    assert table.handle_action("p2", ActionType.CALL) is True
+    assert table.street == Street.TURN
+
+    # Turn: both check -> deals River
+    assert table.handle_action("p2", ActionType.CHECK) is True
+    assert table.handle_action("p1", ActionType.CHECK) is True
+    assert table.street == Street.RIVER
+
+    # River: both check -> showdown
+    assert table.handle_action("p2", ActionType.CHECK) is True
+    assert table.handle_action("p1", ActionType.CHECK) is True
+    assert table.street == Street.HAND_END
+
+    state = table.get_table_state()
+    res_p1 = next(r for r in state["hand_results"] if r["player_id"] == "p1")
+    res_p2 = next(r for r in state["hand_results"] if r["player_id"] == "p2")
+
+    # Pot = 200, 100 each.
+    # Originally: p1 wins 200 (net +100), p2 wins 0 (net -100).
+    # With 70% assistant reduction:
+    # p1 gets 200 * 0.7 = 140 (net +40).
+    # p2 gets 60 (net -40).
+    # Adjustments: p1 -60, p2 +60.
+    assert res_p1["original_payout_amount"] == 200
+    assert res_p1["payout_amount"] == 140
+    assert res_p1["original_net_profit"] == 100
+    assert res_p1["net_profit"] == 40
+    assert res_p1["assistant_adjustment"] == -60
+    assert res_p1["using_assistant"] is True
+
+    assert res_p2["original_payout_amount"] == 0
+    assert res_p2["payout_amount"] == 60
+    assert res_p2["original_net_profit"] == -100
+    assert res_p2["net_profit"] == -40
+    assert res_p2["assistant_adjustment"] == 60
+    assert res_p2["using_assistant"] is False
