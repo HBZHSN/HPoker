@@ -69,6 +69,8 @@ async def start_all_in_slow_dealing(room_id: str):
             return
         r.table.enter_showdown()
         await ws_manager.broadcast_sound(r_id, "win_pot")
+        if r.table.time_card_rewarded_players:
+            await ws_manager.broadcast_sound(r_id, "time_card_gain")
         await ws_manager.broadcast_room_state(r)
 
     timeout_manager.start_deal_task(room_id, _deal_flow)
@@ -245,6 +247,8 @@ async def trigger_room_turn_timer(room_id: str):
                     await ws_manager.broadcast_sound(r_id, "deal")
                 elif r.table.street in (Street.SHOWDOWN, Street.HAND_END):
                     await ws_manager.broadcast_sound(r_id, "win_pot")
+                    if r.table.time_card_rewarded_players:
+                        await ws_manager.broadcast_sound(r_id, "time_card_gain")
 
             await ws_manager.broadcast_room_state(r)
             await trigger_room_after_action(r_id)
@@ -315,6 +319,8 @@ async def trigger_room_turn_timer(room_id: str):
                 await ws_manager.broadcast_sound(r_id, "deal")
             elif r.table.street in (Street.SHOWDOWN, Street.HAND_END):
                 await ws_manager.broadcast_sound(r_id, "win_pot")
+                if r.table.time_card_rewarded_players:
+                    await ws_manager.broadcast_sound(r_id, "time_card_gain")
 
         await ws_manager.broadcast_room_state(r)
         await trigger_room_after_action(r_id)
@@ -671,6 +677,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
                             await ws_manager.broadcast_sound(room_id, "deal")
                         elif room.table.street in (Street.SHOWDOWN, Street.HAND_END):
                             await ws_manager.broadcast_sound(room_id, "win_pot")
+                            if room.table.time_card_rewarded_players:
+                                await ws_manager.broadcast_sound(room_id, "time_card_gain")
 
                     await ws_manager.broadcast_room_state(room)
                     await trigger_room_after_action(room_id)

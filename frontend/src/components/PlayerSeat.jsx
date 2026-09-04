@@ -221,6 +221,7 @@ export default function PlayerSeat({
 
         {/* === BOTTOM-RIGHT CORNER: Time Bank Cards Badge (时间卡数量) === */}
         <div
+          title={`时间卡: ${seatData.time_bank_cards ?? 3}张 (已玩 ${seatData.hands_played ?? 0} 手，每15手送1张)`}
           className="absolute -bottom-2 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1 py-0.5 rounded-full border border-amber-500/60 text-[9px] md:text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
         >
           <span>x{seatData.time_bank_cards ?? 3}</span>

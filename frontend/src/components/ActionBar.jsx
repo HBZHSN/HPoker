@@ -574,6 +574,7 @@ export default function ActionBar({
               <span className="text-[9px] lg:text-[10px] text-slate-400 font-bold">时间卡:</span>
               <span className="text-[10px] lg:text-[11px] text-amber-300 font-black bg-slate-950 px-1.5 lg:px-2 py-0.2 rounded-full border border-amber-500/30 flex items-center gap-1">
                 <span>{selfSeat.time_bank_cards ?? 3} / 5</span>
+                <span className="text-[9px] text-slate-400 font-normal">({(selfSeat.hands_played ?? 0) % 15}/15手)</span>
               </span>
             </div>
           </div>
