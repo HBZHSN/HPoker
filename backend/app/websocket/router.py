@@ -655,6 +655,12 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                             await ws_manager.broadcast_room_state(room)
                             await trigger_room_turn_timer(room_id)
 
+            elif event == EventType.USE_EQUITY_ASSISTANT:
+                active = payload.get("active", True)
+                ok = room.table.set_player_using_assistant(user_id, bool(active))
+                if ok:
+                    await ws_manager.broadcast_room_state(room)
+
             elif event == EventType.KICK_PLAYER:
                 target_player_id = payload.get("target_player_id")
                 if user_id != room.host_player_id:

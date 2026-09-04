@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CardView from './CardView';
 import { sortCardsLowToHigh } from '../utils/cards';
-import { Bot, Crown, RefreshCw, UserPlus, Clock, UserX } from 'lucide-react';
+import { Bot, Crown, RefreshCw, UserPlus, Clock, UserX, BarChart2 } from 'lucide-react';
 
 export default function PlayerSeat({
   seatIndex,
@@ -224,6 +224,17 @@ export default function PlayerSeat({
           <span>x{seatData.time_bank_cards ?? 3}</span>
         </div>
 
+        {/* === BOTTOM-LEFT CORNER: Equity Assistant Badge (胜率辅助标识) === */}
+        {seatData.using_assistant && (
+          <div
+            className="absolute -bottom-2 -left-2 z-20 flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 md:border-2 text-[9px] md:text-[10px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
+            title="该玩家正在使用胜率辅助功能"
+          >
+            <BarChart2 className="w-2.5 h-2.5 text-amber-300 stroke-[3]" />
+            <span>辅助</span>
+          </div>
+        )}
+
         {/* === TOP-RIGHT CORNER: Dealer / SB / BB Position Badges === */}
         <div className="absolute -top-2 -right-2 z-20 flex gap-0.5 md:gap-1 items-center">
           {isDealer && (
@@ -262,7 +273,9 @@ export default function PlayerSeat({
               : isWinner
               ? 'border-emerald-400 shadow-glow-cyan'
               : isSelf
-              ? 'border-sky-400 shadow-lg ring-2 ring-sky-500/50'
+              ? (seatData.using_assistant ? 'border-purple-400 shadow-glow-cyan ring-2 ring-purple-500/60' : 'border-sky-400 shadow-lg ring-2 ring-sky-500/50')
+              : seatData.using_assistant
+              ? 'border-purple-400 shadow-glow-cyan ring-1 ring-purple-500/50'
               : 'border-slate-700/80'
           }`}
         >

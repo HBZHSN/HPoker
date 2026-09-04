@@ -61,6 +61,7 @@ class PlayerSeat:
     shown_cards: List[Card] = field(default_factory=list)
     last_action: Optional[str] = None
     time_bank_cards: int = 3
+    using_assistant: bool = False
 
     def add_time_bank_card(self, amount: int = 1, max_cards: int = 5) -> bool:
         """Add time bank cards up to max_cards (default 5). Returns True if added."""
@@ -83,6 +84,7 @@ class PlayerSeat:
         self.has_acted_this_round = False
         self.shown_cards.clear()
         self.last_action = None
+        self.using_assistant = False
 
     def to_dict(self, include_private_cards: bool = True) -> dict:
         return {
@@ -103,6 +105,7 @@ class PlayerSeat:
             "shown_cards": [c.to_dict() for c in self.shown_cards],
             "last_action": self.last_action,
             "time_bank_cards": self.time_bank_cards,
+            "using_assistant": self.using_assistant,
         }
 
 
@@ -1059,6 +1062,14 @@ class TableStateMachine:
             return True
         return False
 
+    def set_player_using_assistant(self, player_id: str, using: bool = True) -> bool:
+        """Record whether a player is using the equity assistant during the current hand."""
+        player = next((p for p in self.active_seated_players if p.player_id == player_id), None)
+        if not player:
+            return False
+        player.using_assistant = using
+        return True
+
     def _log_action(self, player_id: str, action: ActionType, amount: int) -> None:
         self.last_action_history.append({
             "player_id": player_id,
@@ -1122,6 +1133,7 @@ class TableStateMachine:
                     "hole_cards": [c.to_dict() for c in p.hole_cards] if (p.player_id == viewer_player_id) else [],
                     "shown_cards": [c.to_dict() for c in p.shown_cards],
                     "is_ready": p.player_id in self.ready_player_ids,
+                    "using_assistant": p.using_assistant,
                 })
 
         return {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import PlayerSeat from './PlayerSeat';
 import CommunityBoard from './CommunityBoard';
 import ActionBar from './ActionBar';
@@ -206,6 +206,24 @@ export default function PokerTable({
     onSendWsEvent('REVEAL_BOARD_CARDS', {});
   };
 
+  const handleUseAssistant = useCallback(() => {
+    if (selfSeat && !selfSeat.using_assistant) {
+      onSendWsEvent?.('USE_EQUITY_ASSISTANT', { active: true });
+    }
+  }, [selfSeat, onSendWsEvent]);
+
+  const handleToggleEquity = useCallback(() => {
+    setIsEquityOpen((prev) => {
+      const next = !prev;
+      if (next && table?.street !== 'HAND_END') {
+        if (selfSeat && !selfSeat.using_assistant) {
+          onSendWsEvent?.('USE_EQUITY_ASSISTANT', { active: true });
+        }
+      }
+      return next;
+    });
+  }, [table?.street, selfSeat, onSendWsEvent]);
+
   const hasTestAccountInRoom = useMemo(() => {
     if (!table?.seats) return false;
     return table.seats.some(
@@ -389,10 +407,7 @@ export default function PokerTable({
           {/* Equity / Win Rate Trigger Button */}
           <EquityTrigger
             isOpen={isEquityOpen}
-            onToggle={() => setIsEquityOpen((v) => !v)}
-            holeCards={selfSeat?.hole_cards || []}
-            boardCards={table?.board_cards || []}
-            street={table?.street || 'IDLE'}
+            onToggle={handleToggleEquity}
           />
 
           {/* Host End Room Button */}
@@ -439,6 +454,8 @@ export default function PokerTable({
             )}
             isSeated={Boolean(selfSeat)}
             isFolded={Boolean(selfSeat?.is_folded)}
+            handNumber={table?.hand_number || 0}
+            onUseAssistant={handleUseAssistant}
           />
         )}
 
