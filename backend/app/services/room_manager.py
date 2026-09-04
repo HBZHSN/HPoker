@@ -101,6 +101,8 @@ class RoomManager:
                 "big_blind": r.config.big_blind,
                 "buyin_chips": r.config.buyin_chips,
                 "cash_value": r.config.cash_value,
+                "assistant_win_ratio": r.config.assistant_win_ratio,
+                "assistant_win_pct": int(round(r.config.assistant_win_ratio * 100)),
                 "is_ended": r.is_ended,
             })
         return rooms_info

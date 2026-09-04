@@ -26,12 +26,15 @@ class RoomConfig:
     initial_time_cards: int = 3      # Starting time cards per player
     max_time_cards: int = 5          # Maximum time cards per player
     time_card_replenish_interval: int = 900  # 15 minutes replenishment interval (in seconds)
+    assistant_win_ratio: float = 0.70  # Ratio of pot won when using equity assistant (0.1 to 1.0)
 
     def __post_init__(self) -> None:
         if self.small_blind < 1:
             raise ValueError("small_blind must be at least 1")
         if not 2 <= self.max_seats <= 9:
             raise ValueError("max_seats must be between 2 and 9")
+        if not (0.1 <= self.assistant_win_ratio <= 1.0):
+            raise ValueError("assistant_win_ratio must be between 0.1 and 1.0")
         self.big_blind = self.small_blind * 2
 
     def to_dict(self) -> dict:
@@ -47,6 +50,8 @@ class RoomConfig:
             "initial_time_cards": self.initial_time_cards,
             "max_time_cards": self.max_time_cards,
             "time_card_replenish_interval": self.time_card_replenish_interval,
+            "assistant_win_ratio": self.assistant_win_ratio,
+            "assistant_win_pct": int(round(self.assistant_win_ratio * 100)),
             "chip_to_cash_ratio": self.cash_value / self.buyin_chips if self.buyin_chips > 0 else 1.0,
         }
 
@@ -76,6 +81,7 @@ class Room:
             small_blind=config.small_blind,
             big_blind=config.big_blind,
             action_timeout=config.action_timeout,
+            assistant_win_ratio=config.assistant_win_ratio,
         )
 
         # Historical participant tracker (player_id -> dict of stats)
@@ -195,7 +201,7 @@ class Room:
                 "room_name", "buyin_chips", "cash_value", "small_blind",
                 "action_timeout", "max_seats", "time_card_duration",
                 "initial_time_cards", "max_time_cards",
-                "time_card_replenish_interval",
+                "time_card_replenish_interval", "assistant_win_ratio",
             )
             if key in raw_config
         })

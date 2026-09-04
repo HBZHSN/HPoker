@@ -150,11 +150,13 @@ class TableStateMachine:
         small_blind: int = 1,
         big_blind: int = 2,
         action_timeout: int = 15,
+        assistant_win_ratio: float = 0.70,
     ):
         self.max_seats = max_seats
         self.small_blind = small_blind
         self.big_blind = big_blind
         self.action_timeout = action_timeout
+        self.assistant_win_ratio = assistant_win_ratio
 
         self.seats: List[Optional[PlayerSeat]] = [None] * max_seats
         self.deck = Deck()
@@ -887,6 +889,10 @@ class TableStateMachine:
             if not p.is_folded
         ]
 
+        assistant_players = {
+            p.player_id for p in self.active_seated_players if p.using_assistant
+        }
+
         if not self.rit_enabled:
             evaluations: Dict[str, HandEvaluation] = {}
             for p in self.active_in_hand_players:
@@ -897,7 +903,10 @@ class TableStateMachine:
 
             self.payouts = self.pot_manager.resolve_showdown(
                 hand_evaluations=evaluations,
-                seat_order_from_sb=sb_order
+                seat_order_from_sb=sb_order,
+                assistant_players=assistant_players,
+                assistant_win_ratio=self.assistant_win_ratio,
+                small_blind=self.small_blind,
             )
             for payout in self.payouts:
                 player = next((p for p in self.active_seated_players if p.player_id == payout.player_id), None)
@@ -917,7 +926,10 @@ class TableStateMachine:
             p1, p2, combined = self.pot_manager.resolve_showdown_twice(
                 hand_evaluations_1=evaluations_1,
                 hand_evaluations_2=evaluations_2,
-                seat_order_from_sb=sb_order
+                seat_order_from_sb=sb_order,
+                assistant_players=assistant_players,
+                assistant_win_ratio=self.assistant_win_ratio,
+                small_blind=self.small_blind,
             )
             self.payouts_1 = p1
             self.payouts_2 = p2
@@ -972,14 +984,87 @@ class TableStateMachine:
                     self.payouts.append(PotPayout(player_id=pid, amount=ref_amt, pot_name="多余下注退回"))
 
             # Pot to winner
+            sb = max(1, self.small_blind)
+            used_assistant = winner.using_assistant and self.assistant_win_ratio < 1.0
+
             for pot in pots:
-                winner.chips += pot.amount
-                self.payouts.append(PotPayout(
-                    player_id=winner.player_id,
-                    amount=pot.amount,
-                    pot_name=pot.name,
-                    hand_description="其他玩家弃牌获胜"
-                ))
+                pot_amt = pot.amount
+                if pot_amt <= 0:
+                    continue
+
+                if used_assistant:
+                    raw_reduced = pot_amt * self.assistant_win_ratio
+                    units = int(round(raw_reduced / sb))
+                    if pot_amt >= sb:
+                        units = max(1, min(pot_amt // sb, units))
+                    win_amt = units * sb
+                    deducted = pot_amt - win_amt
+
+                    winner.chips += win_amt
+                    self.payouts.append(PotPayout(
+                        player_id=winner.player_id,
+                        amount=win_amt,
+                        pot_name=pot.name,
+                        hand_description=f"其他玩家弃牌获胜 (辅助折让 {int(round(self.assistant_win_ratio * 100))}%)"
+                    ))
+
+                    if deducted > 0:
+                        # Compensate deducted chips back to other players who put chips into this pot
+                        other_contenders = [p for p in pot.eligible_players if p != winner.player_id]
+                        if not other_contenders:
+                            other_contenders = [
+                                p.player_id for p in self.active_seated_players
+                                if p.player_id != winner.player_id and self.pot_manager.get_player_total_bet(p.player_id) > 0
+                            ]
+                        if not other_contenders:
+                            other_contenders = [p.player_id for p in self.active_seated_players if p.player_id != winner.player_id]
+
+                        if other_contenders:
+                            sb_order = [
+                                p.player_id for p in self._get_players_in_action_order(self.sb_seat)
+                                if p.player_id in other_contenders
+                            ]
+                            for pid in other_contenders:
+                                if pid not in sb_order:
+                                    sb_order.append(pid)
+
+                            tot_units = deducted // sb
+                            rem_odd_chips = deducted % sb
+                            c_count = len(sb_order)
+                            u_per_c = tot_units // c_count
+                            rem_u = tot_units % c_count
+
+                            for i, pid in enumerate(sb_order):
+                                extra = sb if i < rem_u else 0
+                                odd = rem_odd_chips if i == 0 else 0
+                                comp_amt = u_per_c * sb + extra + odd
+                                if comp_amt > 0:
+                                    comp_p = next((p for p in self.active_seated_players if p.player_id == pid), None)
+                                    if comp_p:
+                                        comp_p.chips += comp_amt
+                                    self.payouts.append(PotPayout(
+                                        player_id=pid,
+                                        amount=comp_amt,
+                                        pot_name=pot.name,
+                                        hand_description="辅助折让对手补偿"
+                                    ))
+                        else:
+                            # No other player to compensate, return to winner
+                            winner.chips += deducted
+                            self.payouts.append(PotPayout(
+                                player_id=winner.player_id,
+                                amount=deducted,
+                                pot_name=pot.name,
+                                hand_description="折让返还"
+                            ))
+                else:
+                    winner.chips += pot_amt
+                    self.payouts.append(PotPayout(
+                        player_id=winner.player_id,
+                        amount=pot_amt,
+                        pot_name=pot.name,
+                        hand_description="其他玩家弃牌获胜"
+                    ))
 
     def _prepare_final_board_cards(self) -> None:
         """Reserve the remaining board cards for an ended uncontested hand.
@@ -1169,6 +1254,7 @@ class TableStateMachine:
             "turn_started_at": self.turn_started_at,
             "small_blind": self.small_blind,
             "big_blind": self.big_blind,
+            "assistant_win_ratio": self.assistant_win_ratio,
             "current_round_highest_bet": self.current_round_highest_bet,
             "total_pot": self.pot_manager.total_pot_amount,
             "pots": [p.to_dict() for p in pots],

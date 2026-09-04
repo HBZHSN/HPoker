@@ -209,9 +209,15 @@ class PotManager:
         pots: List[Pot],
         hand_evaluations: Dict[str, HandEvaluation],
         seat_order_from_sb: Sequence[str],
+        assistant_players: Optional[Set[str]] = None,
+        assistant_win_ratio: float = 1.0,
+        small_blind: int = 1,
     ) -> List[PotPayout]:
         """Internal helper to distribute a given list of pots among evaluated contenders."""
         payouts: List[PotPayout] = []
+        sb = max(1, small_blind)
+        assistant_set = assistant_players or set()
+
         for pot in pots:
             if pot.amount <= 0:
                 continue
@@ -257,20 +263,127 @@ class PotManager:
                 for i in range(remainder):
                     winner_payouts[ordered_winners[i]] += 1
 
+            # Assistant penalty reduction:
+            # If assistant_win_ratio < 1.0 and any winner used assistant
+            total_deducted = 0
+            if assistant_win_ratio < 1.0:
+                for w in list(winners):
+                    if w in assistant_set:
+                        orig_amt = winner_payouts[w]
+                        raw_reduced = orig_amt * assistant_win_ratio
+                        units = int(round(raw_reduced / sb))
+                        if orig_amt >= sb:
+                            units = max(1, min(orig_amt // sb, units))
+                        reduced_amt = units * sb
+                        deducted = orig_amt - reduced_amt
+                        if deducted > 0:
+                            winner_payouts[w] = reduced_amt
+                            total_deducted += deducted
+
+            # Add winner payouts
             for w, amt in winner_payouts.items():
                 if amt > 0:
+                    desc = best_eval.description if best_eval else None
+                    if w in assistant_set and assistant_win_ratio < 1.0:
+                        desc = f"{desc or '获胜'} (辅助折让 {int(round(assistant_win_ratio * 100))}%)"
                     payouts.append(PotPayout(
                         player_id=w,
                         amount=amt,
                         pot_name=pot.name,
-                        hand_description=best_eval.description if best_eval else None
+                        hand_description=desc,
                     ))
+
+            # Distribute deducted chips to runner-up(s) or non-assistant contenders
+            if total_deducted > 0:
+                non_winners = [p for p in contenders if p not in winners]
+                if non_winners:
+                    best_sub_eval: Optional[HandEvaluation] = None
+                    runner_ups: List[str] = []
+                    for p in non_winners:
+                        p_eval = hand_evaluations[p]
+                        if best_sub_eval is None or p_eval > best_sub_eval:
+                            best_sub_eval = p_eval
+                            runner_ups = [p]
+                        elif p_eval == best_sub_eval:
+                            runner_ups.append(p)
+
+                    total_units = total_deducted // sb
+                    rem_odd_chips = total_deducted % sb
+                    ru_count = len(runner_ups)
+                    units_per_ru = total_units // ru_count
+                    rem_units = total_units % ru_count
+
+                    ordered_ru = [p for p in seat_order_from_sb if p in runner_ups]
+                    for r in runner_ups:
+                        if r not in ordered_ru:
+                            ordered_ru.append(r)
+
+                    for i, r in enumerate(ordered_ru):
+                        extra = sb if i < rem_units else 0
+                        odd = rem_odd_chips if i == 0 else 0
+                        amt = units_per_ru * sb + extra + odd
+                        if amt > 0:
+                            payouts.append(PotPayout(
+                                player_id=r,
+                                amount=amt,
+                                pot_name=pot.name,
+                                hand_description=f"亚军补偿 ({best_sub_eval.description if best_sub_eval else ''})"
+                            ))
+                else:
+                    # All contenders tied for 1st place
+                    non_assistant_winners = [w for w in winners if w not in assistant_set]
+                    if non_assistant_winners:
+                        total_units = total_deducted // sb
+                        rem_odd_chips = total_deducted % sb
+                        na_count = len(non_assistant_winners)
+                        units_per_na = total_units // na_count
+                        rem_units = total_units % na_count
+                        ordered_na = [p for p in seat_order_from_sb if p in non_assistant_winners]
+                        for na in non_assistant_winners:
+                            if na not in ordered_na:
+                                ordered_na.append(na)
+                        for i, na in enumerate(ordered_na):
+                            extra = sb if i < rem_units else 0
+                            odd = rem_odd_chips if i == 0 else 0
+                            amt = units_per_na * sb + extra + odd
+                            if amt > 0:
+                                payouts.append(PotPayout(
+                                    player_id=na,
+                                    amount=amt,
+                                    pot_name=pot.name,
+                                    hand_description="平局未开辅助补偿"
+                                ))
+                    else:
+                        # All tied winners used assistant; distribute back
+                        total_units = total_deducted // sb
+                        rem_odd_chips = total_deducted % sb
+                        w_count = len(winners)
+                        units_per_w = total_units // w_count
+                        rem_units = total_units % w_count
+                        ordered_w = [p for p in seat_order_from_sb if p in winners]
+                        for w in winners:
+                            if w not in ordered_w:
+                                ordered_w.append(w)
+                        for i, w in enumerate(ordered_w):
+                            extra = sb if i < rem_units else 0
+                            odd = rem_odd_chips if i == 0 else 0
+                            amt = units_per_w * sb + extra + odd
+                            if amt > 0:
+                                payouts.append(PotPayout(
+                                    player_id=w,
+                                    amount=amt,
+                                    pot_name=pot.name,
+                                    hand_description="辅助平局折让返还"
+                                ))
         return payouts
 
     def resolve_showdown(
         self,
         hand_evaluations: Dict[str, HandEvaluation],
-        seat_order_from_sb: Sequence[str]
+        seat_order_from_sb: Sequence[str],
+        assistant_players: Optional[Set[str]] = None,
+        assistant_win_ratio: float = 1.0,
+        small_blind: int = 1,
     ) -> List[PotPayout]:
         """Distribute all pots to winning players based on hand evaluations (Run It Once)."""
         pots, refunds = self.calculate_pots()
@@ -286,14 +399,24 @@ class PotManager:
                 ))
 
         # Distribute pots
-        payouts.extend(self._distribute_pots_internal(pots, hand_evaluations, seat_order_from_sb))
+        payouts.extend(self._distribute_pots_internal(
+            pots=pots,
+            hand_evaluations=hand_evaluations,
+            seat_order_from_sb=seat_order_from_sb,
+            assistant_players=assistant_players,
+            assistant_win_ratio=assistant_win_ratio,
+            small_blind=small_blind,
+        ))
         return payouts
 
     def resolve_showdown_twice(
         self,
         hand_evaluations_1: Dict[str, HandEvaluation],
         hand_evaluations_2: Dict[str, HandEvaluation],
-        seat_order_from_sb: Sequence[str]
+        seat_order_from_sb: Sequence[str],
+        assistant_players: Optional[Set[str]] = None,
+        assistant_win_ratio: float = 1.0,
+        small_blind: int = 1,
     ) -> Tuple[List[PotPayout], List[PotPayout], List[PotPayout]]:
         """Distribute all pots across two runouts (Run It Twice).
         
@@ -339,8 +462,22 @@ class PotManager:
                     eligible_players=set(pot.eligible_players)
                 ))
 
-        payouts_1 = self._distribute_pots_internal(pots_1, hand_evaluations_1, seat_order_from_sb)
-        payouts_2 = self._distribute_pots_internal(pots_2, hand_evaluations_2, seat_order_from_sb)
+        payouts_1 = self._distribute_pots_internal(
+            pots_1,
+            hand_evaluations_1,
+            seat_order_from_sb,
+            assistant_players=assistant_players,
+            assistant_win_ratio=assistant_win_ratio,
+            small_blind=small_blind,
+        )
+        payouts_2 = self._distribute_pots_internal(
+            pots_2,
+            hand_evaluations_2,
+            seat_order_from_sb,
+            assistant_players=assistant_players,
+            assistant_win_ratio=assistant_win_ratio,
+            small_blind=small_blind,
+        )
         all_combined = refund_payouts + payouts_1 + payouts_2
 
         return payouts_1, payouts_2, all_combined
