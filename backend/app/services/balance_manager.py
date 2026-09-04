@@ -7,11 +7,13 @@ Strictly isolates test accounts and bot matches to prevent contaminating real ba
 
 from __future__ import annotations
 import json
+import logging
 import os
 import time
 from typing import Dict, List, Optional, Tuple
 import uuid
 
+from backend.app.database import DEFAULT_DATABASE_PATH, SQLiteDatabase
 from backend.app.models.balance import (
     ParticipantRecord,
     LedgerEntry,
@@ -21,7 +23,9 @@ from backend.app.models.balance import (
 from backend.app.services.settlement import SettlementEngine, PaymentTransaction, SettlementReport
 from backend.app.services.user_manager import user_manager, UserManager
 
-DEFAULT_BALANCE_STORAGE_FILE = os.path.join(
+logger = logging.getLogger("poker.balance")
+
+LEGACY_STORAGE_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data",
     "balance_ledger.json",
@@ -29,56 +33,82 @@ DEFAULT_BALANCE_STORAGE_FILE = os.path.join(
 
 
 class BalanceManager:
-    """Manages balance ledgers, batch debt settlement, and test-data isolation."""
+    """Manage normalized SQLite ledgers, debt settlement, and test isolation."""
 
-    def __init__(self, storage_path: Optional[str] = None):
-        if storage_path is not None:
-            self.storage_path = storage_path
-        else:
-            self.storage_path = os.environ.get("BALANCE_DATA_FILE", DEFAULT_BALANCE_STORAGE_FILE)
+    def __init__(
+        self,
+        database_path: Optional[str] = None,
+        *,
+        storage_path: Optional[str] = None,
+        legacy_storage_path: Optional[str] = None,
+    ):
+        if database_path is not None and storage_path is not None:
+            raise ValueError("database_path and storage_path cannot both be set")
+        selected_path = database_path if database_path is not None else storage_path
+        self._database = SQLiteDatabase(selected_path)
+        self.storage_path = self._database.path
+        self.legacy_storage_path = legacy_storage_path
+        if (
+            legacy_storage_path is None
+            and self.storage_path == os.path.realpath(DEFAULT_DATABASE_PATH)
+        ):
+            self.legacy_storage_path = LEGACY_STORAGE_FILE
 
         self._entries: Dict[str, LedgerEntry] = {}
         self._batches: Dict[str, SettlementBatch] = {}
         self.load_from_storage()
 
+    def _migrate_legacy_json(self) -> None:
+        """Import balance_ledger.json exactly once into normalized tables."""
+        migration_name = "balance_ledger_json_v1"
+        if self._database.migration_applied(migration_name):
+            return
+        existing_entries, existing_batches = self._database.load_ledger()
+        if existing_entries or existing_batches:
+            self._database.mark_migration_applied(migration_name)
+            return
+
+        legacy_path = self.legacy_storage_path
+        if legacy_path and os.path.exists(legacy_path):
+            try:
+                with open(legacy_path, "r", encoding="utf-8") as storage_file:
+                    payload = json.load(storage_file)
+                self._database.replace_ledger(
+                    payload.get("entries", []), payload.get("batches", [])
+                )
+            except (OSError, ValueError, KeyError):
+                logger.exception("Failed to migrate balance ledger from %s", legacy_path)
+                raise
+        self._database.mark_migration_applied(migration_name)
+
     def load_from_storage(self) -> None:
-        """Load ledger entries and settlement batches from JSON storage."""
+        """Load ledger entries and settlement batches from normalized tables."""
         self._entries.clear()
         self._batches.clear()
 
-        if not self.storage_path or self.storage_path == ":memory:":
-            return
-
-        if os.path.exists(self.storage_path):
-            try:
-                with open(self.storage_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for e_data in data.get("entries", []):
-                        entry = LedgerEntry.from_dict(e_data)
-                        self._entries[entry.entry_id] = entry
-                    for b_data in data.get("batches", []):
-                        batch = SettlementBatch.from_dict(b_data)
-                        self._batches[batch.batch_id] = batch
-            except Exception as e:
-                print(f"[BalanceManager] Warning: Failed to load balance storage from {self.storage_path}: {e}")
+        self._migrate_legacy_json()
+        stored_entries, stored_batches = self._database.load_ledger()
+        for entry_data in stored_entries:
+            entry = LedgerEntry.from_dict(entry_data)
+            self._entries[entry.entry_id] = entry
+        for batch_data in stored_batches:
+            batch = SettlementBatch.from_dict(batch_data)
+            self._batches[batch.batch_id] = batch
 
     def save_to_storage(self) -> None:
-        """Persist ledger entries and settlement batches to JSON storage."""
-        if not self.storage_path or self.storage_path == ":memory:":
-            return
-
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(self.storage_path)), exist_ok=True)
-            payload = {
-                "entries": [e.to_dict() for e in self._entries.values()],
-                "batches": [b.to_dict() for b in self._batches.values()],
-            }
-            tmp_path = f"{self.storage_path}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, self.storage_path)
-        except Exception as e:
-            print(f"[BalanceManager] Warning: Failed to save balance storage to {self.storage_path}: {e}")
+        """Atomically persist the ledger graph to normalized SQLite tables."""
+        entries = []
+        for entry in self._entries.values():
+            payload = entry.to_dict()
+            for participant, participant_payload in zip(
+                entry.participants, payload["participants"]
+            ):
+                participant_payload["username"] = participant.username
+            entries.append(payload)
+        self._database.replace_ledger(
+            entries,
+            [batch.to_dict() for batch in self._batches.values()],
+        )
 
     def record_settlement(
         self,

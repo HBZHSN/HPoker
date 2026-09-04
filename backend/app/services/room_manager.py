@@ -6,10 +6,12 @@ import logging
 import os
 import threading
 from typing import Dict, List, Optional
+
+from backend.app.database import DEFAULT_DATABASE_PATH, SQLiteDatabase
 from backend.app.models.room import Room, RoomConfig
 
 logger = logging.getLogger("poker.rooms")
-DEFAULT_STORAGE_FILE = os.path.join(
+LEGACY_STORAGE_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data",
     "rooms.json",
@@ -17,60 +19,68 @@ DEFAULT_STORAGE_FILE = os.path.join(
 
 
 class RoomManager:
-    """Manage active poker rooms and atomically persist safe checkpoints."""
+    """Manage active poker rooms and persist safe checkpoints in SQLite."""
 
-    def __init__(self, storage_path: Optional[str] = None):
-        self.storage_path = (
-            storage_path
-            if storage_path is not None
-            else os.environ.get("ROOMS_DATA_FILE", DEFAULT_STORAGE_FILE)
-        )
+    def __init__(
+        self,
+        database_path: Optional[str] = None,
+        *,
+        storage_path: Optional[str] = None,
+        legacy_storage_path: Optional[str] = None,
+    ):
+        if database_path is not None and storage_path is not None:
+            raise ValueError("database_path and storage_path cannot both be set")
+        selected_path = database_path if database_path is not None else storage_path
+        self._database = SQLiteDatabase(selected_path)
+        self.storage_path = self._database.path
+        self.legacy_storage_path = legacy_storage_path
+        if (
+            legacy_storage_path is None
+            and self.storage_path == os.path.realpath(DEFAULT_DATABASE_PATH)
+        ):
+            self.legacy_storage_path = LEGACY_STORAGE_FILE
         self._rooms: Dict[str, Room] = {}
         self._storage_lock = threading.RLock()
         self.load_from_storage()
 
-    def load_from_storage(self) -> None:
-        """Load all un-settled rooms from the durable checkpoint file."""
-        self._rooms.clear()
-        if (
-            not self.storage_path
-            or self.storage_path == ":memory:"
-            or not os.path.exists(self.storage_path)
-        ):
+    def _migrate_legacy_json(self) -> None:
+        """Import rooms.json exactly once when creating the production DB."""
+        migration_name = "rooms_json_v1"
+        if self._database.migration_applied(migration_name):
             return
-        try:
-            with open(self.storage_path, "r", encoding="utf-8") as storage_file:
-                payload = json.load(storage_file)
-            for room_data in payload.get("rooms", []):
-                room = Room.from_checkpoint_dict(room_data)
-                self._rooms[room.room_id] = room
-        except Exception:
-            logger.exception("Failed to load room checkpoints from %s", self.storage_path)
+        if self._database.load_rooms():
+            self._database.mark_migration_applied(migration_name)
+            return
+
+        legacy_path = self.legacy_storage_path
+        if legacy_path and os.path.exists(legacy_path):
+            try:
+                with open(legacy_path, "r", encoding="utf-8") as storage_file:
+                    payload = json.load(storage_file)
+                self._database.replace_rooms(payload.get("rooms", []))
+            except (OSError, ValueError, KeyError):
+                logger.exception("Failed to migrate room checkpoints from %s", legacy_path)
+                raise
+        self._database.mark_migration_applied(migration_name)
+
+    def load_from_storage(self) -> None:
+        """Load all unsettled rooms from durable SQLite checkpoints."""
+        self._rooms.clear()
+        self._migrate_legacy_json()
+        for room_data in self._database.load_rooms():
+            room = Room.from_checkpoint_dict(room_data)
+            self._rooms[room.room_id] = room
 
     def save_to_storage(self) -> None:
-        """Atomically flush all un-settled room checkpoints to disk."""
-        if not self.storage_path or self.storage_path == ":memory:":
-            return
+        """Atomically flush all unsettled room checkpoints to SQLite."""
         with self._storage_lock:
-            try:
-                storage_dir = os.path.dirname(os.path.abspath(self.storage_path))
-                os.makedirs(storage_dir, exist_ok=True)
-                payload = {
-                    "version": 1,
-                    "rooms": [
-                        room.to_checkpoint_dict()
-                        for room in self._rooms.values()
-                        if not room.is_ended
-                    ],
-                }
-                tmp_path = f"{self.storage_path}.tmp"
-                with open(tmp_path, "w", encoding="utf-8") as storage_file:
-                    json.dump(payload, storage_file, ensure_ascii=False, indent=2)
-                    storage_file.flush()
-                    os.fsync(storage_file.fileno())
-                os.replace(tmp_path, self.storage_path)
-            except Exception:
-                logger.exception("Failed to save room checkpoints to %s", self.storage_path)
+            self._database.replace_rooms(
+                [
+                    room.to_checkpoint_dict()
+                    for room in self._rooms.values()
+                    if not room.is_ended
+                ]
+            )
 
     def checkpoint_room(self, room: Room) -> None:
         """Record a completed hand if needed, then flush a safe checkpoint."""

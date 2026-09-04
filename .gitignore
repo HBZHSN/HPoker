@@ -23,6 +23,11 @@ dist/
 backend/data/rooms.json
 backend/data/rooms.json.tmp
 
+# Runtime SQLite databases (production and dedicated pytest database)
+backend/data/*.sqlite3
+backend/data/*.sqlite3-shm
+backend/data/*.sqlite3-wal
+
 # Logs and OS files
 *.log
 .DS_Store
