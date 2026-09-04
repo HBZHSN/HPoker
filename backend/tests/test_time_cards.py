@@ -295,3 +295,62 @@ def test_room_checkpoint_and_sit_down_preserves_hands_played():
     assert new_seat.hands_played == 14
     assert new_seat.time_bank_cards == 3
 
+
+@pytest.mark.asyncio
+async def test_mid_hand_joined_player_time_card_and_turn_protection():
+    """Verify that a player sitting down mid-hand cannot be assigned turns or have time cards consumed."""
+    config = RoomConfig(
+        room_name="Mid-hand Room",
+        buyin_chips=1000,
+        cash_value=100.0,
+        small_blind=5,
+        big_blind=10,
+        action_timeout=1,
+        max_seats=6
+    )
+    room = room_manager.create_room(host_player_id="u_test1", config=config)
+    room.sit_down_player("u_test1", "test1", 0)
+    room.sit_down_player("u_test2", "test2", 1)
+
+    # Start hand with p1 and p2
+    assert room.table.start_new_hand() is True
+    assert room.table.street == Street.PREFLOP
+    turn_seat = room.table.current_turn_seat
+    assert turn_seat in (0, 1)
+
+    # p3 sits down mid-hand
+    assert room.sit_down_player("u_test3", "test3", 2) is True
+    p3 = room.table.seats[2]
+    assert p3 is not None
+    assert len(p3.hole_cards) == 0
+    assert p3.is_folded is True
+    assert p3.has_acted_this_round is True
+    assert p3.time_bank_cards == 3
+
+    # Even if table.current_turn_seat were pointed to p3 (e.g., edge case),
+    # use_time_bank_for_current_player must refuse and preserve time cards.
+    original_turn = room.table.current_turn_seat
+    room.table.current_turn_seat = 2
+    assert room.table.use_time_bank_for_current_player() is False
+    assert p3.time_bank_cards == 3
+
+    # Trigger turn timer while pointing at p3: must immediately redirect to next valid seat and not consume time cards
+    await trigger_room_turn_timer(room.room_id)
+    assert room.table.current_turn_seat != 2
+    assert p3.time_bank_cards == 3
+
+    timeout_manager.cancel_all_timers(room.room_id)
+
+    # Finish current hand
+    active_seat = room.table.current_turn_seat
+    active_player = room.table.seats[active_seat]
+    room.table.handle_action(active_player.player_id, "FOLD")
+    assert room.table.street == Street.HAND_END
+
+    # Start new hand: p3 must now be active with 2 cards and not folded
+    assert room.table.start_new_hand() is True
+    assert len(p3.hole_cards) == 2
+    assert p3.is_folded is False
+    assert p3.time_bank_cards == 3
+
+

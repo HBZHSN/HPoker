@@ -238,6 +238,8 @@ class TableStateMachine:
             if s is not None and s.player_id == player_id:
                 return False
 
+        hand_is_running = self.street not in (Street.IDLE, Street.HAND_END)
+
         self.seats[seat_index] = PlayerSeat(
             player_id=player_id,
             name=name,
@@ -250,7 +252,12 @@ class TableStateMachine:
             avatar=avatar or "👤",
             is_bot=is_bot,
             is_test=is_test,
+            is_folded=hand_is_running,
+            has_acted_this_round=hand_is_running,
         )
+        if hand_is_running and self.current_turn_seat == seat_index:
+            self.current_turn_seat = self._find_next_action_seat(seat_index)
+            self.turn_started_at = time.time() if self.current_turn_seat is not None else None
         return True
 
     def use_time_bank_for_current_player(self) -> bool:
@@ -258,7 +265,7 @@ class TableStateMachine:
         if self.current_turn_seat is None:
             return False
         player = self.seats[self.current_turn_seat]
-        if not player or len(player.hole_cards) == 0 or player.time_bank_cards <= 0:
+        if not player or len(player.hole_cards) == 0 or player.is_folded or player.time_bank_cards <= 0:
             return False
         if player.use_time_bank_card():
             self.is_using_time_bank = True
@@ -330,6 +337,9 @@ class TableStateMachine:
 
         self.ready_player_ids.discard(player.player_id)
         self.seats[seat_index] = None
+        if self.current_turn_seat == seat_index:
+            self.current_turn_seat = self._find_next_action_seat(seat_index)
+            self.turn_started_at = time.time() if self.current_turn_seat is not None else None
         return player
 
     def refund_unsettled_hand(self) -> Dict[str, int]:

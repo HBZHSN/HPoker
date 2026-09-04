@@ -28,10 +28,21 @@ export default function App() {
       return null;
     }
   });
+  const [spectateMode, setSpectateMode] = useState(() => {
+    const savedUser = localStorage.getItem('hpoker_user') || localStorage.getItem('ggpoker_user');
+    if (!savedUser) return false;
+    try {
+      const user = JSON.parse(savedUser);
+      return localStorage.getItem(`hpoker_spectate_${user.user_id}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [roomData, setRoomData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState(activeRoomId ? 'connecting' : 'idle');
   const [socialHistory, setSocialHistory] = useState([]);
   const [seatSocialBubbles, setSeatSocialBubbles] = useState({});
+  const [spectatorSocialBubbles, setSpectatorSocialBubbles] = useState([]);
 
   // Modals
   const [profileOpen, setProfileOpen] = useState(false);
@@ -44,6 +55,7 @@ export default function App() {
   useEffect(() => {
     setSocialHistory([]);
     setSeatSocialBubbles({});
+    setSpectatorSocialBubbles([]);
     for (const timer of socialBubbleTimersRef.current.values()) {
       window.clearTimeout(timer);
     }
@@ -140,20 +152,43 @@ export default function App() {
   useEffect(() => {
     if (!currentUser?.user_id) return;
     const savedRoomId = localStorage.getItem(lastRoomStorageKey(currentUser.user_id));
+    const savedSpectate = localStorage.getItem(`hpoker_spectate_${currentUser.user_id}`) === 'true';
     if (savedRoomId) {
+      setSpectateMode(savedSpectate);
       setActiveRoomId(savedRoomId);
       setConnectionStatus('connecting');
     }
   }, [currentUser?.user_id]);
 
-  const rememberAndEnterRoom = useCallback((roomId) => {
+  const rememberAndEnterRoom = useCallback((roomId, options = {}) => {
+    const isSpectate = Boolean(options.spectate);
     if (currentUser?.user_id) {
       localStorage.setItem(lastRoomStorageKey(currentUser.user_id), roomId);
+      if (isSpectate) {
+        localStorage.setItem(`hpoker_spectate_${currentUser.user_id}`, 'true');
+      } else {
+        localStorage.removeItem(`hpoker_spectate_${currentUser.user_id}`);
+      }
     }
     setRoomData(null);
+    setSpectateMode(isSpectate);
     setActiveRoomId(roomId);
     setConnectionStatus('connecting');
   }, [currentUser?.user_id]);
+
+  const handleStandUpToSpectate = useCallback(() => {
+    if (
+      activeRoomId &&
+      wsRef.current &&
+      wsRef.current.readyState === WebSocket.OPEN
+    ) {
+      wsRef.current.send(JSON.stringify({ event: 'STAND_UP', payload: {} }));
+      setSpectateMode(true);
+      if (currentUser?.user_id) {
+        localStorage.setItem(`hpoker_spectate_${currentUser.user_id}`, 'true');
+      }
+    }
+  }, [activeRoomId, currentUser?.user_id]);
 
   const handleLeaveRoom = useCallback((options = {}) => {
     const notifyServer = options.notifyServer !== false;
@@ -167,7 +202,9 @@ export default function App() {
     }
     if (currentUser?.user_id) {
       localStorage.removeItem(lastRoomStorageKey(currentUser.user_id));
+      localStorage.removeItem(`hpoker_spectate_${currentUser.user_id}`);
     }
+    setSpectateMode(false);
     setActiveRoomId(null);
     setRoomData(null);
     setConnectionStatus('idle');
@@ -219,9 +256,22 @@ export default function App() {
       socialBubbleTimersRef.current.set(activity.player_id, timer);
     };
 
+    const showSpectatorSocialBubble = (activity) => {
+      setSpectatorSocialBubbles((prev) => [...prev, activity].slice(-5));
+      window.setTimeout(() => {
+        setSpectatorSocialBubbles((prev) =>
+          prev.filter((item) => item.activity_id !== activity.activity_id)
+        );
+      }, 4500);
+    };
+
     const appendSocialActivity = (activity) => {
       setSocialHistory((history) => [...history, activity].slice(-80));
-      showSeatSocialBubble(activity);
+      if (activity.is_spectator) {
+        showSpectatorSocialBubble(activity);
+      } else {
+        showSeatSocialBubble(activity);
+      }
     };
 
     const connect = () => {
@@ -229,8 +279,9 @@ export default function App() {
       setConnectionStatus(retryCount > 0 ? 'retrying' : 'connecting');
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+      const spectateParam = spectateMode ? (tokenParam ? '&spectate=true' : '?spectate=true') : '';
       const wsUrl = activeRoomId
-        ? `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}${tokenParam}`
+        ? `${protocol}//${window.location.host}/ws/${activeRoomId}/${currentUser.user_id}${tokenParam}${spectateParam}`
         : `${protocol}//${window.location.host}/ws/lobby/${currentUser.user_id}${tokenParam}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -252,6 +303,14 @@ export default function App() {
           if (msg.event === 'ROOM_STATE') {
             if (activeRoomId) {
               localStorage.setItem(lastRoomStorageKey(currentUser.user_id), activeRoomId);
+              const tableSeats = msg.payload?.table?.seats || [];
+              const isSeated = tableSeats.some((s) => s && s.player_id === currentUser.user_id);
+              if (isSeated) {
+                setSpectateMode(false);
+                if (currentUser?.user_id) {
+                  localStorage.removeItem(`hpoker_spectate_${currentUser.user_id}`);
+                }
+              }
               setRoomData(msg.payload);
               setConnectionStatus('connected');
             }
@@ -355,7 +414,7 @@ export default function App() {
       if (wsRef.current) wsRef.current.close();
       wsRef.current = null;
     };
-  }, [activeRoomId, currentUser?.user_id, handleLeaveRoom]);
+  }, [activeRoomId, currentUser?.user_id, spectateMode, handleLeaveRoom]);
 
   const sendWsEvent = (event, payload = {}) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -398,8 +457,8 @@ export default function App() {
     }
   };
 
-  const handleJoinRoom = (roomId) => {
-    rememberAndEnterRoom(roomId);
+  const handleJoinRoom = (roomId, options = {}) => {
+    rememberAndEnterRoom(roomId, options);
   };
 
   // If not authenticated, require login
@@ -419,8 +478,10 @@ export default function App() {
           currentUser={currentUser}
           socialHistory={socialHistory}
           seatSocialBubbles={seatSocialBubbles}
+          spectatorSocialBubbles={spectatorSocialBubbles}
           onSendWsEvent={sendWsEvent}
           onLeaveRoom={handleLeaveRoom}
+          onStandUpToSpectate={handleStandUpToSpectate}
         />
       ) : activeRoomId ? (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center p-6">

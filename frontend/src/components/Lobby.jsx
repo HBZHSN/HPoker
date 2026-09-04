@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2, Wallet } from 'lucide-react';
+import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2, Wallet, Eye } from 'lucide-react';
 import { filterVisibleLobbyUsers } from '../utils/lobbyUsers';
 
 export default function Lobby({
@@ -225,6 +225,15 @@ export default function Lobby({
                             <Users className="w-3.5 h-3.5 text-sky-400" />
                             在座: {r.seated_count}/{r.max_seats}
                           </span>
+                          {r.spectator_count > 0 && (
+                            <>
+                              <span className="text-slate-600">·</span>
+                              <span className="flex items-center gap-1 text-amber-300 font-medium">
+                                <Eye className="w-3.5 h-3.5 text-amber-400" />
+                                观战: {r.spectator_count}
+                              </span>
+                            </>
+                          )}
                           <span className="text-slate-600">·</span>
                           <span className="flex items-center gap-1 text-slate-400">
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -244,13 +253,34 @@ export default function Lobby({
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 sm:self-center shrink-0">
-                      <button
-                        onClick={() => onJoinRoom(r.room_id)}
-                        className="px-4 py-2.5 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl border border-slate-700 hover:border-amber-400 transition flex items-center justify-center gap-1.5 shadow cursor-pointer whitespace-nowrap"
-                      >
-                        进入牌桌
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
+                      {r.seated_count >= r.max_seats ? (
+                        <button
+                          onClick={() => onJoinRoom(r.room_id, { spectate: true })}
+                          className="px-3.5 py-2.5 bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 hover:text-white font-bold text-xs rounded-xl border border-indigo-500/40 transition flex items-center justify-center gap-1.5 shadow cursor-pointer whitespace-nowrap"
+                          title="牌桌已满，作为观众进入观战"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-indigo-400" />
+                          满员观战
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => onJoinRoom(r.room_id, { spectate: false })}
+                            className="px-3.5 py-2.5 bg-slate-800 hover:bg-amber-500 hover:text-slate-950 text-white font-bold text-xs rounded-xl border border-slate-700 hover:border-amber-400 transition flex items-center justify-center gap-1.5 shadow cursor-pointer whitespace-nowrap"
+                          >
+                            进入牌桌
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onJoinRoom(r.room_id, { spectate: true })}
+                            className="px-2.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-amber-300 font-bold text-xs rounded-xl border border-slate-700/80 hover:border-amber-500/40 transition flex items-center justify-center gap-1 shadow cursor-pointer whitespace-nowrap"
+                            title="不入座，作为观众进入观战"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-amber-400/80" />
+                            观战
+                          </button>
+                        </>
+                      )}
                       {canDelete && (
                         <button
                           onClick={(e) => {

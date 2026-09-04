@@ -8,6 +8,8 @@ import {
   History,
   RefreshCw,
   AlertCircle,
+  Eye,
+  UserPlus,
 } from 'lucide-react';
 import {
   PRE_ACTIONS,
@@ -33,6 +35,7 @@ export default function ActionBar({
   selfSeat = null,
   onRebuy,
   canRebuy = false,
+  onQuickSitDown,
   currentTurnPlayer = null,
   isMyTurn = false,
   street = 'IDLE',
@@ -531,8 +534,62 @@ export default function ActionBar({
 
       </div>
 
-      {/* 2. Rebuy Alert Card (Only when player has 0 chips) */}
-      {canRebuy && (
+      {!selfSeat ? (
+        <div className="poker-action-spectator-panel bg-slate-900/90 border border-indigo-500/40 rounded-xl lg:rounded-2xl p-3 flex flex-col gap-3 shadow-xl">
+          <div className="flex items-center gap-2 text-indigo-300">
+            <Eye className="w-4 h-4 text-indigo-400" />
+            <span className="text-xs lg:text-sm font-black tracking-wide">观战模式</span>
+          </div>
+
+          <p className="text-[11px] lg:text-xs text-slate-400 leading-relaxed">
+            您当前正在实时观战。手牌对观战者绝对保密，只展示公共牌与公开亮牌。可随时在左下角与全桌正常聊天与发表情。
+          </p>
+
+          <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col gap-1.5 text-xs">
+            <div className="flex items-center justify-between text-slate-300">
+              <span className="text-[11px] text-slate-500">在座人数</span>
+              <span className="font-bold text-amber-300">
+                {seats.filter(Boolean).length} / {seats.length} 人
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-slate-300">
+              <span className="text-[11px] text-slate-500">当前底池</span>
+              <span className="font-black text-amber-400">${totalPot}</span>
+            </div>
+            {currentRoundHighestBet > 0 && (
+              <div className="flex items-center justify-between text-slate-300">
+                <span className="text-[11px] text-slate-500">本轮最高注</span>
+                <span className="font-bold text-sky-400">${currentRoundHighestBet}</span>
+              </div>
+            )}
+          </div>
+
+          {seats.some((s) => !s) ? (
+            <div className="flex flex-col gap-1.5 mt-1">
+              <span className="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                ✓ 牌桌尚有空座，可入座对局
+              </span>
+              {onQuickSitDown && (
+                <button
+                  type="button"
+                  onClick={onQuickSitDown}
+                  className="w-full py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs lg:text-sm rounded-xl shadow-glow-cyan transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  入座参与对局
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center text-[11px] font-bold text-slate-400">
+              牌桌当前已满员，尽享精彩对局
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {/* 2. Rebuy Alert Card (Only when player has 0 chips) */}
+          {canRebuy && (
         <div className="poker-action-rebuy bg-gradient-to-r from-red-950/90 via-amber-950/90 to-red-950/90 border border-amber-500/80 lg:border-2 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex items-center justify-between shadow-glow-gold">
           <div className="flex flex-col gap-0.5">
             <span className="text-[11px] lg:text-xs font-black text-amber-300 flex items-center gap-1">
@@ -990,6 +1047,8 @@ export default function ActionBar({
           })}
         </div>
       </div>
+      </>
+      )}
 
         {/* 行动记录 */}
       {actionHistory && actionHistory.length > 0 && (

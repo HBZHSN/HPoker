@@ -105,11 +105,20 @@ class RoomManager:
         for r in self._rooms.values():
             if r.is_ended:
                 continue
+            spectator_count = 0
+            try:
+                from backend.app.websocket.connection_manager import ws_manager
+                seated_ids = {s.player_id for s in r.table.seats if s}
+                spectator_count = len(ws_manager.get_room_user_ids(r.room_id) - seated_ids)
+            except Exception:
+                spectator_count = 0
+
             rooms_info.append({
                 "room_id": r.room_id,
                 "room_name": r.config.room_name,
                 "host_player_id": r.host_player_id,
                 "seated_count": len(r.table.active_seated_players),
+                "spectator_count": spectator_count,
                 "max_seats": r.config.max_seats,
                 "small_blind": r.config.small_blind,
                 "big_blind": r.config.big_blind,
