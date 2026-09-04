@@ -410,21 +410,21 @@ export default function ActionBar({
   const formatActionName = (act, amt) => {
     switch (act) {
       case 'FOLD':
-        return '弃牌 Fold';
+        return '弃牌';
       case 'CHECK':
-        return '过牌 Check';
+        return '过牌';
       case 'CALL':
-        return `跟注 Call $${amt}`;
+        return `跟注 $${amt}`;
       case 'BET':
-        return `下注 Bet $${amt}`;
+        return `下注 $${amt}`;
       case 'RAISE':
-        return `加注 Raise to $${amt}`;
+        return `加注至 $${amt}`;
       case 'ALL_IN':
-        return `全下 All-In $${amt}`;
+        return `全下 $${amt}`;
       case 'POST_SB':
-        return `小盲 SB $${amt}`;
+        return `小盲 $${amt}`;
       case 'POST_BB':
-        return `大盲 BB $${amt}`;
+        return `大盲 $${amt}`;
       default:
         return act;
     }
@@ -456,7 +456,7 @@ export default function ActionBar({
             )}
             <span className="text-xs lg:text-sm font-black tracking-wide">
               {isMyTurn && isUsingTimeBank
-                ? '时间卡 +30 秒'
+                ? '时间卡'
                 : isMyTurn
                 ? '轮到你'
                 : currentTurnPlayer
@@ -510,14 +510,13 @@ export default function ActionBar({
               <button
                 onClick={onUseTimeCard}
                 className="px-2 py-0.5 lg:px-2.5 lg:py-1 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-purple-100 rounded-lg text-[11px] lg:text-xs font-black border border-purple-400/50 shadow-md transition active:scale-95 cursor-pointer flex items-center gap-1"
-                title="使用 1 张时间卡"
               >
                 <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-purple-300 animate-spin" />
                 <span>+30 秒</span>
               </button>
             ) : isUsingTimeBank ? (
               <span className="text-[10px] lg:text-[11px] font-black text-purple-300 animate-pulse">
-                时间卡生效
+                +30 秒
               </span>
             ) : (
               null
@@ -561,7 +560,7 @@ export default function ActionBar({
               )}
             </div>
             <div className="flex items-baseline gap-1">
-              <span className="text-[11px] lg:text-xs text-slate-400 font-bold">筹码:</span>
+                <span className="text-[11px] lg:text-xs text-slate-400 font-bold">筹码</span>
               <span className={`text-sm lg:text-lg font-black ${selfSeat.chips === 0 ? 'text-red-400' : 'text-amber-400'}`}>
                 ${selfSeat.chips}
               </span>
@@ -592,7 +591,7 @@ export default function ActionBar({
         <div className="flex items-center justify-between">
           <div className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
             <Zap className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-amber-400" />
-            <span>{canPreAction ? '操作 (提前预选)' : '操作'}</span>
+            <span>{canPreAction ? '预选' : '操作'}</span>
           </div>
           {canPreAction && preAction && (
             <button
@@ -601,16 +600,15 @@ export default function ActionBar({
                 setPreActionData(null);
               }}
               className="text-[10px] lg:text-[11px] text-amber-300 hover:text-amber-200 bg-amber-950/80 hover:bg-amber-900/90 border border-amber-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold cursor-pointer transition shadow"
-              title="取消提前预选"
             >
-              <span>已预选: {
+              <span>预选：{
                 preAction === PRE_ACTIONS.CHECK_FOLD
                   ? '过牌/弃牌'
                   : preAction === PRE_ACTIONS.CHECK_CALL
                   ? `过牌/跟注${preCallCost > 0 ? ` $${preCallDisplayAmt}` : ''}`
                   : `加注至 $${currentAmount}`
               }</span>
-              <span className="text-amber-400 font-extrabold">✕ 取消</span>
+              <span className="text-amber-400 font-extrabold">✕</span>
             </button>
           )}
         </div>
@@ -624,13 +622,12 @@ export default function ActionBar({
               className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
             >
               <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
-              <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">Fold [F]</span>
+              <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">[F]</span>
             </button>
           ) : canPreAction ? (
             <button
               onClick={() => togglePreAction(PRE_ACTIONS.CHECK_FOLD)}
               disabled={disabled}
-              title="无人加注则过牌，有任何加注则弃牌"
               className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg ${
                 preAction === PRE_ACTIONS.CHECK_FOLD
                   ? 'bg-gradient-to-b from-red-700 via-amber-950 to-red-950 border-amber-400 ring-2 ring-amber-400/80 text-amber-200 shadow-glow-gold'
@@ -650,7 +647,7 @@ export default function ActionBar({
               <span className={`text-[10px] lg:text-[11px] font-medium ${
                 preAction === PRE_ACTIONS.CHECK_FOLD ? 'text-amber-300' : 'text-slate-400'
               }`}>
-                Check/Fold [F]
+                [F]
               </span>
             </button>
           ) : (
@@ -659,7 +656,7 @@ export default function ActionBar({
               className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg"
             >
               <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
-              <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">Fold [F]</span>
+              <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">[F]</span>
             </button>
           )}
 
@@ -672,7 +669,7 @@ export default function ActionBar({
                 className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
               >
                 <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
-                <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Check [Space]</span>
+                <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
               </button>
             ) : (
               <button
@@ -683,18 +680,13 @@ export default function ActionBar({
                 <span className="text-sm lg:text-base font-black tracking-wide">
                   跟注 ${legalActions?.call_amount || 0}
                 </span>
-                <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Call [Space]</span>
+                <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
               </button>
             )
           ) : canPreAction ? (
             <button
               onClick={() => togglePreAction(PRE_ACTIONS.CHECK_CALL)}
               disabled={disabled}
-              title={
-                preCallCost > 0
-                  ? `若无人继续加注则跟注 $${preCallDisplayAmt}，若有人加注则取消预选`
-                  : '若无人加注则过牌，若有人加注则取消预选'
-              }
               className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg ${
                 preAction === PRE_ACTIONS.CHECK_CALL
                   ? 'bg-gradient-to-b from-emerald-600 to-emerald-950 border-emerald-400 ring-2 ring-emerald-400/80 text-white shadow-[0_0_15px_rgba(52,211,153,0.5)]'
@@ -714,7 +706,7 @@ export default function ActionBar({
               <span className={`text-[10px] lg:text-[11px] font-medium ${
                 preAction === PRE_ACTIONS.CHECK_CALL ? 'text-emerald-200' : 'text-slate-400'
               }`}>
-                Check/Call [Space]
+                [Space]
               </span>
             </button>
           ) : (
@@ -723,7 +715,7 @@ export default function ActionBar({
               className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg"
             >
               <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
-              <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">Check [Space]</span>
+              <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
             </button>
           )}
 
@@ -772,7 +764,7 @@ export default function ActionBar({
               className={`poker-horizontal-raise-slider w-full h-2 lg:h-2.5 my-1 rounded-lg appearance-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-slate-800 ${
                 isAllIn ? 'accent-purple-400' : 'accent-amber-400'
               }`}
-              aria-label="非线性调整下注额度"
+              aria-label="下注额"
               aria-valuetext={`下注 ${currentAmount} 筹码`}
             />
             <div className="flex items-center justify-between text-[9px] lg:text-[10px] text-slate-500 font-semibold px-0.5">
@@ -801,7 +793,7 @@ export default function ActionBar({
                     全下 ${legalActions?.all_in_amount || currentAmount}
                   </span>
                   <span className="text-[10px] lg:text-[11px] text-purple-300/90 font-medium">
-                    All-In [R]
+                    [R]
                   </span>
                 </>
               ) : (
@@ -810,7 +802,7 @@ export default function ActionBar({
                     {legalActions?.can_bet ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`}
                   </span>
                   <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">
-                    {legalActions?.can_bet ? 'Bet [R]' : 'Raise [R]'}
+                    [R]
                   </span>
                 </>
               )}
@@ -819,7 +811,6 @@ export default function ActionBar({
             <button
               onClick={() => togglePreAction(PRE_ACTIONS.RAISE)}
               disabled={disabled || maxVal <= 0}
-              title="若无人加注则按此额度加注，若有人加注则取消预选"
               className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed min-h-[52px] lg:min-h-[60px] ${
                 preAction === PRE_ACTIONS.RAISE
                   ? isAllIn
@@ -843,7 +834,7 @@ export default function ActionBar({
               <span className={`text-[10px] lg:text-[11px] font-medium ${
                 preAction === PRE_ACTIONS.RAISE ? 'text-amber-300' : 'text-slate-400'
               }`}>
-                Raise [R] (无人加注时)
+                [R]
               </span>
             </button>
           ) : (
@@ -852,7 +843,7 @@ export default function ActionBar({
               className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg opacity-35 cursor-not-allowed min-h-[52px] lg:min-h-[60px] bg-gradient-to-b from-amber-500 to-amber-900 text-white"
             >
               <span className="text-sm lg:text-base font-black tracking-wide">加注</span>
-              <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">Raise [R]</span>
+              <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">[R]</span>
             </button>
           )}
         </div>
@@ -869,7 +860,6 @@ export default function ActionBar({
               onClick={() => adjustBB(-1)}
               disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
-              title="-1 BB"
             >
               -1BB
             </button>
@@ -896,7 +886,6 @@ export default function ActionBar({
               onClick={() => adjustBB(1)}
               disabled={(!isMyTurn && !canPreAction) || (isMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
               className="px-1.5 py-0.5 lg:px-2 lg:py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-md lg:rounded-lg border border-slate-700 text-[10px] lg:text-xs font-bold active:scale-95 shadow cursor-pointer transition"
-              title="+1 BB"
             >
               +1BB
             </button>
