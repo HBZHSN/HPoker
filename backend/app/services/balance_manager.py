@@ -301,6 +301,7 @@ class BalanceManager:
                 unsettled_games_count=data["unsettled_games_count"],
             )
             for data in user_map.values()
+            if round(data["net_cash"], 2) != 0 or data["net_chips"] != 0
         ]
 
         # Sort descending by net_cash (top winners first)
@@ -354,6 +355,7 @@ class BalanceManager:
                 "unsettled_games_count": u["unsettled_games_count"],
             }
             for u in user_map.values()
+            if round(u["net_cash"], 2) != 0 or u["net_chips"] != 0
         ]
         user_summaries.sort(key=lambda s: s["net_cash"], reverse=True)
 
