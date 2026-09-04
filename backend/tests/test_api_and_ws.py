@@ -494,7 +494,7 @@ def test_host_delete_room_ws_broadcast():
             assert room_manager.get_room(room_id) is None
 
 
-def test_unsettled_room_is_retained_when_empty():
+def test_empty_room_cleanup_is_scheduled_asynchronously():
     from backend.app.websocket.router import schedule_room_empty_check
 
     room = room_manager.create_room(
@@ -504,7 +504,8 @@ def test_unsettled_room_is_retained_when_empty():
     room_id = room.room_id
     assert room_manager.get_room(room_id) is not None
 
-    # A legacy empty-check request must no longer delete an un-settled room.
+    # Outside an event loop no background task is started; live WebSocket
+    # disconnects exercise this hook in their running loop.
     schedule_room_empty_check(room_id, delay_seconds=0.1)
 
     assert room_manager.get_room(room_id) is not None
@@ -819,5 +820,4 @@ def test_security_rest_room_details_card_isolation():
             for seat in spec_msg["payload"]["table"]["seats"]:
                 if seat:
                     assert seat["hole_cards"] == []
-
 

@@ -24,6 +24,8 @@ class TimeoutManager:
         self._bot_tasks: Dict[str, asyncio.Task] = {}
         # room_id -> active empty room auto-cleanup asyncio.Task
         self._empty_room_tasks: Dict[str, asyncio.Task] = {}
+        # (room_id, user_id) -> delayed automatic leave/cash-out task
+        self._disconnect_tasks: Dict[tuple[str, str], asyncio.Task] = {}
 
     def cancel_turn_timer(self, room_id: str) -> None:
         """Cancel existing turn timer for a room if any."""
@@ -65,6 +67,16 @@ class TimeoutManager:
         if task and not task.done():
             task.cancel()
 
+    def cancel_disconnect_timeout(self, room_id: str, user_id: str) -> None:
+        key = (room_id, user_id)
+        task = self._disconnect_tasks.pop(key, None)
+        try:
+            current_task = asyncio.current_task()
+        except RuntimeError:
+            current_task = None
+        if task and task is not current_task and not task.done():
+            task.cancel()
+
     # Backwards-compatible alias
     def cancel_timer(self, room_id: str) -> None:
         self.cancel_turn_timer(room_id)
@@ -77,6 +89,46 @@ class TimeoutManager:
         self.cancel_replenish_task(room_id)
         self.cancel_bot_action(room_id)
         self.cancel_empty_room_cleanup(room_id)
+        for task_room_id, user_id in tuple(self._disconnect_tasks):
+            if task_room_id == room_id:
+                self.cancel_disconnect_timeout(task_room_id, user_id)
+
+    def schedule_disconnect_timeout(
+        self,
+        room_id: str,
+        user_id: str,
+        delay_seconds: float,
+        timeout_callback: Callable[[str, str], Awaitable[None]],
+    ) -> None:
+        """Cash a disconnected user out after the reconnect grace period."""
+        self.cancel_disconnect_timeout(room_id, user_id)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+
+        async def _disconnect_worker():
+            current_task = asyncio.current_task()
+            key = (room_id, user_id)
+            try:
+                await asyncio.sleep(delay_seconds)
+                await timeout_callback(room_id, user_id)
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                logger.exception(
+                    "Error in disconnect timeout for %s/%s: %s",
+                    room_id,
+                    user_id,
+                    exc,
+                )
+            finally:
+                if self._disconnect_tasks.get(key) is current_task:
+                    self._disconnect_tasks.pop(key, None)
+
+        self._disconnect_tasks[(room_id, user_id)] = loop.create_task(
+            _disconnect_worker()
+        )
 
     def schedule_empty_room_cleanup(
         self,

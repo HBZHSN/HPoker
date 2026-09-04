@@ -28,6 +28,7 @@ ws_router = APIRouter()
 BOT_ACTION_DELAY_MIN: float = 0.0
 BOT_ACTION_DELAY_MAX: float = 0.0
 BOT_ACTION_DELAY_SECONDS: float = 0.0
+DISCONNECT_GRACE_SECONDS: float = 60.0
 
 
 def get_bot_action_delay() -> float:
@@ -79,6 +80,15 @@ async def trigger_room_after_action(room_id: str):
     if not room or room.is_ended:
         timeout_manager.cancel_all_timers(room_id)
         return
+
+    if room.table.street == Street.HAND_END and room.pending_auto_leave_ids:
+        # Persist the completed hand before removing a participant whose
+        # all-in seat had to remain for pot eligibility.
+        room_manager.checkpoint_room(room)
+        if room.process_pending_auto_leaves():
+            await ws_manager.broadcast_room_state(room)
+            if await close_room_if_empty(room_id):
+                return
 
     if room.table.street == Street.RIT_DECISION:
         timeout_manager.cancel_turn_timer(room_id)
@@ -316,13 +326,38 @@ async def trigger_room_turn_timer(room_id: str):
     )
 
 
-def schedule_room_empty_check(room_id: str, delay_seconds: float = 3.0) -> None:
-    """Retain an empty active room so disconnected clients can resume it.
+async def close_room_if_empty(room_id: str) -> bool:
+    """Delete a room after its last human seat and connection have gone."""
+    room = room_manager.get_room(room_id)
+    if not room or room.has_human_players or ws_manager.has_connections(room_id):
+        return False
+    timeout_manager.cancel_all_timers(room_id)
+    room_manager.delete_room(room_id, reason="room_empty")
+    await ws_manager.close_room_connections(room_id, reason="Room is empty")
+    await broadcast_lobby_online_users()
+    return True
 
-    Kept as a compatibility hook for older callers. Rooms are now removed only
-    by an explicit host/admin disband operation.
-    """
-    timeout_manager.cancel_empty_room_cleanup(room_id)
+
+async def handle_disconnected_player_timeout(room_id: str, user_id: str) -> None:
+    """Auto-leave/cash-out one user who did not reconnect within one minute."""
+    if ws_manager.has_user_connection(room_id, user_id):
+        return
+    room = room_manager.get_room(room_id)
+    if not room or room.is_ended:
+        return
+    room.auto_leave_disconnected_player(user_id)
+    room_manager.checkpoint_room(room)
+    await ws_manager.broadcast_room_state(room)
+    await close_room_if_empty(room_id)
+
+
+def schedule_room_empty_check(room_id: str, delay_seconds: float = 0.0) -> None:
+    """Schedule removal when a room has no human seats or connections."""
+    timeout_manager.schedule_empty_room_cleanup(
+        room_id,
+        delay_seconds,
+        close_room_if_empty,
+    )
 
 
 async def broadcast_lobby_online_users():
@@ -417,6 +452,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
         )))
         await websocket.close(reason="Removed by room host")
         return
+
+    timeout_manager.cancel_disconnect_timeout(room_id, user_id)
 
     nickname = user.nickname if user else f"Spectator_{user_id[-4:]}"
     avatar = user.avatar if user else "👀"
@@ -797,9 +834,23 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
         logger.exception(f"Unexpected WebSocket error: {e}")
     finally:
         r_id, u_id = ws_manager.disconnect(websocket)
-        if r_id:
-            if ws_manager.get_room_connection_count(r_id) > 0:
-                active_r = room_manager.get_room(r_id)
-                if active_r and not active_r.is_ended:
+        if r_id and r_id != "lobby":
+            active_r = room_manager.get_room(r_id)
+            if active_r and not active_r.is_ended:
+                if u_id and not ws_manager.has_user_connection(r_id, u_id):
+                    is_seated = any(
+                        seat and seat.player_id == u_id
+                        for seat in active_r.table.seats
+                    )
+                    if is_seated:
+                        timeout_manager.schedule_disconnect_timeout(
+                            r_id,
+                            u_id,
+                            DISCONNECT_GRACE_SECONDS,
+                            handle_disconnected_player_timeout,
+                        )
+                    else:
+                        schedule_room_empty_check(r_id)
+                if ws_manager.get_room_connection_count(r_id) > 0:
                     await ws_manager.broadcast_room_state(active_r)
         await broadcast_lobby_online_users()

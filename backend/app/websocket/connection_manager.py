@@ -41,6 +41,12 @@ class ConnectionManager:
         """Check if a room currently has any connected clients."""
         return self.get_room_connection_count(room_id) > 0
 
+    def has_user_connection(self, room_id: str, user_id: str) -> bool:
+        return any(
+            self.socket_info.get(websocket) == (room_id, user_id)
+            for websocket in self.room_connections.get(room_id, set())
+        )
+
     def get_online_user_ids(self) -> Set[str]:
         """Return the set of user_ids that have at least one active WebSocket long connection."""
         return {uid for (_, uid) in self.socket_info.values() if uid}
