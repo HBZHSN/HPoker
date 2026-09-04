@@ -194,6 +194,7 @@ class TableStateMachine:
         self.payouts: List[PotPayout] = []
         self.payouts_1: List[PotPayout] = []
         self.payouts_2: List[PotPayout] = []
+        self.original_payouts: List[PotPayout] = []
         self.last_action_history: List[dict] = []
         self.ready_player_ids: Set[str] = set()
         self.turn_count: int = 0
@@ -395,6 +396,7 @@ class TableStateMachine:
         self.payouts.clear()
         self.payouts_1.clear()
         self.payouts_2.clear()
+        self.original_payouts.clear()
         self.last_action_history.clear()
         self.ready_player_ids.clear()
         self.pot_manager.reset()
@@ -901,6 +903,15 @@ class TableStateMachine:
                 evaluations[p.player_id] = eval_res
                 self.hand_evaluations[p.player_id] = eval_res
 
+            # Baseline payouts if no assistant deduction was applied
+            self.original_payouts = self.pot_manager.resolve_showdown(
+                hand_evaluations=evaluations,
+                seat_order_from_sb=sb_order,
+                assistant_players=None,
+                assistant_win_ratio=1.0,
+                small_blind=self.small_blind,
+            )
+
             self.payouts = self.pot_manager.resolve_showdown(
                 hand_evaluations=evaluations,
                 seat_order_from_sb=sb_order,
@@ -922,6 +933,17 @@ class TableStateMachine:
                 evaluations_2[p.player_id] = e2
                 self.hand_evaluations[p.player_id] = e1
                 self.hand_evaluations_2[p.player_id] = e2
+
+            # Baseline payouts if no assistant deduction was applied
+            _, _, orig_combined = self.pot_manager.resolve_showdown_twice(
+                hand_evaluations_1=evaluations_1,
+                hand_evaluations_2=evaluations_2,
+                seat_order_from_sb=sb_order,
+                assistant_players=None,
+                assistant_win_ratio=1.0,
+                small_blind=self.small_blind,
+            )
+            self.original_payouts = orig_combined
 
             p1, p2, combined = self.pot_manager.resolve_showdown_twice(
                 hand_evaluations_1=evaluations_1,
@@ -974,6 +996,19 @@ class TableStateMachine:
         if winner:
             pots, refunds = self.pot_manager.calculate_pots()
             self.payouts.clear()
+            self.original_payouts.clear()
+
+            # Baseline unreduced payouts
+            for pid, ref_amt in refunds.items():
+                if ref_amt > 0:
+                    self.original_payouts.append(PotPayout(player_id=pid, amount=ref_amt, pot_name="多余下注退回"))
+            for pot in pots:
+                self.original_payouts.append(PotPayout(
+                    player_id=winner.player_id,
+                    amount=pot.amount,
+                    pot_name=pot.name,
+                    hand_description="其他玩家弃牌获胜"
+                ))
 
             # Refunds
             for pid, ref_amt in refunds.items():
@@ -1176,6 +1211,15 @@ class TableStateMachine:
                 payout_b1 = sum(po.amount for po in self.payouts_1 if po.player_id == p.player_id)
                 payout_b2 = sum(po.amount for po in self.payouts_2 if po.player_id == p.player_id)
                 net_profit = payout_amt - total_bet
+
+                orig_payout = (
+                    sum(po.amount for po in self.original_payouts if po.player_id == p.player_id)
+                    if self.original_payouts
+                    else payout_amt
+                )
+                orig_net_profit = orig_payout - total_bet
+                assistant_adjustment = payout_amt - orig_payout
+
                 hand_desc = "未参与"
                 hand_desc_2 = None
                 if p.player_id in self.hand_evaluations:
@@ -1208,6 +1252,9 @@ class TableStateMachine:
                     "payout_board_1": payout_b1,
                     "payout_board_2": payout_b2,
                     "net_profit": net_profit,
+                    "original_payout_amount": orig_payout,
+                    "original_net_profit": orig_net_profit,
+                    "assistant_adjustment": assistant_adjustment,
                     "chips": p.chips,
                     "is_folded": p.is_folded,
                     "is_winner": payout_amt > 0,

@@ -123,6 +123,16 @@ export default function HandResultModal({
             </span>
           </div>
 
+          {/* Assistant Adjustment Banner */}
+          {(handResults || []).some((r) => r.assistant_adjustment && r.assistant_adjustment !== 0) && (
+            <div className="flex items-center gap-2 px-3.5 py-2 bg-purple-950/50 border border-purple-500/40 rounded-2xl text-xs text-purple-200">
+              <span className="text-base select-none">⚖️</span>
+              <span className="leading-snug">
+                本局赢家使用了胜率辅助，赢池已依房间规则折让并补偿给对手（详见下方<strong>「原应 ➔ 调整」</strong>明细）。
+              </span>
+            </div>
+          )}
+
           <div className="flex flex-col gap-2">
             {(handResults || []).map((res, idx) => {
               const isMe = selfSeat && res.player_id === selfSeat.player_id;
@@ -160,6 +170,11 @@ export default function HandResultModal({
                         {isWinner && (
                           <span className="text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded font-black">
                             赢家
+                          </span>
+                        )}
+                        {res.using_assistant && (
+                          <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-500/40 px-1.5 py-0.2 rounded font-bold">
+                            已用辅助
                           </span>
                         )}
                       </div>
@@ -254,7 +269,7 @@ export default function HandResultModal({
                     </div>
 
                     {/* Net Profit / Loss */}
-                    <div className="flex flex-col items-end min-w-[80px]">
+                    <div className="flex flex-col items-end min-w-[90px]">
                       <span
                         className={`text-base font-black ${
                           res.net_profit > 0
@@ -266,7 +281,29 @@ export default function HandResultModal({
                       >
                         {res.net_profit > 0 ? `+$${res.net_profit}` : res.net_profit < 0 ? `-$${Math.abs(res.net_profit)}` : '$0'}
                       </span>
-                      <div className="flex items-center justify-end gap-1.5">
+
+                      {/* Assistant Adjustment (Before vs After) */}
+                      {res.assistant_adjustment !== undefined && res.assistant_adjustment !== 0 && (
+                        <div className="flex items-center gap-1 mt-0.5 text-[10px] font-semibold whitespace-nowrap">
+                          {res.assistant_adjustment < 0 ? (
+                            <span
+                              className="bg-purple-950/80 text-purple-300 border border-purple-500/40 rounded px-1.5 py-0.5 shadow-sm"
+                              title={`使用辅助获胜折让：原应净赢 ${res.original_net_profit > 0 ? `+$${res.original_net_profit}` : `$${res.original_net_profit}`}，折让 -$${Math.abs(res.assistant_adjustment)}`}
+                            >
+                              原应 {res.original_net_profit > 0 ? `+$${res.original_net_profit}` : res.original_net_profit < 0 ? `-$${Math.abs(res.original_net_profit)}` : '$0'} · 折让 -${Math.abs(res.assistant_adjustment)}
+                            </span>
+                          ) : (
+                            <span
+                              className="bg-sky-950/80 text-sky-300 border border-sky-500/40 rounded px-1.5 py-0.5 shadow-sm"
+                              title={`对手使用辅助补偿：原应净输/得 ${res.original_net_profit > 0 ? `+$${res.original_net_profit}` : `$${res.original_net_profit}`}，获得补偿 +$${res.assistant_adjustment}`}
+                            >
+                              原应 {res.original_net_profit > 0 ? `+$${res.original_net_profit}` : res.original_net_profit < 0 ? `-$${Math.abs(res.original_net_profit)}` : '$0'} · 补偿 +${res.assistant_adjustment}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end gap-1.5 mt-0.5">
                         {res.rebuy_count > 1 && (
                           <span className="text-[10px] text-amber-400/80 font-medium">
                             买入 x{res.rebuy_count}

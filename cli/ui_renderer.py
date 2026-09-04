@@ -1172,6 +1172,17 @@ class PokerUiRenderer:
                 f"盈亏 {self.c(net_text, net_color)}  ·  "
                 f"余额 {self._int(result.get('chips', 0))}"
             )
+            adj = self._int(result.get("assistant_adjustment", 0))
+            if adj != 0:
+                orig_net = self._int(result.get("original_net_profit", net))
+                orig_text = f"+{orig_net}" if orig_net > 0 else str(orig_net)
+                adj_desc = f"折让 -{abs(adj)}" if adj < 0 else f"获补偿 +{adj}"
+                lines.append(
+                    self.c(
+                        f"  辅助调整  原应 {orig_text}  ·  {adj_desc}  ➔  实得 {net_text}",
+                        Colors.MAGENTA if adj < 0 else Colors.BRIGHT_CYAN
+                    )
+                )
 
         return "\n".join(lines)
 
