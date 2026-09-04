@@ -117,8 +117,13 @@ class RoomManager:
             })
         return rooms_info
 
-    def delete_room(self, room_id: str) -> bool:
-        if room_id in self._rooms:
+    def delete_room(self, room_id: str, reason: str = "room_deleted") -> bool:
+        room = self._rooms.get(room_id)
+        if room is not None:
+            # Deletion is also a cash-out boundary. Calling this after
+            # ``Room.end_room`` is harmless because that method empties seats.
+            room.cash_out_all_players(reason=reason)
+            room.is_ended = True
             del self._rooms[room_id]
             self.save_to_storage()
             return True

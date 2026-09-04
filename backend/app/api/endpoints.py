@@ -401,7 +401,7 @@ def end_room(room_id: str, requester_id: str = Query(...), settlement_type: str 
     if not report:
         raise HTTPException(status_code=403, detail="Only host can end room or room already ended")
     timeout_manager.cancel_all_timers(room_id)
-    room_manager.delete_room(room_id)
+    room_manager.delete_room(room_id, reason="room_ended")
     return report.to_dict()
 
 
@@ -431,7 +431,7 @@ async def delete_room(room_id: str, requester_id: str = Query(...)):
             pass
 
     timeout_manager.cancel_all_timers(room_id)
-    room_manager.delete_room(room_id)
+    room_manager.delete_room(room_id, reason="room_disbanded")
     await ws_manager.close_room_connections(room_id, reason="Room deleted by host")
     return {"success": True, "message": "房间已成功删除"}
 

@@ -90,6 +90,10 @@ class Room:
         # included in these records.
         self.hand_records: List[dict] = []
         self._next_test_bot_number = 1
+        # Real-money stacks are debited when chips enter the table and credited
+        # when chips leave it. Test users and bots never touch this wallet.
+        self.money_mode: str = "real"
+        self.money_mode_epoch: int = 0
 
     def record_completed_hand(self) -> bool:
         """Append one chip/buy-in ledger entry for a completed hand."""
@@ -149,6 +153,7 @@ class Room:
                 "chips": seat.chips + contributions.get(seat.player_id, 0),
                 "avatar": seat.avatar,
                 "is_bot": seat.is_bot,
+                "is_test": seat.is_test,
                 "is_sitting_out": seat.is_sitting_out,
                 "rebuy_count": seat.rebuy_count,
                 "total_buyin_chips": seat.total_buyin_chips,
@@ -185,6 +190,8 @@ class Room:
             "kicked_player_ids": sorted(self.kicked_player_ids),
             "next_test_bot_number": self._next_test_bot_number,
             "has_bots": self.has_bots,
+            "money_mode": self.money_mode,
+            "money_mode_epoch": self.money_mode_epoch,
             "table": {
                 "hand_number": self.table.hand_number,
                 "dealer_seat": self.table.dealer_seat,
@@ -213,13 +220,21 @@ class Room:
         )
         room.created_at = float(data.get("created_at", time.time()))
         room.historical_players = copy.deepcopy(data.get("historical_players", {}))
-        for history in room.historical_players.values():
+        for player_id, history in room.historical_players.items():
             if "cashed_out_chips" not in history:
                 history["cashed_out_chips"] = (
                     history.get("final_chips", 0)
                     if not history.get("is_seated", True)
                     else 0
                 )
+            history.setdefault(
+                "is_test",
+                cls._is_test_player(
+                    player_id,
+                    is_bot=bool(history.get("is_bot", False)),
+                ),
+            )
+            history.setdefault("wallet_cashout_count", 0)
         room.hand_records = list(data.get("hand_records", []))
         room.pending_settlements = list(data.get("pending_settlements", []))
         room.kicked_player_ids = {
@@ -228,6 +243,8 @@ class Room:
             if isinstance(player_id, str)
         }
         room._next_test_bot_number = int(data.get("next_test_bot_number", 1))
+        room.money_mode = data.get("money_mode", "real")
+        room.money_mode_epoch = int(data.get("money_mode_epoch", 0))
 
         table_data = data.get("table", {})
         room.table.hand_number = int(table_data.get("hand_number", 0))
@@ -244,6 +261,15 @@ class Room:
                 total_buyin=int(seat_data.get("total_buyin_chips", 0)),
                 avatar=seat_data.get("avatar", "👤"),
                 is_bot=bool(seat_data.get("is_bot", False)),
+                is_test=bool(
+                    seat_data.get(
+                        "is_test",
+                        cls._is_test_player(
+                            seat_data["player_id"],
+                            is_bot=bool(seat_data.get("is_bot", False)),
+                        ),
+                    )
+                ),
             ):
                 continue
             seat = room.table.seats[seat_index]
@@ -276,6 +302,7 @@ class Room:
         chips_added: int,
         avatar: str = "👤",
         is_bot: bool = False,
+        is_test: bool = False,
     ) -> None:
         """Record buyin or rebuy for historical accounting."""
         if player_id not in self.historical_players:
@@ -284,11 +311,13 @@ class Room:
                 "player_name": name,
                 "avatar": avatar or "👤",
                 "is_bot": is_bot,
+                "is_test": is_test,
                 "rebuy_count": 1,
                 "total_buyin_chips": chips_added,
                 "final_chips": 0,
                 "cashed_out_chips": 0,
                 "is_seated": True,
+                "wallet_cashout_count": 0,
             }
         else:
             self.historical_players[player_id]["player_name"] = name
@@ -296,6 +325,49 @@ class Room:
             self.historical_players[player_id]["rebuy_count"] += 1
             self.historical_players[player_id]["total_buyin_chips"] += chips_added
             self.historical_players[player_id]["is_seated"] = True
+            self.historical_players[player_id]["is_test"] = is_test
+
+    @staticmethod
+    def _is_test_player(player_id: str, is_bot: bool = False, is_test: Optional[bool] = None) -> bool:
+        if is_bot or player_id.startswith("bot_"):
+            return True
+        if is_test is not None:
+            return bool(is_test)
+        from backend.app.services.user_manager import user_manager
+        return user_manager.is_test_user(player_id)
+
+    def _record_wallet_change(self, player, chips_delta: int, entry_kind: str) -> None:
+        """Persist a real-player table/wallet movement with a stable event key."""
+        if chips_delta == 0 or player.is_bot or player.is_test:
+            return
+        history = self.historical_players.get(player.player_id)
+        if history is None:
+            return
+
+        if chips_delta < 0:
+            sequence = int(history.get("rebuy_count", player.rebuy_count))
+            event = "buyin"
+        else:
+            sequence = int(history.get("wallet_cashout_count", 0)) + 1
+            history["wallet_cashout_count"] = sequence
+            event = "cashout"
+
+        from backend.app.services.balance_manager import balance_manager
+        balance_manager.record_wallet_change(
+            room_id=self.room_id,
+            room_name=self.config.room_name,
+            player_id=player.player_id,
+            player_name=player.name,
+            avatar=player.avatar,
+            chips_delta=chips_delta,
+            buyin_chips=self.config.buyin_chips,
+            cash_value=self.config.cash_value,
+            entry_kind=entry_kind,
+            idempotency_key=(
+                f"{self.room_id}:{player.player_id}:{event}:{sequence}:"
+                f"mode:{self.money_mode_epoch}"
+            ),
+        )
 
     def sit_down_player(
         self,
@@ -304,11 +376,13 @@ class Room:
         seat_index: int,
         avatar: str = "👤",
         is_bot: bool = False,
+        is_test: Optional[bool] = None,
     ) -> bool:
         """Sit a player down with initial room buy-in."""
         if self.is_ended or player_id in self.kicked_player_ids:
             return False
         buyin = self.config.buyin_chips
+        test_identity = self._is_test_player(player_id, is_bot=is_bot, is_test=is_test)
         success = self.table.sit_down(
             player_id=player_id,
             name=name,
@@ -317,9 +391,17 @@ class Room:
             total_buyin=buyin,
             avatar=avatar,
             is_bot=is_bot,
+            is_test=test_identity,
         )
         if success:
-            self.track_player(player_id, name, buyin, avatar=avatar, is_bot=is_bot)
+            self.track_player(
+                player_id,
+                name,
+                buyin,
+                avatar=avatar,
+                is_bot=is_bot,
+                is_test=test_identity,
+            )
             seat = next(
                 (seat for seat in self.table.active_seated_players if seat.player_id == player_id),
                 None,
@@ -328,6 +410,8 @@ class Room:
             if seat and history:
                 seat.rebuy_count = int(history["rebuy_count"])
                 seat.total_buyin_chips = int(history["total_buyin_chips"])
+                if self.money_mode == "real":
+                    self._record_wallet_change(seat, -buyin, "buyin")
         return success
 
     def add_test_bot(self, seat_index: Optional[int] = None) -> Optional[dict]:
@@ -355,6 +439,7 @@ class Room:
             seat_index=seat_index,
             avatar="🤖",
             is_bot=True,
+            is_test=True,
         ):
             return None
 
@@ -371,6 +456,12 @@ class Room:
             if player_id in self.historical_players:
                 self.historical_players[player_id]["rebuy_count"] += 1
                 self.historical_players[player_id]["total_buyin_chips"] += buyin
+            player = next(
+                (seat for seat in self.table.active_seated_players if seat.player_id == player_id),
+                None,
+            )
+            if player and self.money_mode == "real":
+                self._record_wallet_change(player, -buyin, "buyin")
         return success
 
     def _build_participant_data(self) -> List[dict]:
@@ -445,11 +536,14 @@ class Room:
             "total_buyin_chips": player.total_buyin_chips,
             "rebuy_count": player.rebuy_count,
             "is_bot": getattr(player, "is_bot", False),
+            "is_test": getattr(player, "is_test", False),
             "reason": reason,
             "hand_number": hand_number,
-            "status": "pending",
+            "status": "credited",
             "created_at": time.time(),
         })
+        if self.money_mode == "real":
+            self._record_wallet_change(player, player.chips, "cashout")
 
     def stand_up_player(self, seat_index: int, reason: str = "leave") -> Optional[dict]:
         """Stand up a player and retain their cash-out for pending settlement."""
@@ -490,6 +584,42 @@ class Room:
     def is_player_kicked(self, player_id: str) -> bool:
         """Return whether the host has removed this player from the room."""
         return player_id in self.kicked_player_ids
+
+    def cash_out_all_players(self, reason: str = "room_closed") -> List[dict]:
+        """Refund an unfinished hand and return every real stack to its wallet."""
+        refunded_contributions = self.table.refund_unsettled_hand()
+        seated_player_ids = {
+            seat.player_id for seat in self.table.active_seated_players
+        }
+        for player_id, refund in refunded_contributions.items():
+            if player_id in seated_player_ids or refund <= 0:
+                continue
+            history = self.historical_players.get(player_id)
+            if history is None:
+                continue
+            history["cashed_out_chips"] = int(
+                history.get("cashed_out_chips", history.get("final_chips", 0))
+            ) + refund
+            history["final_chips"] = history["cashed_out_chips"]
+            if self.money_mode == "real" and not history.get("is_test", False):
+                class DepartedPlayer:
+                    pass
+
+                departed = DepartedPlayer()
+                departed.player_id = player_id
+                departed.name = history.get("player_name", player_id)
+                departed.avatar = history.get("avatar", "👤")
+                departed.rebuy_count = history.get("rebuy_count", 1)
+                departed.is_bot = history.get("is_bot", False)
+                departed.is_test = history.get("is_test", False)
+                self._record_wallet_change(departed, refund, "cashout")
+
+        departed_players = []
+        for seat in list(self.table.active_seated_players):
+            departed = self.stand_up_player(seat.seat_index, reason=reason)
+            if departed:
+                departed_players.append(departed)
+        return departed_players
 
     @property
     def has_bots(self) -> bool:
@@ -536,9 +666,6 @@ class Room:
             return self.settlement_report
         if settlement_type not in ("balance", "immediate"):
             raise ValueError("settlement_type must be 'balance' or 'immediate'")
-        if self.has_bots and settlement_type == "balance":
-            raise ValueError("房间内含有机器人，不允许结算到余额，只能实时结算")
-
         # A room can be closed in the middle of a hand. Return all current
         # hand contributions before taking the settlement snapshot so the
         # chips remain conserved instead of being stranded in an open pot.
@@ -569,6 +696,12 @@ class Room:
             settlement_type=settlement_type,
         )
 
+        # Each stack has already had every buy-in debited. Closing the room now
+        # credits the remaining chips; no second room-level net settlement is
+        # written, avoiding duplicate accounting.
+        for seat in list(self.table.active_seated_players):
+            self.stand_up_player(seat.seat_index, reason="room_ended")
+
         self.is_ended = True
         self.settlement_type = settlement_type
         self.settlement_report = report
@@ -578,14 +711,6 @@ class Room:
                 pending["status"] = "resolved"
                 pending["settlement_type"] = settlement_type
                 pending["resolved_at"] = resolved_at
-
-        # Automatically record into balance ledger if enabled
-        if record_to_balance:
-            try:
-                from backend.app.services.balance_manager import balance_manager
-                balance_manager.record_settlement(report, settlement_type=settlement_type)
-            except Exception as e:
-                print(f"[Room.end_room] Warning: Failed to record settlement to balance_manager: {e}")
 
         return report
 
@@ -597,6 +722,7 @@ class Room:
             "config": self.config.to_dict(),
             "is_ended": self.is_ended,
             "has_bots": self.has_bots,
+            "money_mode": self.money_mode,
             "settlement_type": getattr(self, "settlement_type", "balance"),
             "table": self.table.get_table_state(viewer_player_id),
             "settlement_report": self.settlement_report.to_dict() if self.settlement_report else None,

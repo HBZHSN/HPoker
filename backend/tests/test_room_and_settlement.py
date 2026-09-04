@@ -158,12 +158,14 @@ def test_ending_room_refunds_unsettled_hand_contributions():
     assert report.transactions == []
     assert room.table.pot_manager.total_pot_amount == 0
     assert room.table.street.value == "HAND_END"
-    assert room.table.seats[0].chips == 100
-    assert room.table.seats[1].chips == 100
+    assert room.table.seats[0] is None
+    assert room.table.seats[1] is None
+    assert room.historical_players["host1"]["final_chips"] == 100
+    assert room.historical_players["user2"]["final_chips"] == 100
     assert all(record.net_chips == 0 for record in report.player_records)
 
 
-def test_player_leave_stages_cash_out_until_host_chooses_settlement():
+def test_player_leave_credits_cash_out_immediately():
     room = Room(
         host_player_id="host1",
         config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
@@ -179,10 +181,11 @@ def test_player_leave_stages_cash_out_until_host_chooses_settlement():
     assert room.table.seats[1] is None
     assert room.historical_players["user2"]["final_chips"] == 60
     assert room.pending_settlements[0]["reason"] == "leave"
-    assert room.pending_settlements[0]["status"] == "pending"
-    assert room.pending_settlement_report is not None
-    assert room.pending_settlement_report.settlement_type == "pending"
-    assert balance_manager._entries == {}
+    assert room.pending_settlements[0]["status"] == "credited"
+    assert room.pending_settlement_report is None
+    user2_entries = balance_manager.get_user_records("user2")
+    assert [entry["entry_kind"] for entry in user2_entries] == ["cashout", "buyin"]
+    assert balance_manager.get_user_balances()[0].net_cash == -4
 
     report = room.end_room(requester_id="host1", settlement_type="balance")
     records = {record.player_id: record for record in report.player_records}
@@ -190,10 +193,56 @@ def test_player_leave_stages_cash_out_until_host_chooses_settlement():
     assert report.is_balanced is True
     assert records["user2"].final_chips == 60
     assert records["host1"].final_chips == 140
-    assert room.pending_settlements[0]["status"] == "resolved"
-    assert room.pending_settlements[0]["settlement_type"] == "balance"
-    assert len(balance_manager._entries) == 1
-    assert next(iter(balance_manager._entries.values())).status == "unsettled"
+    assert room.pending_settlements[0]["status"] == "credited"
+    assert len(balance_manager._entries) == 4
+    assert all(entry.entry_kind in {"buyin", "cashout"} for entry in balance_manager._entries.values())
+    balances = {item.user_id: item.net_cash for item in balance_manager.get_user_balances()}
+    assert balances == {"host1": 4.0, "user2": -4.0}
+
+
+def test_room_manager_delete_cash_outs_every_remaining_stack(tmp_path):
+    manager = RoomManager(database_path=str(tmp_path / "cashout-delete.sqlite3"))
+    room = manager.create_room(
+        host_player_id="cash_host",
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
+        room_id="cashout-delete",
+    )
+    assert room.sit_down_player("cash_host", "Alice", 0)
+    assert room.sit_down_player("cash_guest", "Bob", 1)
+    room.table.seats[0].chips = 130
+    room.table.seats[1].chips = 70
+
+    assert manager.delete_room(room.room_id, reason="room_disbanded")
+
+    balances = {item.user_id: item.net_cash for item in balance_manager.get_user_balances()}
+    assert balances == {"cash_host": 3.0, "cash_guest": -3.0}
+    assert manager.get_room(room.room_id) is None
+
+
+def test_every_rebuy_debits_balance_and_kick_credits_stack():
+    room = Room(
+        host_player_id="rebuy_host",
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
+        room_id="rebuy-wallet",
+    )
+    assert room.sit_down_player("rebuy_host", "Alice", 0)
+    assert room.sit_down_player("rebuy_guest", "Bob", 1)
+    room.table.seats[1].chips = 0
+    assert room.rebuy_player("rebuy_guest")
+
+    before_kick = {
+        item.user_id: item.net_cash for item in balance_manager.get_user_balances()
+    }
+    assert before_kick["rebuy_guest"] == -20
+
+    assert room.kick_player("rebuy_guest")
+    after_kick = {
+        item.user_id: item.net_cash for item in balance_manager.get_user_balances()
+    }
+    assert after_kick["rebuy_guest"] == -10
+    assert [
+        item["entry_kind"] for item in balance_manager.get_user_records("rebuy_guest")
+    ] == ["cashout", "buyin", "buyin"]
 
 
 def test_player_can_buy_in_again_without_losing_previous_cash_out():
