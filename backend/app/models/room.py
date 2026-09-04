@@ -344,7 +344,10 @@ class Room:
         if history is None:
             return
 
-        if chips_delta < 0:
+        if entry_kind == "mode_change":
+            sequence = self.money_mode_epoch + 1
+            event = "mode_debit" if chips_delta < 0 else "mode_credit"
+        elif chips_delta < 0:
             sequence = int(history.get("rebuy_count", player.rebuy_count))
             event = "buyin"
         else:
@@ -368,6 +371,46 @@ class Room:
                 f"mode:{self.money_mode_epoch}"
             ),
         )
+
+    @property
+    def has_active_test_players(self) -> bool:
+        """Return whether a seated bot or test account makes hands play-money."""
+        return any(
+            seat and (seat.is_bot or seat.is_test)
+            for seat in self.table.seats
+        )
+
+    def sync_money_mode(self) -> bool:
+        """Switch table funding at a safe hand boundary.
+
+        Entering play-money credits every real player's current stack first.
+        Returning to an all-real table debits the stacks then present. This
+        preserves wallet conservation while allowing chips to remain on seats.
+        """
+        if self.table.street not in (Street.IDLE, Street.HAND_END):
+            return False
+
+        desired_mode = "play" if self.has_active_test_players else "real"
+        if desired_mode == self.money_mode:
+            return True
+
+        entering_play = desired_mode == "play"
+        for seat in self.table.active_seated_players:
+            if seat.is_bot or seat.is_test or seat.chips <= 0:
+                continue
+            self._record_wallet_change(
+                seat,
+                seat.chips if entering_play else -seat.chips,
+                "mode_change",
+            )
+
+        self.money_mode = desired_mode
+        self.money_mode_epoch += 1
+        return True
+
+    def prepare_next_hand(self) -> bool:
+        """Apply any deferred test/real funding switch before cards are dealt."""
+        return self.sync_money_mode()
 
     def sit_down_player(
         self,
@@ -410,8 +453,9 @@ class Room:
             if seat and history:
                 seat.rebuy_count = int(history["rebuy_count"])
                 seat.total_buyin_chips = int(history["total_buyin_chips"])
-                if self.money_mode == "real":
+                if self.money_mode == "real" and not self.has_active_test_players:
                     self._record_wallet_change(seat, -buyin, "buyin")
+            self.sync_money_mode()
         return success
 
     def add_test_bot(self, seat_index: Optional[int] = None) -> Optional[dict]:
@@ -460,7 +504,7 @@ class Room:
                 (seat for seat in self.table.active_seated_players if seat.player_id == player_id),
                 None,
             )
-            if player and self.money_mode == "real":
+            if player and self.money_mode == "real" and not self.has_active_test_players:
                 self._record_wallet_change(player, -buyin, "buyin")
         return success
 
@@ -556,6 +600,7 @@ class Room:
         if not player:
             return None
         self._record_pending_departure(player, reason, hand_number=hand_number)
+        self.sync_money_mode()
         return player.to_dict()
 
     def leave_player(self, player_id: str) -> Optional[dict]:
@@ -723,6 +768,7 @@ class Room:
             "is_ended": self.is_ended,
             "has_bots": self.has_bots,
             "money_mode": self.money_mode,
+            "has_active_test_players": self.has_active_test_players,
             "settlement_type": getattr(self, "settlement_type", "balance"),
             "table": self.table.get_table_state(viewer_player_id),
             "settlement_report": self.settlement_report.to_dict() if self.settlement_report else None,

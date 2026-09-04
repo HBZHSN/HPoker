@@ -427,7 +427,13 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
         if not is_already_seated:
             for idx in range(room.config.max_seats):
                 if room.table.seats[idx] is None:
-                    room.sit_down_player(user_id, nickname, idx, avatar=avatar)
+                    room.sit_down_player(
+                        user_id,
+                        nickname,
+                        idx,
+                        avatar=avatar,
+                        is_test=user.is_test_account,
+                    )
                     break
 
     timeout_manager.cancel_empty_room_cleanup(room_id)
@@ -508,7 +514,13 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
             elif event == EventType.SIT_DOWN:
                 seat_index = payload.get("seat_index")
                 if seat_index is not None and user is not None:
-                    ok = room.sit_down_player(user_id, nickname, seat_index, avatar=avatar)
+                    ok = room.sit_down_player(
+                        user_id,
+                        nickname,
+                        seat_index,
+                        avatar=avatar,
+                        is_test=user.is_test_account,
+                    )
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
@@ -541,6 +553,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
             elif event == EventType.START_GAME:
                 # Only room host can trigger start of next hand when idle / hand_end
                 if user_id == room.host_player_id:
+                    room.prepare_next_hand()
                     for seat in room.table.seats:
                         if seat and seat.is_bot and seat.chips <= 0:
                             room.rebuy_player(seat.player_id)
@@ -659,6 +672,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
                 ready = payload.get("ready", True)
                 all_ready = room.table.set_player_ready(user_id, ready)
                 if all_ready and room.table.can_start_hand():
+                    room.prepare_next_hand()
                     timeout_manager.cancel_all_timers(room_id)
                     ok = room.table.start_new_hand()
                     if ok:
