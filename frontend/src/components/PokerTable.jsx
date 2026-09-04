@@ -4,8 +4,6 @@ import CommunityBoard from './CommunityBoard';
 import ActionBar from './ActionBar';
 import CardView from './CardView';
 import HandResultModal from './HandResultModal';
-import SettlementModal from './SettlementModal';
-import EndRoomConfirmModal from './EndRoomConfirmModal';
 import TableSocialControls from './TableSocialControls';
 import EquityDrawer, { EquityTrigger } from './EquityDrawer';
 import { sortCardsLowToHigh } from '../utils/cards';
@@ -15,7 +13,6 @@ import {
   VolumeX,
   RefreshCw,
   LogOut,
-  PowerOff,
   Play,
   Clock,
   CheckCircle2,
@@ -55,8 +52,6 @@ export default function PokerTable({
   onLeaveRoom,
 }) {
   const [isMuted, setIsMuted] = useState(false);
-  const [settlementOpen, setSettlementOpen] = useState(false);
-  const [endRoomConfirmOpen, setEndRoomConfirmOpen] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
   const [leaveRequested, setLeaveRequested] = useState(false);
@@ -92,13 +87,6 @@ export default function PokerTable({
   }, [table?.seats, currentUser?.user_id]);
 
   const selfSeat = selfSeatIndex >= 0 ? table.seats[selfSeatIndex] : null;
-  const pendingSettlements = room?.pending_settlements || [];
-  const pendingSettlementCount = new Set(
-    pendingSettlements
-      .filter((item) => (item.status || 'pending') === 'pending')
-      .map((item) => item.player_id)
-      .filter(Boolean)
-  ).size;
   const orderedHoleCards = useMemo(
     () => sortCardsLowToHigh(selfSeat?.hole_cards || []),
     [selfSeat?.hole_cards]
@@ -135,13 +123,6 @@ export default function PokerTable({
     selfSeat.chips === 0 &&
     ['IDLE', 'HAND_END'].includes(table?.street)
   );
-
-  // Handle Settlement report prompt
-  useEffect(() => {
-    if (room?.is_ended && room?.settlement_report) {
-      setSettlementOpen(true);
-    }
-  }, [room?.is_ended, room?.settlement_report]);
 
   // Visual positions are generated for every supported table size. Position 0
   // remains bottom-center so rotating the real seats always keeps the viewer's
@@ -224,29 +205,6 @@ export default function PokerTable({
     });
   }, [table?.street, selfSeat, onSendWsEvent]);
 
-  const hasTestAccountInRoom = useMemo(() => {
-    if (!table?.seats) return false;
-    return table.seats.some(
-      (s) => s && (s.is_bot || s.name?.toLowerCase()?.includes('test') || s.player_id?.toLowerCase()?.includes('test'))
-    );
-  }, [table?.seats]);
-
-  const hasBotsInRoom = useMemo(() => {
-    if (room?.has_bots !== undefined) return Boolean(room.has_bots);
-    if (table?.seats?.some((s) => s && (s.is_bot || s.player_id?.startsWith('bot_')))) return true;
-    if (room?.pending_settlements?.some((p) => p && (p.is_bot || p.player_id?.startsWith('bot_')))) return true;
-    return false;
-  }, [room?.has_bots, table?.seats, room?.pending_settlements]);
-
-  const handleEndRoom = () => {
-    setEndRoomConfirmOpen(true);
-  };
-
-  const handleConfirmEndRoom = (settlementType) => {
-    setEndRoomConfirmOpen(false);
-    onSendWsEvent('END_ROOM', { settlement_type: settlementType });
-  };
-
   const handleKickPlayer = (playerId, playerName) => {
     if (!isHost || playerId === currentUser?.user_id) return;
     if (window.confirm(`确定要将 ${playerName || '该玩家'} 移出房间吗？`)) {
@@ -255,7 +213,7 @@ export default function PokerTable({
   };
 
   const handleDeleteRoom = () => {
-    if (window.confirm('确定要解散并删除该房间吗？删除后所有玩家将返回大厅。')) {
+    if (window.confirm('确定解散房间吗？所有在桌筹码将自动兑回余额。')) {
       onSendWsEvent('DELETE_ROOM', {});
     }
   };
@@ -366,11 +324,6 @@ export default function PokerTable({
             <span className="poker-table-room-buyin text-[11px] text-slate-400">
               买入: ${room?.config?.buyin_chips} = ¥{room?.config?.cash_value} · 超时: {room?.config?.action_timeout}s
             </span>
-            {pendingSettlementCount > 0 && (
-              <span className="mt-1 inline-flex w-fit items-center rounded-full border border-amber-500/50 bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                待房主选择结算 · {pendingSettlementCount} 人
-              </span>
-            )}
           </div>
         </div>
 
@@ -414,17 +367,6 @@ export default function PokerTable({
             isOpen={isEquityOpen}
             onToggle={handleToggleEquity}
           />
-
-          {/* Host End Room Button */}
-          {isHost && !room?.is_ended && (
-            <button
-              onClick={handleEndRoom}
-              className="flex items-center gap-1 px-3 py-1.5 bg-red-900/80 hover:bg-red-800 text-red-200 rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"
-            >
-              <PowerOff className="w-3.5 h-3.5" />
-              结算
-            </button>
-          )}
 
           {/* Host Delete/Disband Room Button */}
           {(isHost || currentUser?.is_admin) && !room?.is_ended && (
@@ -848,28 +790,6 @@ export default function PokerTable({
         />
       )}
 
-      {/* End Room Settlement Type Confirmation Modal */}
-      {endRoomConfirmOpen && (
-        <EndRoomConfirmModal
-          isOpen={endRoomConfirmOpen}
-          hasTestAccount={hasTestAccountInRoom}
-          hasBots={hasBotsInRoom}
-          pendingSettlementCount={pendingSettlementCount}
-          onConfirm={handleConfirmEndRoom}
-          onClose={() => setEndRoomConfirmOpen(false)}
-        />
-      )}
-
-      {/* Final Settlement Report Modal */}
-      {settlementOpen && (
-        <SettlementModal
-          report={room?.settlement_report}
-          onClose={() => {
-            setSettlementOpen(false);
-            onLeaveRoom({ notifyServer: false });
-          }}
-        />
-      )}
     </div>
   );
 }
