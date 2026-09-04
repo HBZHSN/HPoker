@@ -143,6 +143,7 @@ class SQLiteDatabase:
                     chip_to_cash_ratio REAL NOT NULL CHECK (chip_to_cash_ratio >= 0),
                     buyin_chips INTEGER NOT NULL CHECK (buyin_chips >= 0),
                     cash_value_cents INTEGER NOT NULL CHECK (cash_value_cents >= 0),
+                    entry_kind TEXT NOT NULL DEFAULT 'settlement',
                     settled_at REAL,
                     settled_by TEXT
                 );
@@ -237,7 +238,20 @@ class SQLiteDatabase:
                     VALUES (1, CAST(strftime('%s', 'now') AS REAL));
                 """
             )
-            connection.execute("PRAGMA user_version = 1")
+            ledger_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(ledger_entries)")
+            }
+            if "entry_kind" not in ledger_columns:
+                connection.execute(
+                    "ALTER TABLE ledger_entries "
+                    "ADD COLUMN entry_kind TEXT NOT NULL DEFAULT 'settlement'"
+                )
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (2, time.time()),
+            )
+            connection.execute("PRAGMA user_version = 2")
 
     @staticmethod
     def _encode(payload: dict) -> str:
@@ -350,7 +364,7 @@ class SQLiteDatabase:
             entry_rows = connection.execute(
                 """SELECT entry_id, room_id, room_name, settlement_type, status,
                           created_at, is_test_game, chip_to_cash_ratio, buyin_chips,
-                          cash_value_cents, settled_at, settled_by
+                          cash_value_cents, entry_kind, settled_at, settled_by
                    FROM ledger_entries ORDER BY created_at, entry_id"""
             ).fetchall()
             participant_rows = connection.execute(
@@ -457,8 +471,8 @@ class SQLiteDatabase:
                 """INSERT INTO ledger_entries(
                        entry_id, room_id, room_name, settlement_type, status,
                        created_at, is_test_game, chip_to_cash_ratio, buyin_chips,
-                       cash_value_cents, settled_at, settled_by
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       cash_value_cents, entry_kind, settled_at, settled_by
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
                     (
                         entry["entry_id"],
@@ -471,6 +485,7 @@ class SQLiteDatabase:
                         float(entry.get("chip_to_cash_ratio", 0.1)),
                         int(entry.get("buyin_chips", 0)),
                         int(round(float(entry.get("cash_value", 0.0)) * 100)),
+                        entry.get("entry_kind", "settlement"),
                         entry.get("settled_at"),
                         entry.get("settled_by"),
                     )

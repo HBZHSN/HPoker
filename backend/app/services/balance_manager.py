@@ -7,6 +7,7 @@ Strictly isolates test accounts and bot matches to prevent contaminating real ba
 
 from __future__ import annotations
 import json
+import hashlib
 import logging
 import os
 import time
@@ -182,6 +183,76 @@ class BalanceManager:
         self.save_to_storage()
         return entry
 
+    def record_wallet_change(
+        self,
+        *,
+        room_id: str,
+        room_name: str,
+        player_id: str,
+        player_name: str,
+        avatar: str,
+        chips_delta: int,
+        buyin_chips: int,
+        cash_value: float,
+        entry_kind: str,
+        idempotency_key: str,
+        u_mgr: Optional[UserManager] = None,
+    ) -> LedgerEntry:
+        """Apply one durable table-wallet movement exactly once.
+
+        Negative ``chips_delta`` debits a buy-in from the player's pending
+        balance. Positive values credit chips cashed out from the table.
+        """
+        if chips_delta == 0:
+            raise ValueError("chips_delta must be non-zero")
+        if entry_kind not in {"buyin", "cashout", "mode_change"}:
+            raise ValueError("unsupported wallet entry kind")
+        if not idempotency_key:
+            raise ValueError("idempotency_key is required")
+
+        digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:24]
+        entry_id = f"wallet_{digest}"
+        existing = self._entries.get(entry_id)
+        if existing is not None:
+            return existing
+
+        mgr = u_mgr or user_manager
+        user = mgr.get_user(player_id)
+        is_test = player_id.startswith("bot_") or mgr.is_test_user(player_id)
+        ratio = cash_value / buyin_chips if buyin_chips > 0 else 0.0
+        total_buyin = -chips_delta if chips_delta < 0 else 0
+        final_chips = chips_delta if chips_delta > 0 else 0
+        participant = ParticipantRecord(
+            player_id=player_id,
+            username=user.username if user else player_id,
+            nickname=player_name or (user.nickname if user else player_id),
+            avatar=avatar or (user.avatar if user else "👤"),
+            is_test=is_test,
+            rebuy_count=1 if chips_delta < 0 else 0,
+            total_buyin_chips=total_buyin,
+            final_chips=final_chips,
+            net_chips=chips_delta,
+            net_cash=round(chips_delta * ratio, 2),
+        )
+        entry = LedgerEntry(
+            entry_id=entry_id,
+            room_id=room_id,
+            room_name=room_name,
+            settlement_type="balance",
+            status="unsettled",
+            created_at=time.time(),
+            is_test_game=is_test,
+            participants=[participant],
+            transactions=[],
+            chip_to_cash_ratio=ratio,
+            buyin_chips=buyin_chips,
+            cash_value=cash_value,
+            entry_kind=entry_kind,
+        )
+        self._entries[entry_id] = entry
+        self.save_to_storage()
+        return entry
+
     def get_user_balances(self, include_test: bool = False) -> List[UserBalanceSummary]:
         """Aggregate pending unsettled balances across all unsettled 'balance' entries.
 
@@ -310,12 +381,17 @@ class BalanceManager:
                 "display": f"{tx.from_player_name} 应付给 {tx.to_player_name}: ¥{amt:.2f}",
             })
 
+        net_cash_cents = sum(
+            int(round(user["net_cash"] * 100)) for user in user_summaries
+        )
         return {
             "entry_count": len(selected_entries),
             "entry_ids": [e.entry_id for e in selected_entries],
             "total_transferred_cash": round(total_transferred_cash, 2),
             "user_summaries": user_summaries,
             "transactions": transactions,
+            "is_balanced": net_cash_cents == 0,
+            "unmatched_cash": round(abs(net_cash_cents) / 100, 2),
         }
 
     def settle_batch(
@@ -329,6 +405,8 @@ class BalanceManager:
         preview = self.preview_batch_settlement(include_test=include_test, entry_ids=entry_ids)
         if not preview["entry_ids"]:
             raise ValueError("当前没有可结算的待结账单条目")
+        if not preview["is_balanced"]:
+            raise ValueError("仍有筹码在牌桌中，需全部兑回余额后再划转结算")
 
         batch_id = f"batch_{uuid.uuid4().hex[:8]}"
         now = time.time()
