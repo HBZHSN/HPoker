@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, MessageCircle, Send, SmilePlus, X } from 'lucide-react';
+import { shouldMarkSocialActivityUnread } from '../utils/socialNotifications';
 
 export const TABLE_EMOJIS = [
   '😀', '😃', '😄', '😁', '😆', '😂', '🤣', '😊', '😇', '🙂',
@@ -60,6 +61,7 @@ export default function TableSocialControls({
   const messageListRef = useRef(null);
 
   const latestMessageId = activities.at(-1)?.activity_id || null;
+  const latestActivityPlayerId = activities.at(-1)?.player_id || null;
   const sortedEmojis = useMemo(() => TABLE_EMOJIS
     .map((emoji, defaultIndex) => ({
       emoji,
@@ -80,15 +82,17 @@ export default function TableSocialControls({
   }, [currentUserId]);
 
   useEffect(() => {
-    if (
-      latestMessageId &&
-      latestMessageId !== lastMessageIdRef.current &&
-      !chatOpen
-    ) {
+    if (shouldMarkSocialActivityUnread({
+      activityId: latestMessageId,
+      lastActivityId: lastMessageIdRef.current,
+      playerId: latestActivityPlayerId,
+      currentUserId,
+      chatOpen,
+    })) {
       setHasUnread(true);
     }
     lastMessageIdRef.current = latestMessageId;
-  }, [latestMessageId, chatOpen]);
+  }, [latestMessageId, latestActivityPlayerId, currentUserId, chatOpen]);
 
   useEffect(() => {
     if (!chatOpen) return;
