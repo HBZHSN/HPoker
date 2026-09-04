@@ -72,6 +72,8 @@ export default function PlayerSeat({
   const isWinner = !!payoutInfo;
   const isFolded = seatData.is_folded;
   const isAllIn = seatData.is_all_in;
+  const hasCards = Boolean(seatData.has_cards || (seatData.hole_cards && seatData.hole_cards.length > 0));
+  const isWaitingNextHand = !hasCards && !isFolded && !['IDLE', 'HAND_END'].includes(street);
 
   return (
     <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none`}>
@@ -122,7 +124,7 @@ export default function PlayerSeat({
       ) : null}
 
       {/* Anchor Container for Avatar Card & Floating Badges & Cards (Dimmed & grayscale when folded) */}
-      <div className={`poker-player-seat-body relative w-full h-full flex flex-col items-center justify-center transition-all duration-300 ${isFolded ? 'opacity-40 grayscale-[30%]' : ''}`}>
+      <div className={`poker-player-seat-body relative w-full h-full flex flex-col items-center justify-center transition-all duration-300 ${isFolded ? 'opacity-40 grayscale-[30%]' : isWaitingNextHand ? 'opacity-65' : ''}`}>
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {isCurrentTurn ? (
           isUsingTimeBank ? (
@@ -147,6 +149,10 @@ export default function PlayerSeat({
         ) : payoutInfo ? (
           <div className="absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border border-emerald-400 md:border-2 px-2 md:px-3.5 py-0.5 md:py-1 rounded-lg md:rounded-xl text-[10px] md:text-sm font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
             +${payoutInfo.amount} ({payoutInfo.pot_name})
+          </div>
+        ) : isWaitingNextHand ? (
+          <div className="absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-bold shadow-md z-30 whitespace-nowrap border border-slate-700 bg-slate-900/95 text-slate-400">
+            等下局
           </div>
         ) : seatData.last_action ? (
           <div

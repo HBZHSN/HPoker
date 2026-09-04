@@ -207,3 +207,16 @@ def test_room_add_test_bot_only_works_between_hands_and_tracks_player():
 
     assert room.table.start_new_hand() is True
     assert room.add_test_bot() is None
+
+
+def test_choose_bot_action_returns_none_if_no_cards():
+    table = TableStateMachine(max_seats=6, small_blind=10, big_blind=20)
+    table.sit_down("p1", "Alice", seat_index=0, chips=100)
+    table.sit_down("p2", "Bob", seat_index=1, chips=100)
+    assert table.start_new_hand() is True
+
+    # Bot sits down mid-hand
+    table.sit_down("bot_mid", "Bot Mid", seat_index=2, chips=100, is_bot=True)
+    decision = choose_bot_action(table, "bot_mid")
+    assert decision is None
+

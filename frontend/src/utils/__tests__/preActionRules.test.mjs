@@ -82,6 +82,26 @@ test('isEligibleForPreAction: correctly checks eligibility', () => {
     }),
     false
   );
+
+  // Ineligible if player has no cards (joined mid-hand)
+  assert.equal(
+    isEligibleForPreAction({
+      disabled: false,
+      isMyTurn: false,
+      selfSeat: { ...baseSeat, has_cards: false, hole_cards: [] },
+      street: 'FLOP',
+    }),
+    false
+  );
+  assert.equal(
+    isEligibleForPreAction({
+      disabled: false,
+      isMyTurn: false,
+      selfSeat: { ...baseSeat, has_cards: undefined, hole_cards: [] },
+      street: 'FLOP',
+    }),
+    false
+  );
 });
 
 test('calculatePreActionBounds: unraised street', () => {
