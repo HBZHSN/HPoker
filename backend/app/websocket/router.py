@@ -25,13 +25,13 @@ from backend.app.engine.state_machine import ActionType, Street
 
 logger = logging.getLogger("poker.router")
 ws_router = APIRouter()
-BOT_ACTION_DELAY_MIN: float = 3.0
-BOT_ACTION_DELAY_MAX: float = 5.0
-BOT_ACTION_DELAY_SECONDS: float = 3.0
+BOT_ACTION_DELAY_MIN: float = 0.0
+BOT_ACTION_DELAY_MAX: float = 0.0
+BOT_ACTION_DELAY_SECONDS: float = 0.0
 
 
 def get_bot_action_delay() -> float:
-    """Return a randomized bot decision delay between 3 and 5 seconds."""
+    """Return bot decision delay (0.0s: bot acts immediately once calculation finishes)."""
     low = min(BOT_ACTION_DELAY_MIN, BOT_ACTION_DELAY_MAX)
     high = max(BOT_ACTION_DELAY_MIN, BOT_ACTION_DELAY_MAX)
     if low >= high:
@@ -181,7 +181,7 @@ async def trigger_room_turn_timer(room_id: str):
             if not bot or not bot.is_bot:
                 return
 
-            decision = choose_bot_action(r.table, bot.player_id)
+            decision = await asyncio.to_thread(choose_bot_action, r.table, bot.player_id)
             if decision is None:
                 return
 
