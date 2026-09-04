@@ -23,7 +23,7 @@ export default function BalanceCenterModal({
   token,
   onClose,
 }) {
-  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'history' | 'admin'
+  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'hands' | 'history' | 'admin'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -36,6 +36,9 @@ export default function BalanceCenterModal({
   const [includeTest, setIncludeTest] = useState(false);
   const [settleConfirmOpen, setSettleConfirmOpen] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [handHistory, setHandHistory] = useState({ hands: [], total: 0, summary: {} });
+  const [handOutcome, setHandOutcome] = useState('all');
+  const [handSort, setHandSort] = useState('recent');
 
   const fetchMyBalance = useCallback(async () => {
     if (!currentUser?.user_id) return;
@@ -81,11 +84,34 @@ export default function BalanceCenterModal({
     }
   }, [token]);
 
+  const fetchHandHistory = useCallback(async () => {
+    if (!currentUser?.user_id) return;
+    const params = new URLSearchParams();
+    if (handOutcome !== 'all') params.set('outcome', handOutcome);
+    if (handSort === 'biggest-win') {
+      params.set('sort_by', 'net_chips');
+      params.set('order', 'desc');
+    } else if (handSort === 'biggest-loss') {
+      params.set('sort_by', 'net_chips');
+      params.set('order', 'asc');
+    }
+    try {
+      const res = await fetch(`/api/hands/my?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        setHandHistory(await res.json());
+      }
+    } catch (e) {
+      console.error('Failed to fetch hand history', e);
+    }
+  }, [currentUser?.user_id, handOutcome, handSort, token]);
+
   const refreshAll = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchMyBalance(), fetchOverview(), fetchBatches()])
+    Promise.all([fetchMyBalance(), fetchOverview(), fetchBatches(), fetchHandHistory()])
       .finally(() => setLoading(false));
-  }, [fetchMyBalance, fetchOverview, fetchBatches]);
+  }, [fetchMyBalance, fetchOverview, fetchBatches, fetchHandHistory]);
 
   useEffect(() => {
     if (isOpen) {
@@ -119,7 +145,7 @@ export default function BalanceCenterModal({
         throw new Error(errData.detail || '结算失败');
       }
       const newBatch = await res.json();
-      setSuccessMsg(`已生成结算批次 #${newBatch.batch_id}`);
+      setSuccessMsg(`已完成余额划转 #${newBatch.batch_id}`);
       setSettleConfirmOpen(false);
       setSelectedBatch(newBatch);
       refreshAll();
@@ -187,15 +213,15 @@ export default function BalanceCenterModal({
   const copyBatchText = (batch) => {
     if (!batch) return;
     const dateStr = new Date(batch.created_at * 1000).toLocaleString();
-    let text = `【HPoker 战局统一结算批次 #${batch.batch_id}】\n`;
-    text += `结算时间: ${dateStr}\n`;
+    let text = `【HPoker 余额划转批次 #${batch.batch_id}】\n`;
+    text += `划转时间: ${dateStr}\n`;
     text += `操作员: ${batch.operator_name}\n`;
     text += `转账总额: ¥${batch.total_transferred_cash.toFixed(2)}\n\n`;
 
     text += `--- 各玩家结算汇总 ---\n`;
     (batch.user_summaries || []).forEach((u, idx) => {
       const sign = u.net_cash >= 0 ? '+' : '';
-      text += `${idx + 1}. ${u.nickname}: 净额 ${sign}¥${u.net_cash.toFixed(2)} (${u.unsettled_games_count}局)\n`;
+      text += `${idx + 1}. ${u.nickname}: 净额 ${sign}¥${u.net_cash.toFixed(2)} (${u.unsettled_games_count}笔流水)\n`;
     });
 
     text += `\n--- 最终转账执行清单 ---\n`;
@@ -259,6 +285,25 @@ export default function BalanceCenterModal({
                 activeTab === 'my' ? 'bg-slate-950 text-amber-300' : 'bg-amber-950 text-amber-300'
               }`}>
                 {myBalance.unsettled_games_count}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('hands')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+              activeTab === 'hands'
+                ? 'bg-amber-500 text-slate-950 shadow-glow-gold'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            牌局
+            {handHistory.total > 0 && (
+              <span className={`text-[10px] px-1.5 rounded-full font-black ${
+                activeTab === 'hands' ? 'bg-slate-950 text-amber-300' : 'bg-slate-800 text-slate-400'
+              }`}>
+                {handHistory.total}
               </span>
             )}
           </button>
@@ -347,9 +392,9 @@ export default function BalanceCenterModal({
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col gap-0.5">
-                <span className="text-[11px] text-slate-400 font-medium">待结局数</span>
+                <span className="text-[11px] text-slate-400 font-medium">余额流水</span>
                 <div className="text-2xl font-black text-slate-200">
-                  {myBalance?.unsettled_games_count || 0} 桌
+                  {myBalance?.unsettled_games_count || 0} 笔
                 </div>
               </div>
             </div>
@@ -369,19 +414,24 @@ export default function BalanceCenterModal({
                     <thead className="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800">
                       <tr>
                         <th className="p-3">房间 / 时间</th>
-                        <th className="p-3 text-center">模式</th>
-                        <th className="p-3 text-right">总买入筹码</th>
-                        <th className="p-3 text-right">剩余筹码</th>
-                        <th className="p-3 text-right">我的盈亏 (¥)</th>
+                        <th className="p-3 text-center">流水</th>
+                        <th className="p-3 text-right">筹码变动</th>
+                        <th className="p-3 text-right">余额变动</th>
                         <th className="p-3 text-center">状态</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
                       {myBalance.records.map((rec) => {
                         const myRec = rec.my_record || {};
-                        const isProfit = (myRec.net_cash || 0) >= 0;
+                        const isCredit = (myRec.net_cash || 0) > 0;
                         const dateStr = new Date(rec.created_at * 1000).toLocaleString();
                         const isSettled = rec.status === 'settled';
+                        const entryLabels = {
+                          buyin: '买入扣款',
+                          cashout: '筹码兑回',
+                          mode_change: '模式切换',
+                          settlement: '对局结算',
+                        };
                         return (
                           <tr key={rec.entry_id} className="hover:bg-slate-900/40 transition">
                             <td className="p-3">
@@ -397,26 +447,18 @@ export default function BalanceCenterModal({
                             </td>
                             <td className="p-3 text-center">
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
-                                rec.settlement_type === 'balance'
-                                  ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
-                                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+                                isCredit
+                                  ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+                                  : 'bg-red-950/60 text-red-300 border-red-500/30'
                               }`}>
-                                {rec.settlement_type === 'balance' ? '计入余额' : '实时转账'}
+                                {entryLabels[rec.entry_kind] || '对局结算'}
                               </span>
                             </td>
-                            <td className="p-3 text-right text-slate-400">
-                              <span>{myRec.total_buyin_chips}</span>
-                              {myRec.rebuy_count > 1 && (
-                                <span className="text-[10px] text-amber-400/80 font-mono ml-1">
-                                  (x{myRec.rebuy_count})
-                                </span>
-                              )}
+                            <td className={`p-3 text-right font-bold ${isCredit ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {(myRec.net_chips || 0) > 0 ? '+' : ''}{myRec.net_chips || 0}
                             </td>
-                            <td className="p-3 text-right text-amber-300 font-bold">
-                              {myRec.final_chips}
-                            </td>
-                            <td className={`p-3 text-right font-black ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {isProfit ? '+' : ''}¥{(myRec.net_cash || 0).toFixed(2)}
+                            <td className={`p-3 text-right font-black ${isCredit ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {(myRec.net_cash || 0) > 0 ? '+' : ''}¥{(myRec.net_cash || 0).toFixed(2)}
                             </td>
                             <td className="p-3 text-center">
                               <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
@@ -424,7 +466,7 @@ export default function BalanceCenterModal({
                                   ? 'bg-slate-800 text-slate-400'
                                   : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                               }`}>
-                                {isSettled ? '已结算' : '待结算'}
+                                {isSettled ? '已划转' : '待划转'}
                               </span>
                             </td>
                           </tr>
@@ -438,7 +480,103 @@ export default function BalanceCenterModal({
           </div>
         )}
 
-        {/* Tab 2: Settlement Batches History */}
+        {/* Personal per-hand history. Hole cards belong only to this user. */}
+        {activeTab === 'hands' && (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="grid grid-cols-2 gap-2 flex-1">
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
+                  <div className="text-[10px] text-emerald-300">最大赢牌</div>
+                  <div className="text-lg font-black text-emerald-400">
+                    +{handHistory.summary?.biggest_win?.net_chips || 0}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-3">
+                  <div className="text-[10px] text-red-300">最大输牌</div>
+                  <div className="text-lg font-black text-red-400">
+                    {handHistory.summary?.biggest_loss?.net_chips || 0}
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={handOutcome}
+                  onChange={(event) => setHandOutcome(event.target.value)}
+                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200"
+                >
+                  <option value="all">全部结果</option>
+                  <option value="win">只看赢牌</option>
+                  <option value="loss">只看输牌</option>
+                  <option value="even">只看持平</option>
+                </select>
+                <select
+                  value={handSort}
+                  onChange={(event) => setHandSort(event.target.value)}
+                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200"
+                >
+                  <option value="recent">最近牌局</option>
+                  <option value="biggest-win">赢得最多</option>
+                  <option value="biggest-loss">输得最多</option>
+                </select>
+              </div>
+            </div>
+
+            {handHistory.hands.length === 0 ? (
+              <div className="p-8 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
+                暂无符合条件的牌局
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-900 text-slate-400 border-b border-slate-800">
+                    <tr>
+                      <th className="p-3">牌局</th>
+                      <th className="p-3">我的手牌</th>
+                      <th className="p-3">公共牌</th>
+                      <th className="p-3 text-right">投入 / 收回</th>
+                      <th className="p-3 text-right">净结果</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {handHistory.hands.map((hand) => {
+                      const positive = hand.net_chips >= 0;
+                      const cardText = (card) => card.display || `${card.rank_symbol || card.rank}${card.suit_symbol || card.suit}`;
+                      return (
+                        <tr key={hand.hand_id} className="hover:bg-slate-900/40">
+                          <td className="p-3">
+                            <div className="font-bold text-slate-200">{hand.room_name} · #{hand.hand_number}</div>
+                            <div className="mt-0.5 text-[10px] text-slate-500">
+                              {new Date(hand.ended_at * 1000).toLocaleString()}
+                              {hand.money_mode === 'play' && <span className="ml-1 text-purple-300">测试</span>}
+                            </div>
+                          </td>
+                          <td className="p-3 font-black text-amber-300">
+                            {(hand.hole_cards || []).map(cardText).join(' ') || '—'}
+                            <div className="text-[10px] font-normal text-slate-500">{hand.hand_description}</div>
+                          </td>
+                          <td className="p-3 text-slate-300">
+                            {(hand.board || []).map(cardText).join(' ') || '—'}
+                          </td>
+                          <td className="p-3 text-right text-slate-400">
+                            {hand.contributed_chips} / {hand.payout_chips}
+                          </td>
+                          <td className={`p-3 text-right font-black ${positive ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {positive ? '+' : ''}{hand.net_chips}
+                            {hand.money_mode === 'real' && (
+                              <div className="text-[10px]">{positive ? '+' : ''}¥{Number(hand.net_cash || 0).toFixed(2)}</div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Settlement Batches History */}
         {activeTab === 'history' && (
           <div className="flex flex-col gap-4">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
@@ -494,8 +632,8 @@ export default function BalanceCenterModal({
                             onClick={() => copyBatchText(batch)}
                             className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl shadow transition flex items-center gap-1"
                           >
-                            <Copy className="w-3 h-3" />
-                            复制
+                            {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                            {copied ? '已复制' : '复制'}
                           </button>
                         </div>
                       </div>
@@ -603,9 +741,9 @@ export default function BalanceCenterModal({
             {/* Overview Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="p-3.5 rounded-2xl bg-slate-900/70 border border-slate-800 flex flex-col gap-0.5">
-                <span className="text-[11px] text-slate-400 font-medium">待结局数</span>
+                <span className="text-[11px] text-slate-400 font-medium">余额流水</span>
                 <div className="text-2xl font-black text-amber-400">
-                  {overview?.preview?.entry_count || 0} 桌
+                  {overview?.preview?.entry_count || 0} 笔
                 </div>
               </div>
 
@@ -617,7 +755,7 @@ export default function BalanceCenterModal({
               </div>
 
               <div className="p-3.5 rounded-2xl bg-gradient-to-br from-amber-950/30 via-slate-900 to-slate-950 border border-amber-500/40 flex flex-col gap-0.5">
-                <span className="text-[11px] text-amber-400 font-medium">结算总额</span>
+                <span className="text-[11px] text-amber-400 font-medium">划转总额</span>
                 <div className="text-2xl font-black text-amber-400">
                   ¥{(overview?.preview?.total_transferred_cash || 0).toFixed(2)}
                 </div>
@@ -639,7 +777,7 @@ export default function BalanceCenterModal({
                     <thead className="bg-slate-900 text-slate-400 font-semibold border-b border-slate-800">
                       <tr>
                         <th className="p-3">玩家</th>
-                        <th className="p-3 text-center">待结局数</th>
+                        <th className="p-3 text-center">余额流水</th>
                         <th className="p-3 text-right">待结筹码</th>
                         <th className="p-3 text-right">待结金额 (¥)</th>
                         <th className="p-3 text-center">状态</th>
@@ -662,7 +800,7 @@ export default function BalanceCenterModal({
                               )}
                             </td>
                             <td className="p-3 text-center text-slate-300">
-                              {u.unsettled_games_count} 局
+                              {u.unsettled_games_count} 笔
                             </td>
                             <td className="p-3 text-right text-amber-300 font-bold">
                               {u.net_chips > 0 ? '+' : ''}{u.net_chips}
@@ -723,19 +861,26 @@ export default function BalanceCenterModal({
               )}
             </div>
 
+            {overview?.preview?.entry_count > 0 && overview?.preview?.is_balanced === false && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-950/40 p-3 text-xs font-bold text-amber-300">
+                <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                仍有¥{(overview?.preview?.unmatched_cash || 0).toFixed(2)} 对应筹码在桌，全部兑回余额后才能划转。
+              </div>
+            )}
+
             {/* Batch Settle Action Button */}
             <div className="pt-2 flex justify-end">
               <button
-                disabled={loading || !overview?.preview?.entry_count}
+                disabled={loading || !overview?.preview?.entry_count || overview?.preview?.is_balanced === false}
                 onClick={() => setSettleConfirmOpen(true)}
                 className={`px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg transition active:scale-95 ${
-                  overview?.preview?.entry_count
+                  overview?.preview?.entry_count && overview?.preview?.is_balanced !== false
                     ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 shadow-glow-gold hover:brightness-105 cursor-pointer'
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                结算 ({overview?.preview?.entry_count || 0} 局)
+                划转结算 ({overview?.preview?.entry_count || 0} 笔)
               </button>
             </div>
           </div>
@@ -749,13 +894,13 @@ export default function BalanceCenterModal({
                 <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
-                <h3 className="text-base font-black text-white">确认结算？</h3>
+                <h3 className="text-base font-black text-white">确认余额划转？</h3>
               </div>
 
               <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs flex flex-col gap-2">
                 <div className="flex justify-between text-slate-300">
-                  <span>结算局数:</span>
-                  <span className="font-bold text-amber-400">{overview?.preview?.entry_count || 0} 局</span>
+                  <span>余额流水:</span>
+                  <span className="font-bold text-amber-400">{overview?.preview?.entry_count || 0} 笔</span>
                 </div>
                 <div className="flex justify-between text-slate-300">
                   <span>涉及玩家:</span>
@@ -771,6 +916,26 @@ export default function BalanceCenterModal({
                 </div>
               </div>
 
+              <div className="max-h-52 overflow-y-auto rounded-2xl border border-slate-800 bg-slate-950/80 p-3">
+                <div className="mb-2 text-[11px] font-bold text-slate-400">本次付款关系</div>
+                {(!overview?.preview?.transactions || overview.preview.transactions.length === 0) ? (
+                  <div className="py-3 text-center text-xs text-slate-400">无需转账</div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {overview.preview.transactions.map((transaction, index) => (
+                      <div key={index} className="flex items-center justify-between gap-3 rounded-xl bg-slate-900 p-2.5 text-xs">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-bold text-red-400">{transaction.from_player_name}</span>
+                          <ArrowRight className="h-3.5 w-3.5 flex-shrink-0 text-slate-500" />
+                          <span className="truncate font-bold text-emerald-400">{transaction.to_player_name}</span>
+                        </div>
+                        <span className="flex-shrink-0 font-black text-amber-400">¥{transaction.amount_cash.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-2.5 pt-1">
                 <button
                   onClick={() => setSettleConfirmOpen(false)}
@@ -783,7 +948,7 @@ export default function BalanceCenterModal({
                   onClick={handleExecuteBatchSettle}
                   className="flex-1 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-glow-gold transition flex items-center justify-center gap-1.5"
                 >
-                  {loading ? '处理中...' : '确认结算'}
+                  {loading ? '处理中...' : '确认划转'}
                 </button>
               </div>
             </div>
