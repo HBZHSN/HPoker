@@ -79,8 +79,8 @@ def test_room_config_rejects_unsupported_table_size(max_seats):
         RoomConfig(max_seats=max_seats)
 
 
-def test_room_lifecycle_and_rebuy():
-    rm = RoomManager(storage_path=":memory:")
+def test_room_lifecycle_and_rebuy(tmp_path):
+    rm = RoomManager(database_path=str(tmp_path / "room_lifecycle_test.sqlite3"))
     cfg = RoomConfig(
         room_name="VIP Cash Room",
         buyin_chips=1000,
@@ -237,8 +237,8 @@ def test_all_in_player_cannot_leave_before_hand_end():
 
 
 def test_pending_departure_and_kick_survive_room_checkpoint(tmp_path):
-    storage_path = tmp_path / "rooms.json"
-    manager = RoomManager(storage_path=str(storage_path))
+    storage_path = tmp_path / "rooms_test.sqlite3"
+    manager = RoomManager(database_path=str(storage_path))
     room = manager.create_room(
         host_player_id="host1",
         config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
@@ -253,7 +253,7 @@ def test_pending_departure_and_kick_survive_room_checkpoint(tmp_path):
     assert room.kick_player("user2") is not None
 
     manager.checkpoint_room(room)
-    restored = RoomManager(storage_path=str(storage_path)).get_room("departure1")
+    restored = RoomManager(database_path=str(storage_path)).get_room("departure1")
 
     assert restored is not None
     assert restored.table.seats[1] is None
@@ -263,8 +263,8 @@ def test_pending_departure_and_kick_survive_room_checkpoint(tmp_path):
 
 
 def test_room_checkpoint_restores_completed_hand_ledger(tmp_path):
-    storage_path = tmp_path / "rooms.json"
-    manager = RoomManager(storage_path=str(storage_path))
+    storage_path = tmp_path / "rooms_test.sqlite3"
+    manager = RoomManager(database_path=str(storage_path))
     room = manager.create_room(
         host_player_id="host1",
         config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5),
@@ -281,7 +281,7 @@ def test_room_checkpoint_restores_completed_hand_ledger(tmp_path):
     assert room.table.street == Street.HAND_END
     manager.checkpoint_room(room)
 
-    restored_manager = RoomManager(storage_path=str(storage_path))
+    restored_manager = RoomManager(database_path=str(storage_path))
     restored = restored_manager.get_room("durable1")
     assert restored is not None
     assert restored.table.street == Street.IDLE
@@ -293,8 +293,8 @@ def test_room_checkpoint_restores_completed_hand_ledger(tmp_path):
 
 
 def test_in_progress_checkpoint_refunds_current_hand_contributions(tmp_path):
-    storage_path = tmp_path / "rooms.json"
-    manager = RoomManager(storage_path=str(storage_path))
+    storage_path = tmp_path / "rooms_test.sqlite3"
+    manager = RoomManager(database_path=str(storage_path))
     room = manager.create_room(
         host_player_id="host1",
         config=RoomConfig(buyin_chips=100, small_blind=5),
@@ -308,7 +308,7 @@ def test_in_progress_checkpoint_refunds_current_hand_contributions(tmp_path):
     # A crash during a hand restores the safe pre-hand stacks rather than
     # stranding posted blinds in a hand that cannot be reconstructed safely.
     manager.checkpoint_room(room)
-    restored = RoomManager(storage_path=str(storage_path)).get_room("recover1")
+    restored = RoomManager(database_path=str(storage_path)).get_room("recover1")
     assert restored is not None
     assert restored.table.street == Street.IDLE
     assert [seat.chips for seat in restored.table.active_seated_players] == [100, 100]

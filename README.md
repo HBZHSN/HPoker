@@ -33,7 +33,7 @@
 
 ## 🛠️ 技术架构
 
-- **后端架构**：Python 3.11+ / FastAPI / WebSockets / Asyncio
+- **后端架构**：Python 3.11+ / FastAPI / WebSockets / Asyncio / SQLite
 - **核心算法**：纯 Python 实现的高性能 7-Card Evaluator、Side Pot Split Engine、Debt Optimizer
 - **前端架构**：React 18 / Vue 3 + Vite + Tailwind CSS + Lucide Icons + Web Audio API
 - **通信协议**：WebSocket 双向事件流（实时广播游戏状态、操作确认、动画同步与重连同步）
@@ -87,6 +87,13 @@ sudo systemctl disable --now poker.service
 ```
 
 服务默认监听 `0.0.0.0:8000`，前端静态资源由 FastAPI 同端口提供；房间和用户持久化数据保存在 `backend/data/`。
+
+### SQLite 数据持久化与测试隔离
+
+- 正式环境默认统一使用 `backend/data/poker.sqlite3`，也可通过 `POKER_DATABASE_PATH` 指定数据库绝对路径。
+- 用户、登录令牌、结算账单、账单参与者、转账、批次及批次关联均使用规范化数据表；现金金额以“分”为整数落库，避免浮点误差。房间运行态作为不可拆分的恢复快照保存，同时单独维护房主、房间名和时间等可查询字段。
+- 数据库启用外键、约束、索引、事务、WAL 与 schema version。首次启用时会一次性迁移原有 `users.json`、`rooms.json` 和 `balance_ledger.json`，迁移记录写入数据库，避免重复导入。
+- pytest 在导入应用前强制设置 `POKER_ENV=test`，并只使用 `backend/data/poker_test.sqlite3`。测试环境若尝试连接正式数据库会直接报错，测试前后也会重置专用测试库中的业务表。
 
 ---
 

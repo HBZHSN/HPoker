@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 import json
+import logging
 import os
 import time
 from typing import Dict, List, Optional, Tuple
 import uuid
 
+from backend.app.database import DEFAULT_DATABASE_PATH, SQLiteDatabase
 from backend.app.models.user import User, hash_password
+
+
+logger = logging.getLogger("poker.users")
 
 
 DEFAULT_PRESET_USERS = [
@@ -20,7 +25,7 @@ DEFAULT_PRESET_USERS = [
     {"user_id": "u_test3", "username": "test3", "nickname": "test3", "avatar": "🧪", "is_admin": False, "is_test": True, "password": "123"},
 ]
 
-DEFAULT_STORAGE_FILE = os.path.join(
+LEGACY_STORAGE_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "data",
     "users.json",
@@ -28,41 +33,76 @@ DEFAULT_STORAGE_FILE = os.path.join(
 
 
 class UserManager:
-    """Manages preconfigured users, persistent storage, authentication, and admin controls."""
+    """Manage preconfigured users, SQLite persistence, and authentication."""
 
-    def __init__(self, storage_path: Optional[str] = None):
-        if storage_path is not None:
-            self.storage_path = storage_path
-        else:
-            self.storage_path = os.environ.get("USERS_DATA_FILE", DEFAULT_STORAGE_FILE)
+    def __init__(
+        self,
+        database_path: Optional[str] = None,
+        *,
+        storage_path: Optional[str] = None,
+        legacy_storage_path: Optional[str] = None,
+    ):
+        if database_path is not None and storage_path is not None:
+            raise ValueError("database_path and storage_path cannot both be set")
+        selected_path = database_path if database_path is not None else storage_path
+        self._database = SQLiteDatabase(selected_path)
+        # Keep the old public attribute as a read-only compatibility aid for
+        # callers that report the configured persistence location.
+        self.storage_path = self._database.path
+        self.legacy_storage_path = legacy_storage_path
+        if (
+            legacy_storage_path is None
+            and self.storage_path == os.path.realpath(DEFAULT_DATABASE_PATH)
+        ):
+            self.legacy_storage_path = LEGACY_STORAGE_FILE
 
         self._users: Dict[str, User] = {}
         self._tokens: Dict[str, str] = {}  # token -> user_id
         self.load_from_storage()
 
+    def _migrate_legacy_json(self) -> None:
+        """Import the former users.json once when the production DB is empty."""
+        migration_name = "users_json_v1"
+        if self._database.migration_applied(migration_name):
+            return
+        existing_users, _ = self._database.load_users()
+        if existing_users:
+            self._database.mark_migration_applied(migration_name)
+            return
+
+        legacy_path = self.legacy_storage_path
+        if legacy_path and os.path.exists(legacy_path):
+            try:
+                with open(legacy_path, "r", encoding="utf-8") as storage_file:
+                    payload = json.load(storage_file)
+                self._database.replace_users(
+                    payload.get("users", []), payload.get("tokens", {})
+                )
+            except (OSError, ValueError, KeyError):
+                logger.exception("Failed to migrate users from %s", legacy_path)
+                raise
+        self._database.mark_migration_applied(migration_name)
+
     def load_from_storage(self) -> None:
-        """Load users and tokens from persistent JSON storage, ensuring default users exist."""
+        """Load users and tokens from SQLite, ensuring preset users exist."""
         self._users.clear()
         self._tokens.clear()
 
-        has_file = False
-        if self.storage_path and self.storage_path != ":memory:" and os.path.exists(self.storage_path):
-            try:
-                with open(self.storage_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for u_data in data.get("users", []):
-                        user = User.from_storage_dict(u_data)
-                        self._users[user.user_id] = user
-                    self._tokens = data.get("tokens", {})
-                has_file = True
-            except Exception as e:
-                print(f"[UserManager] Warning: Failed to load storage from {self.storage_path}: {e}")
+        self._migrate_legacy_json()
+        stored_users, stored_tokens = self._database.load_users()
+        for user_data in stored_users:
+            user = User.from_storage_dict(user_data)
+            self._users[user.user_id] = user
+        self._tokens = stored_tokens
 
         # Ensure preset users exist (admin, fwd, hx, yy, test1, test2, test3)
         modified = False
         existing_usernames = {u.username.lower(): u for u in self._users.values()}
         now = time.time()
-        for preset in DEFAULT_PRESET_USERS:
+        presets = DEFAULT_PRESET_USERS
+        if os.environ.get("POKER_ENV", "").lower() == "test":
+            presets = [preset for preset in presets if preset.get("is_test", False)]
+        for preset in presets:
             uname = preset["username"].lower()
             if uname not in existing_usernames:
                 pwd = preset.get("password", "123")
@@ -90,26 +130,15 @@ class UserManager:
                     existing_user.is_test = preset_test
                     modified = True
 
-        if modified or not has_file:
+        if modified or not stored_users:
             self.save_to_storage()
 
     def save_to_storage(self) -> None:
-        """Persist users and tokens to JSON file."""
-        if not self.storage_path or self.storage_path == ":memory:":
-            return
-
-        try:
-            os.makedirs(os.path.dirname(os.path.abspath(self.storage_path)), exist_ok=True)
-            payload = {
-                "users": [u.to_storage_dict() for u in self._users.values()],
-                "tokens": self._tokens,
-            }
-            tmp_path = f"{self.storage_path}.tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, self.storage_path)
-        except Exception as e:
-            print(f"[UserManager] Warning: Failed to save storage to {self.storage_path}: {e}")
+        """Atomically persist users and authentication tokens to SQLite."""
+        self._database.replace_users(
+            [user.to_storage_dict() for user in self._users.values()],
+            self._tokens,
+        )
 
     def authenticate(self, username: str, password: str) -> Tuple[Optional[User], Optional[str]]:
         """Authenticate user by username and password, return (User, token) if successful."""

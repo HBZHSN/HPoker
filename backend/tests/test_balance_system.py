@@ -8,13 +8,13 @@ from backend.app.services.user_manager import UserManager, User
 
 @pytest.fixture
 def balance_mgr(tmp_path):
-    mgr = BalanceManager(storage_path=":memory:")
+    mgr = BalanceManager(database_path=str(tmp_path / "balance_test.sqlite3"))
     return mgr
 
 
 @pytest.fixture
 def user_mgr(tmp_path):
-    mgr = UserManager(storage_path=":memory:")
+    mgr = UserManager(database_path=str(tmp_path / "users_test.sqlite3"))
     return mgr
 
 
@@ -143,6 +143,10 @@ def test_batch_settlement_and_balance_reset(balance_mgr, user_mgr):
     batches = balance_mgr.list_batches()
     assert len(batches) == 1
     assert batches[0]["batch_id"] == batch.batch_id
+
+    restored = BalanceManager(database_path=balance_mgr.storage_path)
+    assert restored.list_batches()[0]["entry_ids"] == batch.entry_ids
+    assert restored.list_entries(include_test=True)[0]["batch_id"] == batch.batch_id
 
 
 def test_preset_test_accounts(user_mgr):
