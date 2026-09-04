@@ -14,7 +14,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Eye,
-  EyeOff,
 } from 'lucide-react';
 import { preflopChenScore } from '../utils/equityCalculator';
 import { evaluateHand } from '../utils/pokerEvaluator';
@@ -69,7 +68,6 @@ export function EquityTrigger({
           ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white border-purple-300 shadow-glow-cyan'
           : 'bg-gradient-to-r from-purple-950/80 to-indigo-950/80 hover:from-purple-900 hover:to-indigo-900 text-purple-200 border-purple-500/50'
       }`}
-      title={isOpen ? '收起胜率分析' : '展开胜率分析'}
     >
       <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
       <span>胜率</span>
@@ -297,13 +295,6 @@ export default function EquityDrawer({
                   ? '未入座'
                   : '等待发牌'}
               </div>
-              <p className="text-xs text-slate-500 max-w-[220px] leading-relaxed">
-                {street === 'IDLE'
-                  ? '牌局尚未开始，开局发牌后将在此实时展示胜率与决策建议。'
-                  : !isSeated
-                  ? '入座参与对局后，此处将自动展示实时胜率与跟注建议。'
-                  : '手牌发给玩家后，将实时计算胜率、Outs 及底池赔率。'}
-              </p>
             </div>
           ) : (
             <div className="relative">
@@ -314,17 +305,14 @@ export default function EquityDrawer({
                     <Eye className="w-5 h-5 text-amber-400" />
                   </div>
                   <h4 className="text-sm font-black text-slate-100 mb-1">
-                    {street === 'HAND_END' ? '本局已结束（胜率已模糊）' : '胜率分析已模糊锁定'}
+                    {street === 'HAND_END' ? '本局结束' : '分析已锁定'}
                   </h4>
-                  <p className="text-xs text-slate-400 mb-3.5 leading-relaxed max-w-[220px]">
-                    点击查看将向全桌玩家公开你正在使用辅助功能，并在头像上显示「辅助」标识。
-                  </p>
                   <button
                     onClick={handleReveal}
                     className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-glow-cyan border border-purple-300 transition active:scale-95 cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5 text-amber-300" />
-                    <span>{street === 'HAND_END' ? '点击查看结算胜率' : '点击查看胜率分析'}</span>
+                    <span>查看分析</span>
                   </button>
                 </div>
               )}
@@ -334,9 +322,9 @@ export default function EquityDrawer({
                 {/* Status line */}
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">
-                    阶段: <span className="text-amber-300 font-black">{STAGE_NAMES[street] || street}</span>
+                    <span className="text-amber-300 font-black">{STAGE_NAMES[street] || street}</span>
                     {isFolded && <span className="ml-1 text-red-400 font-bold">(已弃牌)</span>}
-                    {numOpponents > 0 && <span className="ml-2 text-slate-500">vs {numOpponents} 名对手</span>}
+                    {numOpponents > 0 && <span className="ml-2 text-slate-500">vs {numOpponents}</span>}
                   </span>
                 {handDesc && (
                   <span className="text-purple-300 font-bold flex items-center gap-1">
@@ -350,7 +338,7 @@ export default function EquityDrawer({
                 <div className="bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-2 flex items-center justify-between">
                   <div className="flex items-center gap-2 text-xs text-slate-300">
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <span>翻前 Chen 强度</span>
+                    <span>Chen 分数</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-28 h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -364,9 +352,8 @@ export default function EquityDrawer({
 
               {/* Loading */}
               {loading && (
-                <div className="flex flex-col items-center justify-center py-10 gap-2 text-slate-400">
+                <div className="flex items-center justify-center py-10 text-slate-400" role="status" aria-label="计算中">
                   <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
-                  <span className="text-xs">后端蒙特卡洛模拟中...</span>
                 </div>
               )}
 
@@ -382,7 +369,7 @@ export default function EquityDrawer({
                 <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs text-slate-400 font-bold">
-                      <BarChart3 className="w-3.5 h-3.5" /> 当前胜率 vs 随机对手
+                      <BarChart3 className="w-3.5 h-3.5" /> 胜率 vs 随机对手
                     </div>
                     <span className="text-[10px] text-slate-500">
                       {equity.strategy === 'exact' ? '精确' : 'MC'}
@@ -420,7 +407,7 @@ export default function EquityDrawer({
                 <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs text-slate-400 font-bold">
-                      <Target className="w-3.5 h-3.5 text-cyan-400" /> 听牌分析 (Outs)
+                      <Target className="w-3.5 h-3.5 text-cyan-400" /> Outs
                     </div>
                     <span className="text-amber-300 font-black text-sm">
                       {outs.total_outs} outs
@@ -430,22 +417,19 @@ export default function EquityDrawer({
                   <div className="space-y-1.5">
                     {outs.categories.map((c, i) => (
                       <div key={i} className="bg-slate-900/60 rounded-lg px-3 py-2 flex items-center justify-between text-xs">
-                        <div>
-                          <div className="text-slate-300 font-bold">{c.name}</div>
-                          <div className="text-[10px] text-slate-500">{c.desc}</div>
-                        </div>
+                        <div className="text-slate-300 font-bold">{c.name}</div>
                         <span className="text-amber-300 font-black text-sm">{c.outs} outs</span>
                       </div>
                     ))}
                   </div>
 
                   <div className="text-[11px] text-slate-400 bg-slate-900/50 rounded-lg px-3 py-2 border border-slate-700/50">
-                    <span className="text-slate-500">补牌概率 — 转牌:</span>{' '}
+                    <span className="text-slate-500">转牌:</span>{' '}
                     <span className="text-cyan-300 font-bold">
                       {(outs.turn_hit_pct * 100).toFixed(1)}%
                     </span>
                     <span className="text-slate-600 mx-2">·</span>
-                    <span className="text-slate-500">转+河:</span>{' '}
+                    <span className="text-slate-500">到河:</span>{' '}
                     <span className="text-cyan-300 font-bold">
                       {(outs.river_hit_pct * 100).toFixed(1)}%
                     </span>
@@ -462,14 +446,14 @@ export default function EquityDrawer({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-bold
                       ${potOdds.decision === 'call' ? 'text-emerald-300' : 'text-red-300'}">
-                      <DollarSign className="w-3.5 h-3.5" /> 底池赔率 & 决策建议
+                      <DollarSign className="w-3.5 h-3.5" /> 底池赔率
                     </div>
                     <div className={`flex items-center gap-1 font-black text-sm
                       ${potOdds.decision === 'call' ? 'text-emerald-300' : 'text-red-300'}`}>
                       {potOdds.decision === 'call'
                         ? <CheckCircle2 className="w-4 h-4" />
                         : <AlertCircle className="w-4 h-4" />}
-                      {potOdds.decision === 'call' ? '建议 CALL' : '建议 FOLD'}
+                      {potOdds.decision === 'call' ? 'CALL' : 'FOLD'}
                     </div>
                   </div>
 
@@ -492,16 +476,12 @@ export default function EquityDrawer({
                   </div>
 
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">需要的最低胜率</span>
+                    <span className="text-slate-400">门槛</span>
                     <span className="text-slate-200 font-mono">
                       ≥ {(potOdds.need_rate * 100).toFixed(1)}%
                     </span>
                   </div>
 
-                  <div className={`text-[11px] pt-2 border-t border-slate-700/50 text-center
-                    ${potOdds.decision === 'call' ? 'text-emerald-300' : 'text-red-300'}`}>
-                    {potOdds.reason}
-                  </div>
                 </div>
               )}
 
@@ -509,7 +489,7 @@ export default function EquityDrawer({
               {!loading && drawProbs && (
                 <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-2">
                   <div className="flex items-center gap-2 text-xs text-slate-400 font-bold">
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400" /> 河牌终局成牌概率
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" /> 河牌成牌
                   </div>
                   <div className="space-y-1.5 pt-1">
                     {sortedCategoryEntries(drawProbs)
@@ -529,7 +509,7 @@ export default function EquityDrawer({
                   onClick={runCalculation}
                   className="text-[11px] text-purple-300 hover:text-purple-200 underline cursor-pointer"
                 >
-                  ↻ 重新计算
+                  ↻ 重算
                 </button>
               </div>
             </div>

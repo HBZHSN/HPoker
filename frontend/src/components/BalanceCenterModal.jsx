@@ -119,7 +119,7 @@ export default function BalanceCenterModal({
         throw new Error(errData.detail || '结算失败');
       }
       const newBatch = await res.json();
-      setSuccessMsg(`结算成功！已生成对账批次 #${newBatch.batch_id}`);
+      setSuccessMsg(`已生成结算批次 #${newBatch.batch_id}`);
       setSettleConfirmOpen(false);
       setSelectedBatch(newBatch);
       refreshAll();
@@ -132,7 +132,7 @@ export default function BalanceCenterModal({
 
   // Clear test records
   const handleClearTestRecords = async () => {
-    if (!window.confirm('确定要清空所有测试账号/机器人的测试对局记录吗？')) return;
+    if (!window.confirm('确认清理测试账号与机器人的对局记录？')) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/balance/test-records?admin_id=${currentUser.user_id}`, {
@@ -157,7 +157,7 @@ export default function BalanceCenterModal({
   const handleClearAllRecords = async () => {
     if (
       !window.confirm(
-        '⚠️ 警告：确定要清空所有结算记录与账单数据吗？\n\n此操作将清除所有未结账单、已结账单及结算批次，所有玩家的余额将重置为 0，数据无法恢复！\n\n是否确认清空并重新开始？'
+        '确认清空所有结算与账单数据？\n\n此操作不可恢复。'
       )
     ) {
       return;
@@ -175,7 +175,7 @@ export default function BalanceCenterModal({
         throw new Error(errData.detail || '清空失败');
       }
       const data = await res.json();
-      setSuccessMsg(data.message || '已成功清空所有结算与账单记录，重新开始计算！');
+      setSuccessMsg(data.message || '结算数据已清空');
       refreshAll();
     } catch (err) {
       setError(err.message);
@@ -357,11 +357,11 @@ export default function BalanceCenterModal({
             {/* My Match Ledger History */}
             <div className="flex flex-col gap-2">
               <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                账单流水
+                账单
               </h3>
               {(!myBalance?.records || myBalance.records.length === 0) ? (
                 <div className="p-6 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
-                  暂无对局账单记录
+                  暂无记录
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
@@ -577,7 +577,7 @@ export default function BalanceCenterModal({
                   onChange={(e) => setIncludeTest(e.target.checked)}
                   className="rounded border-slate-700 text-amber-500 focus:ring-amber-500"
                 />
-                <span>包含测试数据</span>
+                <span>含测试</span>
               </label>
 
               <div className="flex items-center gap-2">
@@ -593,10 +593,9 @@ export default function BalanceCenterModal({
                   onClick={handleClearAllRecords}
                   disabled={loading}
                   className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-black rounded-xl shadow-lg transition flex items-center gap-1 active:scale-95 cursor-pointer"
-                  title="清空所有未结、已结账单及结算批次"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  一键清空所有数据
+                  清空数据
                 </button>
               </div>
             </div>
@@ -736,7 +735,7 @@ export default function BalanceCenterModal({
                 }`}
               >
                 <CheckCircle2 className="w-4 h-4" />
-                一键结算 ({overview?.preview?.entry_count || 0} 局)
+                结算 ({overview?.preview?.entry_count || 0} 局)
               </button>
             </div>
           </div>

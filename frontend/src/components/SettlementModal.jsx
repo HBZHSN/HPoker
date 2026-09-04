@@ -70,7 +70,7 @@ export default function SettlementModal({
 
         {/* Player Leaderboard */}
         <div className="flex flex-col gap-2">
-          <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">玩家战绩</h3>
+          <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">战绩</h3>
           <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/60">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-900/80 text-slate-400 font-semibold border-b border-slate-800">
@@ -129,10 +129,10 @@ export default function SettlementModal({
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-              现金转账明细
+              转账明细
             </h3>
             <span className="text-[11px] text-slate-400">
-              共 {report.transactions.length} 笔支付
+              {report.transactions.length} 笔
             </span>
           </div>
 

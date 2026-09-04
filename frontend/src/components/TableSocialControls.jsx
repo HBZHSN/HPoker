@@ -121,7 +121,6 @@ export default function TableSocialControls({
               type="button"
               onClick={() => setChatOpen(false)}
               className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-800 hover:text-white"
-              title="关闭聊天"
               aria-label="关闭聊天"
             >
               <X className="h-4 w-4" />
@@ -134,7 +133,7 @@ export default function TableSocialControls({
             aria-live="polite"
           >
             {activities.length === 0 ? (
-              <div className="m-auto text-xs text-slate-600">还没有聊天或表情</div>
+              <div className="m-auto text-xs text-slate-600">暂无消息</div>
             ) : activities.map((activity) => {
               const isSelf = activity.player_id === currentUserId;
               const isEmoji = activity.type === 'emoji';
@@ -156,10 +155,7 @@ export default function TableSocialControls({
                         : 'rounded-bl-sm border border-slate-700 bg-slate-800 text-slate-100'
                     }`}>
                       {isEmoji ? (
-                        <span className="flex items-center gap-2">
-                          <span className="text-2xl leading-none">{activity.emoji}</span>
-                          <span className="text-[10px] opacity-70">发表情</span>
-                        </span>
+                        <span className="text-2xl leading-none">{activity.emoji}</span>
                       ) : activity.message}
                     </div>
                   </div>
@@ -174,7 +170,7 @@ export default function TableSocialControls({
               onChange={(event) => setDraft(event.target.value)}
               maxLength={120}
               autoFocus
-              placeholder="输入消息…"
+              placeholder="消息"
               className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white outline-none transition placeholder:text-slate-600 focus:border-amber-500"
               aria-label="聊天内容"
             />
@@ -182,7 +178,6 @@ export default function TableSocialControls({
               type="submit"
               disabled={!draft.trim()}
               className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
-              title="发送"
               aria-label="发送聊天消息"
             >
               <Send className="h-4 w-4" />
@@ -196,8 +191,7 @@ export default function TableSocialControls({
           className="absolute bottom-14 left-0 w-64 rounded-2xl border border-amber-500/35 bg-slate-950/95 p-2.5 shadow-2xl backdrop-blur-xl"
           aria-label="选择表情"
         >
-          <div className="mb-2 flex items-center justify-between px-1 text-[10px] font-bold text-slate-500">
-            <span>常用优先</span>
+          <div className="mb-2 flex items-center justify-end px-1 text-[10px] font-bold text-slate-500">
             <span>{emojiPage + 1} / {emojiPageCount}</span>
           </div>
           <div className="grid grid-cols-5 gap-1.5">
@@ -257,7 +251,6 @@ export default function TableSocialControls({
           setChatOpen(false);
         }}
         className="flex h-11 w-11 items-center justify-center rounded-full border border-amber-500/50 bg-slate-950/95 text-amber-300 shadow-xl backdrop-blur-md transition hover:border-amber-400 hover:bg-amber-950 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-        title={canReact ? '发表情' : '入座后可发表情'}
         aria-label="发表情"
       >
         <SmilePlus className="h-5 w-5" />
@@ -270,7 +263,6 @@ export default function TableSocialControls({
           setEmojiOpen(false);
         }}
         className="relative flex h-11 w-11 items-center justify-center rounded-full border border-amber-500/50 bg-slate-950/95 text-amber-300 shadow-xl backdrop-blur-md transition hover:border-amber-400 hover:bg-amber-950 active:scale-95"
-        title="聊天"
         aria-label="打开聊天"
       >
         <MessageCircle className="h-5 w-5" />

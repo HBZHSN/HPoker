@@ -554,13 +554,13 @@ export default function ActionBar({
             <div className="flex items-center gap-1.5">
               <span className="text-xs lg:text-sm font-black text-slate-100">{selfSeat.name}</span>
               {selfSeat.rebuy_count > 1 && (
-                <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full font-bold" title={`买入次数: ${selfSeat.rebuy_count} 次 (总买入: $${(selfSeat.total_buyin_chips || selfSeat.chips).toLocaleString()})`}>
+                <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full font-bold">
                   买入 x{selfSeat.rebuy_count}
                 </span>
               )}
             </div>
             <div className="flex items-baseline gap-1">
-                <span className="text-[11px] lg:text-xs text-slate-400 font-bold">筹码</span>
+              <span className="text-[11px] lg:text-xs text-slate-400 font-bold">筹码</span>
               <span className={`text-sm lg:text-lg font-black ${selfSeat.chips === 0 ? 'text-red-400' : 'text-amber-400'}`}>
                 ${selfSeat.chips}
               </span>
