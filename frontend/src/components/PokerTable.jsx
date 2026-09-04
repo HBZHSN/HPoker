@@ -7,6 +7,7 @@ import HandResultModal from './HandResultModal';
 import TableSocialControls from './TableSocialControls';
 import EquityDrawer, { EquityTrigger } from './EquityDrawer';
 import { sortCardsLowToHigh } from '../utils/cards';
+import { getRitStageDescription, buildBoardSlots } from '../utils/communityBoard';
 import { soundEngine } from '../sound/SoundEngine';
 import {
   Volume2,
@@ -670,97 +671,136 @@ export default function PokerTable({
               </div>
 
               {/* Interactive Center RIT Decision Overlay */}
-              {table?.street === 'RIT_DECISION' && table?.rit_status === 'VOTING' && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
-                  <div className="max-w-md w-full bg-gradient-to-b from-slate-900 via-slate-950 to-purple-950 border-2 border-purple-500/80 rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 text-center">
-                    <div className="flex items-center justify-center gap-2 text-amber-400 font-black text-base md:text-lg">
-                      全下后发牌次数
-                    </div>
+              {table?.street === 'RIT_DECISION' && table?.rit_status === 'VOTING' && (() => {
+                const ritBoardCards = table?.board_cards || [];
+                const ritBoardSlots = buildBoardSlots(ritBoardCards);
+                const ritStageText = getRitStageDescription(ritBoardCards);
 
-                    {/* Contender cards and vote progress stay visible together so
-                        players can make an informed runout choice. */}
-                    <div className="grid grid-cols-2 gap-2 bg-black/50 p-2.5 rounded-2xl border border-slate-800 max-h-48 overflow-y-auto">
-                      {(table?.rit_voters || []).map((voterId) => {
-                        const voterSeat = table?.seats?.find((s) => s && s.player_id === voterId);
-                        const voterName = voterSeat ? voterSeat.name : voterId;
-                        const vote = table?.rit_votes?.[voterId];
-                        const visibleCards = sortCardsLowToHigh(
-                          voterSeat?.shown_cards?.length
+                return (
+                  <div className="absolute inset-0 z-30 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
+                    <div className="max-w-md w-full bg-gradient-to-b from-slate-900 via-slate-950 to-purple-950 border-2 border-purple-500/80 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col gap-3 sm:gap-3.5 text-center">
+                      <div className="flex items-center justify-between px-1">
+                        <span className="text-amber-400 font-black text-base md:text-lg">
+                          全下后发牌次数
+                        </span>
+                        {table?.total_pot ? (
+                          <span className="text-xs md:text-sm font-bold text-amber-300/90 bg-amber-950/60 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
+                            底池 ${table.total_pot}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {/* Community Cards Display */}
+                      <div className="flex flex-col items-center gap-1.5 bg-black/50 p-2.5 rounded-2xl border border-slate-800 shadow-inner">
+                        <div className="flex items-center justify-between w-full px-1 text-xs">
+                          <span className="font-bold text-slate-300">公共牌</span>
+                          <span className="text-[11px] font-semibold text-amber-400/90">
+                            {ritStageText}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-center gap-1.5 md:gap-2">
+                          {ritBoardSlots.map((card, idx) => (
+                            <CardView
+                              key={idx}
+                              card={card}
+                              isBack={!card}
+                              size="sm"
+                              className="shadow-md"
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Contender cards and vote progress stay visible together so
+                          players can make an informed runout choice. */}
+                      <div className="grid grid-cols-2 gap-2 bg-black/50 p-2.5 rounded-2xl border border-slate-800 max-h-40 sm:max-h-48 overflow-y-auto">
+                        {(table?.rit_voters || []).map((voterId) => {
+                          const voterSeat = table?.seats?.find((s) => s && s.player_id === voterId);
+                          const voterName = voterSeat ? voterSeat.name : voterId;
+                          const isSelf = voterSeat?.player_id === selfSeat?.player_id;
+                          const vote = table?.rit_votes?.[voterId];
+                          const rawCards = voterSeat?.shown_cards?.length
                             ? voterSeat.shown_cards
-                            : voterSeat?.player_id === selfSeat?.player_id
-                            ? voterSeat?.hole_cards || []
-                            : []
-                        );
-                        return (
-                          <div
-                            key={voterId}
-                            className={`min-w-0 px-2.5 py-2 rounded-xl border flex flex-col items-center gap-1.5 ${
-                              vote === 2
-                                ? 'bg-purple-950/90 text-purple-300 border-purple-500/60 shadow'
-                                : vote === 1
-                                ? 'bg-amber-950/90 text-amber-300 border-amber-500/60 shadow'
-                                : 'bg-slate-900 text-slate-400 border-slate-700 animate-pulse'
+                            : voterSeat?.hole_cards?.length
+                            ? voterSeat.hole_cards
+                            : isSelf
+                            ? selfSeat?.hole_cards || []
+                            : [];
+                          const visibleCards = sortCardsLowToHigh(rawCards);
+                          return (
+                            <div
+                              key={voterId}
+                              className={`min-w-0 px-2.5 py-2 rounded-xl border flex flex-col items-center gap-1.5 ${
+                                vote === 2
+                                  ? 'bg-purple-950/90 text-purple-300 border-purple-500/60 shadow'
+                                  : vote === 1
+                                  ? 'bg-amber-950/90 text-amber-300 border-amber-500/60 shadow'
+                                  : 'bg-slate-900 text-slate-400 border-slate-700 animate-pulse'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+                                <span className="text-base leading-none flex-shrink-0">{voterSeat?.avatar || '👤'}</span>
+                                <span className="text-xs font-black truncate">
+                                  {voterName}
+                                  {isSelf && <span className="ml-1 text-[10px] text-amber-400 font-semibold">(我)</span>}
+                                </span>
+                              </div>
+                              <div className="flex -space-x-2 min-h-[42px] items-center" aria-label={`${voterName}的手牌`}>
+                                {visibleCards.length > 0 ? visibleCards.map((card, cardIndex) => (
+                                  <CardView key={cardIndex} card={card} size="xs" className="shadow-lg" />
+                                )) : (
+                                  <span className="text-[10px] text-slate-500">等待亮牌</span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-bold">
+                                {vote === 2 ? '发 2 次' : vote === 1 ? '发 1 次' : '未选择'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Voter Action Buttons */}
+                      {selfSeat && table?.rit_voters?.includes(selfSeat.player_id) ? (
+                        <div className="grid grid-cols-2 gap-3 mt-0.5">
+                          <button
+                            onClick={() => onSendWsEvent('RIT_CHOICE', { choice: 1 })}
+                            className={`py-2.5 sm:py-3 px-3 rounded-2xl font-black text-sm transition active:scale-95 cursor-pointer flex flex-col items-center justify-center border-2 ${
+                              table?.rit_votes?.[selfSeat.player_id] === 1
+                                ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-glow-gold'
+                                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/50'
                             }`}
                           >
-                            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
-                              <span className="text-base leading-none flex-shrink-0">{voterSeat?.avatar || '👤'}</span>
-                              <span className="text-xs font-black truncate">{voterName}</span>
-                            </div>
-                            <div className="flex -space-x-2 min-h-[42px] items-center" aria-label={`${voterName}的手牌`}>
-                              {visibleCards.length > 0 ? visibleCards.map((card, cardIndex) => (
-                                <CardView key={cardIndex} card={card} size="xs" className="shadow-lg" />
-                              )) : (
-                                <span className="text-[10px] text-slate-500">等待亮牌</span>
-                              )}
-                            </div>
-                            <span className="text-[10px] font-bold">
-                              {vote === 2 ? '发 2 次' : vote === 1 ? '发 1 次' : '未选择'}
-                            </span>
-                          </div>
-                        );
-                      })}
+                            <span className="text-base font-black">发 1 次</span>
+                          </button>
+
+                          <button
+                            onClick={() => onSendWsEvent('RIT_CHOICE', { choice: 2 })}
+                            className={`py-2.5 sm:py-3 px-3 rounded-2xl font-black text-sm transition active:scale-95 cursor-pointer flex flex-col items-center justify-center border-2 ${
+                              table?.rit_votes?.[selfSeat.player_id] === 2
+                                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-300 shadow-glow-cyan'
+                                : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border-purple-500/50'
+                            }`}
+                          >
+                            <span className="text-base font-black">发 2 次</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 font-bold py-1 flex items-center justify-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-purple-400" />
+                          等待其他玩家
+                        </div>
+                      )}
+                      {selfSeat && table?.rit_voters?.includes(selfSeat.player_id) && table?.rit_votes?.[selfSeat.player_id] !== undefined && (
+                        <div className="text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          已选择
+                        </div>
+                      )}
                     </div>
-
-                    {/* Voter Action Buttons */}
-                    {selfSeat && table?.rit_voters?.includes(selfSeat.player_id) ? (
-                      <div className="grid grid-cols-2 gap-3 mt-1">
-                        <button
-                          onClick={() => onSendWsEvent('RIT_CHOICE', { choice: 1 })}
-                          className={`py-3 px-3 rounded-2xl font-black text-sm transition active:scale-95 cursor-pointer flex flex-col items-center justify-center border-2 ${
-                            table?.rit_votes?.[selfSeat.player_id] === 1
-                              ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-glow-gold'
-                              : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-amber-500/50'
-                          }`}
-                        >
-                          <span className="text-base font-black">发 1 次</span>
-                        </button>
-
-                        <button
-                          onClick={() => onSendWsEvent('RIT_CHOICE', { choice: 2 })}
-                          className={`py-3 px-3 rounded-2xl font-black text-sm transition active:scale-95 cursor-pointer flex flex-col items-center justify-center border-2 ${
-                            table?.rit_votes?.[selfSeat.player_id] === 2
-                              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-purple-300 shadow-glow-cyan'
-                              : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border-purple-500/50'
-                          }`}
-                        >
-                          <span className="text-base font-black">发 2 次</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-slate-400 font-bold py-1 flex items-center justify-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-purple-400" />
-                        等待其他玩家
-                      </div>
-                    )}
-                    {selfSeat && table?.rit_voters?.includes(selfSeat.player_id) && table?.rit_votes?.[selfSeat.player_id] !== undefined && (
-                      <div className="text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        已选择
-                      </div>
-                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Seated Players Overlay (Auto-rotated so user is at Screen Pos 0 / Bottom) */}
               {visualScreenPositions.map((pos, screenIdx) => {
