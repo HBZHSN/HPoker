@@ -551,10 +551,15 @@ html,
   -webkit-user-select: text;
 }
 
+.poker-social-controls {
+  z-index: 60;
+}
+
 @media (max-width: 640px) {
   .poker-social-controls {
     bottom: 10px;
     left: 10px;
+    z-index: 60;
   }
 
   .poker-chat-window {

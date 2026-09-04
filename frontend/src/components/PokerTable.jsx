@@ -756,14 +756,6 @@ export default function PokerTable({
         </aside>
       </div>
 
-      <TableSocialControls
-        activities={socialHistory}
-        currentUserId={currentUser?.user_id}
-        canReact={Boolean(selfSeat)}
-        onSendChat={(message) => onSendWsEvent('CHAT_MESSAGE', { message })}
-        onSendEmoji={(emoji) => onSendWsEvent('EMOJI_REACTION', { emoji })}
-      />
-
       {/* Hand Result Settlement & Card Reveal Modal */}
       {table?.street === 'HAND_END' && !handResultDismissed && table?.hand_results && table.hand_results.length > 0 && (
         <HandResultModal
@@ -796,6 +788,15 @@ export default function PokerTable({
           onClose={() => setHandResultDismissed(true)}
         />
       )}
+
+      {/* Social interaction controls (Chat & Emoji) rendered after modal to guarantee visibility and interaction */}
+      <TableSocialControls
+        activities={socialHistory}
+        currentUserId={currentUser?.user_id}
+        canReact={Boolean(selfSeat)}
+        onSendChat={(message) => onSendWsEvent('CHAT_MESSAGE', { message })}
+        onSendEmoji={(emoji) => onSendWsEvent('EMOJI_REACTION', { emoji })}
+      />
 
     </div>
   );
