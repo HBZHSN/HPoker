@@ -8,6 +8,7 @@ from typing import List, Optional
 from backend.app.services.user_manager import user_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.services.balance_manager import balance_manager
+from backend.app.services.hand_history_manager import hand_history_manager
 from backend.app.services.timeout_manager import timeout_manager
 from backend.app.websocket.connection_manager import ws_manager
 from backend.app.websocket.protocol import EventType, make_message
@@ -15,6 +16,16 @@ from backend.app.models.room import RoomConfig
 from backend.app.models.user import User
 
 api_router = APIRouter()
+
+
+def _verify_user(authorization: Optional[str] = None, token: Optional[str] = None) -> User:
+    auth_token = token
+    if not auth_token and authorization and authorization.startswith("Bearer "):
+        auth_token = authorization.split("Bearer ")[1].strip()
+    user = user_manager.get_user_by_token(auth_token) if auth_token else None
+    if not user:
+        raise HTTPException(status_code=401, detail="请先登录后查看牌局历史")
+    return user
 
 
 # ----------------- Auth Models & Endpoints -----------------
@@ -437,6 +448,36 @@ async def delete_room(room_id: str, requester_id: str = Query(...)):
 
 
 # ----------------- Balance & Ledger Endpoints -----------------
+
+@api_router.get("/hands/my")
+def get_my_hand_history(
+    outcome: Optional[str] = Query(None),
+    room_id: Optional[str] = Query(None),
+    started_at: Optional[float] = Query(None),
+    ended_at: Optional[float] = Query(None),
+    sort_by: str = Query("ended_at"),
+    order: str = Query("desc"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    """List the authenticated user's hands without exposing opponents' cards."""
+    user = _verify_user(authorization=authorization, token=token)
+    try:
+        return hand_history_manager.list_user_hands(
+            user.user_id,
+            outcome=outcome,
+            room_id=room_id,
+            started_at=started_at,
+            ended_at=ended_at,
+            sort_by=sort_by,
+            order=order,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 class SettleBatchRequest(BaseModel):
     operator_id: str

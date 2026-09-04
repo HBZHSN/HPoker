@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from backend.app.database import DEFAULT_DATABASE_PATH, SQLiteDatabase
 from backend.app.models.room import Room, RoomConfig
+from backend.app.services.hand_history_manager import HandHistoryManager
 
 logger = logging.getLogger("poker.rooms")
 LEGACY_STORAGE_FILE = os.path.join(
@@ -40,6 +41,7 @@ class RoomManager:
         ):
             self.legacy_storage_path = LEGACY_STORAGE_FILE
         self._rooms: Dict[str, Room] = {}
+        self.hand_history_manager = HandHistoryManager(database_path=self.storage_path)
         self._storage_lock = threading.RLock()
         self.load_from_storage()
 
@@ -84,7 +86,9 @@ class RoomManager:
 
     def checkpoint_room(self, room: Room) -> None:
         """Record a completed hand if needed, then flush a safe checkpoint."""
-        room.record_completed_hand()
+        completed_hand = room.record_completed_hand()
+        if completed_hand:
+            self.hand_history_manager.record_hand(completed_hand)
         self.save_to_storage()
 
     def create_room(self, host_player_id: str, config: RoomConfig, room_id: Optional[str] = None) -> Room:

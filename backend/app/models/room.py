@@ -89,47 +89,112 @@ class Room:
         # Durable per-hand accounting checkpoints. Private cards are never
         # included in these records.
         self.hand_records: List[dict] = []
+        self._departed_hand_players: Dict[int, List[dict]] = {}
+        self._aborted_hand_numbers: set[int] = set()
         self._next_test_bot_number = 1
         # Real-money stacks are debited when chips enter the table and credited
         # when chips leave it. Test users and bots never touch this wallet.
         self.money_mode: str = "real"
         self.money_mode_epoch: int = 0
 
-    def record_completed_hand(self) -> bool:
-        """Append one chip/buy-in ledger entry for a completed hand."""
+    def record_completed_hand(self) -> Optional[dict]:
+        """Build one immutable per-user hand history record at hand end."""
         if self.table.street != Street.HAND_END or self.table.hand_number <= 0:
-            return False
+            return None
+        if self.table.hand_number in self._aborted_hand_numbers:
+            return None
         if any(r.get("hand_number") == self.table.hand_number for r in self.hand_records):
-            return False
+            return None
 
+        player_snapshots = [
+            {
+                "player_id": seat.player_id,
+                "player_name": seat.name,
+                "avatar": seat.avatar,
+                "seat_index": seat.seat_index,
+                "is_test": seat.is_test or seat.is_bot,
+                "hole_cards": [card.to_dict() for card in seat.hole_cards],
+                "shown_cards": [card.to_dict() for card in seat.shown_cards],
+                "ending_chips": seat.chips,
+                "is_folded": seat.is_folded,
+                "rebuy_count": seat.rebuy_count,
+                "total_buyin_chips": seat.total_buyin_chips,
+            }
+            for seat in self.table.active_seated_players
+            if seat.hole_cards
+        ]
+        player_snapshots.extend(
+            self._departed_hand_players.pop(self.table.hand_number, [])
+        )
+
+        ratio = self.config.cash_value / self.config.buyin_chips
         players = []
-        active_player_ids = {
-            seat.player_id for seat in self.table.active_seated_players
-        }
-        hand_departure_ids = {
-            item.get("player_id")
-            for item in self.pending_settlements
-            if item.get("hand_number") == self.table.hand_number
-        }
-        participant_ids = active_player_ids | hand_departure_ids
-        for participant in self._build_participant_data():
-            if participant["player_id"] not in participant_ids:
-                continue
+        for snapshot in player_snapshots:
+            player_id = snapshot["player_id"]
+            contributed = self.table.pot_manager.get_player_total_bet(player_id)
+            payout = sum(
+                item.amount for item in self.table.payouts if item.player_id == player_id
+            )
+            ending_chips = int(snapshot["ending_chips"])
+            net_chips = payout - contributed
+            hand_description = "弃牌" if snapshot.get("is_folded") else "已盖牌"
+            evaluation = self.table.hand_evaluations.get(player_id)
+            if evaluation:
+                hand_description = evaluation.description or evaluation.category.display_name
+            else:
+                matching_payout = next(
+                    (item for item in self.table.payouts if item.player_id == player_id),
+                    None,
+                )
+                if matching_payout and matching_payout.hand_description:
+                    hand_description = matching_payout.hand_description
+
             players.append({
-                "player_id": participant["player_id"],
-                "player_name": participant["player_name"],
-                "seat_index": participant.get("seat_index"),
-                "chips": participant["final_chips"],
-                "total_buyin_chips": participant["total_buyin_chips"],
-                "rebuy_count": participant["rebuy_count"],
+                **snapshot,
+                "starting_chips": ending_chips + contributed - payout,
+                "contributed_chips": contributed,
+                "payout_chips": payout,
+                "net_chips": net_chips,
+                "net_cash": round(net_chips * ratio, 2) if self.money_mode == "real" else 0.0,
+                "hand_description": hand_description,
+                "is_winner": net_chips > 0,
             })
+
+        ended_at = time.time()
+        detailed_record = {
+            "hand_id": f"{self.room_id}:{self.table.hand_number}",
+            "room_id": self.room_id,
+            "room_name": self.config.room_name,
+            "hand_number": self.table.hand_number,
+            "ended_at": ended_at,
+            "money_mode": self.money_mode,
+            "small_blind": self.config.small_blind,
+            "big_blind": self.config.big_blind,
+            "chip_to_cash_ratio": ratio if self.money_mode == "real" else 0.0,
+            "total_pot": sum(self.table.pot_manager.total_contributions.values()),
+            "board": [card.to_dict() for card in self.table.board_cards],
+            "board_2": [card.to_dict() for card in self.table.board_cards_2],
+            "actions": copy.deepcopy(self.table.last_action_history),
+            "players": players,
+        }
         self.hand_records.append({
             "hand_number": self.table.hand_number,
-            "settled_at": time.time(),
-            "total_chips": sum(player["chips"] for player in players),
-            "players": players,
+            "settled_at": ended_at,
+            "total_chips": sum(player["ending_chips"] for player in players),
+            "players": [
+                {
+                    "player_id": player["player_id"],
+                    "player_name": player["player_name"],
+                    "seat_index": player.get("seat_index"),
+                    "chips": player["ending_chips"],
+                    "total_buyin_chips": player.get("total_buyin_chips", 0),
+                    "rebuy_count": player.get("rebuy_count", 0),
+                    "net_chips": player["net_chips"],
+                }
+                for player in players
+            ],
         })
-        return True
+        return detailed_record
 
     def to_checkpoint_dict(self) -> dict:
         """Serialize a restart-safe room checkpoint.
@@ -571,6 +636,21 @@ class Room:
         history["final_chips"] = realized_chips
         history["is_seated"] = False
 
+        if hand_number is not None and player.hole_cards:
+            self._departed_hand_players.setdefault(hand_number, []).append({
+                "player_id": player.player_id,
+                "player_name": player.name,
+                "avatar": player.avatar,
+                "seat_index": player.seat_index,
+                "is_test": player.is_test or player.is_bot,
+                "hole_cards": [card.to_dict() for card in player.hole_cards],
+                "shown_cards": [card.to_dict() for card in player.shown_cards],
+                "ending_chips": player.chips,
+                "is_folded": True,
+                "rebuy_count": player.rebuy_count,
+                "total_buyin_chips": player.total_buyin_chips,
+            })
+
         self.pending_settlements.append({
             "player_id": player.player_id,
             "player_name": player.name,
@@ -632,7 +712,10 @@ class Room:
 
     def cash_out_all_players(self, reason: str = "room_closed") -> List[dict]:
         """Refund an unfinished hand and return every real stack to its wallet."""
+        hand_was_running = self.table.street not in (Street.IDLE, Street.HAND_END)
         refunded_contributions = self.table.refund_unsettled_hand()
+        if hand_was_running:
+            self._aborted_hand_numbers.add(self.table.hand_number)
         seated_player_ids = {
             seat.player_id for seat in self.table.active_seated_players
         }
@@ -714,7 +797,10 @@ class Room:
         # A room can be closed in the middle of a hand. Return all current
         # hand contributions before taking the settlement snapshot so the
         # chips remain conserved instead of being stranded in an open pot.
+        hand_was_running = self.table.street not in (Street.IDLE, Street.HAND_END)
         refunded_contributions = self.table.refund_unsettled_hand()
+        if hand_was_running:
+            self._aborted_hand_numbers.add(self.table.hand_number)
         seated_player_ids = {
             seat.player_id for seat in self.table.active_seated_players
         }
