@@ -929,15 +929,43 @@ class PokerCliController:
         if not self._is_host():
             self._output("只有房主可以结束房间。")
             return
+
+        has_bots = False
+        if self.active_room_data:
+            has_bots = bool(self.active_room_data.get("has_bots"))
+            if not has_bots:
+                table = self.active_room_data.get("table") or {}
+                seats = table.get("seats") or []
+                has_bots = any(
+                    s and (s.get("is_bot") or str(s.get("player_id", "")).startswith("bot_"))
+                    for s in seats
+                )
+            if not has_bots:
+                pending = self.active_room_data.get("pending_settlements") or []
+                has_bots = any(
+                    p and (p.get("is_bot") or str(p.get("player_id", "")).startswith("bot_"))
+                    for p in pending
+                )
+
+        if has_bots:
+            self._output(self.renderer.c("检测到房间内含有机器人，禁止结算到余额，将执行实时结算。", Colors.YELLOW))
+            settlement_type = "immediate"
+        else:
+            settlement_type = "balance"
+
         confirmed = (await self._async_input("确定结束房间并生成结算清单吗？(y/n): ")).strip().lower()
         if self._stdin_closed or confirmed not in {"y", "yes"}:
             self._output("已取消。")
             return
         if self.ws_client and self.ws_client.is_connected:
-            await self._send_ws("end_room")
+            await self._send_ws("end_room", settlement_type=settlement_type)
             return
         try:
-            report = await self.api.end_room(self.active_room_id or "", self._current_user_id())
+            report = await self.api.end_room(
+                self.active_room_id or "",
+                self._current_user_id(),
+                settlement_type=settlement_type,
+            )
             self._merge_settlement_report(report)
             self._output(self.renderer.render_settlement_report(report), panel=True)
         except Exception as exc:
