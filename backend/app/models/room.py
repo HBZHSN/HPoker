@@ -91,6 +91,7 @@ class Room:
         self.hand_records: List[dict] = []
         self._departed_hand_players: Dict[int, List[dict]] = {}
         self._aborted_hand_numbers: set[int] = set()
+        self.pending_auto_leave_ids: set[str] = set()
         self._next_test_bot_number = 1
         # Real-money stacks are debited when chips enter the table and credited
         # when chips leave it. Test users and bots never touch this wallet.
@@ -253,6 +254,7 @@ class Room:
             "hand_records": self.hand_records,
             "pending_settlements": copy.deepcopy(self.pending_settlements),
             "kicked_player_ids": sorted(self.kicked_player_ids),
+            "pending_auto_leave_ids": sorted(self.pending_auto_leave_ids),
             "next_test_bot_number": self._next_test_bot_number,
             "has_bots": self.has_bots,
             "money_mode": self.money_mode,
@@ -305,6 +307,11 @@ class Room:
         room.kicked_player_ids = {
             player_id
             for player_id in data.get("kicked_player_ids", [])
+            if isinstance(player_id, str)
+        }
+        room.pending_auto_leave_ids = {
+            player_id
+            for player_id in data.get("pending_auto_leave_ids", [])
             if isinstance(player_id, str)
         }
         room._next_test_bot_number = int(data.get("next_test_bot_number", 1))
@@ -692,6 +699,38 @@ class Room:
         if not seat:
             return None
         return self.stand_up_player(seat.seat_index, reason="leave")
+
+    def auto_leave_disconnected_player(self, player_id: str) -> Optional[dict]:
+        """Auto-fold/cash out, or defer removal until an all-in hand resolves."""
+        departed = self.leave_player(player_id)
+        if departed:
+            self.pending_auto_leave_ids.discard(player_id)
+            return departed
+
+        seat = next(
+            (seat for seat in self.table.active_seated_players if seat.player_id == player_id),
+            None,
+        )
+        if seat:
+            seat.is_sitting_out = True
+            self.pending_auto_leave_ids.add(player_id)
+        return None
+
+    def process_pending_auto_leaves(self) -> List[dict]:
+        """Remove timed-out all-in players once the current hand is complete."""
+        if self.table.street not in (Street.IDLE, Street.HAND_END):
+            return []
+        departed = []
+        for player_id in tuple(self.pending_auto_leave_ids):
+            player = self.leave_player(player_id)
+            if player:
+                departed.append(player)
+                self.pending_auto_leave_ids.discard(player_id)
+        return departed
+
+    @property
+    def has_human_players(self) -> bool:
+        return any(seat and not seat.is_bot for seat in self.table.seats)
 
     def kick_player(self, player_id: str) -> Optional[dict]:
         """Remove a player by id for a host-initiated kick operation."""
