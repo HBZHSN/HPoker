@@ -185,7 +185,6 @@ export default function PlayerSeat({
               onKick?.(seatData.player_id, seatData.name);
             }}
             className="absolute -top-2 -right-2 z-40 flex h-5 w-5 items-center justify-center rounded-full border border-red-400/80 bg-red-950/95 text-red-300 shadow-lg transition hover:bg-red-800 hover:text-white active:scale-90"
-            title="房主移出玩家"
             aria-label={`将 ${seatData.name} 移出房间`}
           >
             <UserX className="h-3 w-3" />
@@ -198,7 +197,6 @@ export default function PlayerSeat({
           {seatData.rebuy_count > 1 && (
             <div
               className="flex items-center gap-0.5 bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-slate-950 px-1 py-0.5 rounded-full border border-amber-300 md:border-2 md:px-1.5 text-[9px] md:text-[10px] font-black shadow-lg ring-1 md:ring-2 ring-slate-900 whitespace-nowrap"
-              title={`买入次数: ${seatData.rebuy_count} 次 (总买入: $${(seatData.total_buyin_chips || seatData.chips).toLocaleString()})`}
             >
               <RefreshCw className="w-2 h-2 md:w-2.5 md:h-2.5 text-slate-950 stroke-[3]" />
               <span>x{seatData.rebuy_count}</span>
@@ -208,7 +206,6 @@ export default function PlayerSeat({
           {isBot && (
             <div
               className="flex items-center gap-0.5 bg-indigo-950/95 text-indigo-200 px-1 py-0.5 rounded-full border border-indigo-400/70 text-[9px] md:text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
-              title="测试机器人：随机 Call / Fold / Raise"
             >
               <Bot className="w-2 h-2 md:w-2.5 md:h-2.5" />
               <span>BOT</span>
@@ -219,7 +216,6 @@ export default function PlayerSeat({
         {/* === BOTTOM-RIGHT CORNER: Time Bank Cards Badge (时间卡数量) === */}
         <div
           className="absolute -bottom-2 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1 py-0.5 rounded-full border border-amber-500/60 text-[9px] md:text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
-          title={`时间卡: 剩余 ${seatData.time_bank_cards ?? 3} 张 (每张+30秒)`}
         >
           <span>x{seatData.time_bank_cards ?? 3}</span>
         </div>
@@ -228,7 +224,6 @@ export default function PlayerSeat({
         {seatData.using_assistant && (
           <div
             className="absolute -bottom-2 -left-2 z-20 flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 md:border-2 text-[9px] md:text-[10px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
-            title="该玩家正在使用胜率辅助功能"
           >
             <BarChart2 className="w-2.5 h-2.5 text-amber-300 stroke-[3]" />
             <span>辅助</span>
@@ -240,7 +235,6 @@ export default function PlayerSeat({
           {isDealer && (
             <span
               className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-slate-950 font-black text-[8px] md:text-[10px] flex items-center justify-center shadow-md ring-1 md:ring-2 ring-slate-900"
-              title="庄家"
             >
               D
             </span>
@@ -248,7 +242,6 @@ export default function PlayerSeat({
           {isSB && (
             <span
               className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-blue-500 text-white font-black text-[8px] md:text-[10px] flex items-center justify-center shadow-md ring-1 md:ring-2 ring-slate-900"
-              title="小盲注"
             >
               SB
             </span>
@@ -256,7 +249,6 @@ export default function PlayerSeat({
           {isBB && (
             <span
               className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-purple-600 text-white font-black text-[8px] md:text-[10px] flex items-center justify-center shadow-md ring-1 md:ring-2 ring-slate-900"
-              title="大盲注"
             >
               BB
             </span>

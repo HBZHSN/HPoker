@@ -341,13 +341,6 @@ export default function PokerTable({
               (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
             )}
             className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
-            title={
-              selfSeat &&
-              !['IDLE', 'HAND_END'].includes(table?.street) &&
-              (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
-                ? '全下牌局结束后才能离开'
-                : '离开牌桌并暂存结算'
-            }
           >
             <LogOut className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">大厅</span>
@@ -365,9 +358,8 @@ export default function PokerTable({
               {room?.config?.assistant_win_ratio !== undefined && room?.config?.assistant_win_ratio < 1.0 && (
                 <span
                   className="text-[11px] bg-purple-950/90 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/40 font-bold"
-                  title="使用胜率辅助获胜时本金全额返还，仅对净盈利按此比例分配"
                 >
-                  辅助净盈利: {Math.round(room.config.assistant_win_ratio * 100)}%
+                  辅助折算: {Math.round(room.config.assistant_win_ratio * 100)}%
                 </span>
               )}
             </div>
@@ -398,7 +390,6 @@ export default function PokerTable({
             <button
               onClick={handleRebuy}
               className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-glow-gold transition active:scale-95 cursor-pointer animate-pulse"
-              title="筹码已输完，补充买入"
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Re-buy (${room?.config?.buyin_chips})
@@ -411,7 +402,6 @@ export default function PokerTable({
               onClick={handleAddTestBot}
               disabled={!canAddTestBot}
               className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 shadow bg-indigo-950/80 hover:bg-indigo-900 text-indigo-200 border-indigo-400/50 disabled:bg-slate-900/70 disabled:hover:bg-slate-900/70 disabled:text-slate-600 disabled:border-slate-800 disabled:cursor-not-allowed"
-              title={canAddTestBot ? '添加机器人' : '当前不可添加'}
             >
               <Bot className="w-3.5 h-3.5" />
               <span>机器人</span>
@@ -441,7 +431,6 @@ export default function PokerTable({
             <button
               onClick={handleDeleteRoom}
               className="flex items-center gap-1 px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"
-              title="解散并删除房间"
             >
               <Trash2 className="w-3.5 h-3.5" />
               解散
@@ -603,9 +592,6 @@ export default function PokerTable({
                     <div className="flex items-center justify-center gap-2 text-amber-400 font-black text-base md:text-lg">
                       全下后发牌次数
                     </div>
-                    <p className="text-xs text-slate-300 leading-relaxed">
-                      所有玩家均选 <strong className="text-purple-300">2 次</strong> 才平分底池；任一玩家选 <strong className="text-amber-300">1 次</strong> 则发 1 次。
-                    </p>
 
                     {/* Contender cards and vote progress stay visible together so
                         players can make an informed runout choice. */}
@@ -679,13 +665,13 @@ export default function PokerTable({
                     ) : (
                       <div className="text-xs text-slate-400 font-bold py-1 flex items-center justify-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-purple-400" />
-                        等待其他玩家决定
+                        等待其他玩家
                       </div>
                     )}
                     {selfSeat && table?.rit_voters?.includes(selfSeat.player_id) && table?.rit_votes?.[selfSeat.player_id] !== undefined && (
                       <div className="text-xs text-slate-400 font-bold flex items-center justify-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        已选择，等待其他玩家决定
+                        已选择
                       </div>
                     )}
                   </div>
