@@ -214,3 +214,68 @@ def test_balance_manager_clear_all_records(balance_mgr, user_mgr):
     assert len(balance_mgr._entries) == 0
     assert len(balance_mgr._batches) == 0
     assert len(balance_mgr.get_user_balances(include_test=True)) == 0
+
+
+def test_wallet_buyin_and_cashout_are_immediate_idempotent_and_persistent(
+    balance_mgr, user_mgr
+):
+    user_mgr._users["real_1"] = User(
+        user_id="real_1",
+        username="alice",
+        nickname="Alice",
+        avatar="🦊",
+    )
+    user_mgr.save_to_storage()
+
+    debit = balance_mgr.record_wallet_change(
+        room_id="cash-1",
+        room_name="现金桌",
+        player_id="real_1",
+        player_name="Alice",
+        avatar="🦊",
+        chips_delta=-1000,
+        buyin_chips=1000,
+        cash_value=100,
+        entry_kind="buyin",
+        idempotency_key="cash-1:real-1:buyin:1",
+        u_mgr=user_mgr,
+    )
+    duplicate = balance_mgr.record_wallet_change(
+        room_id="cash-1",
+        room_name="现金桌",
+        player_id="real_1",
+        player_name="Alice",
+        avatar="🦊",
+        chips_delta=-1000,
+        buyin_chips=1000,
+        cash_value=100,
+        entry_kind="buyin",
+        idempotency_key="cash-1:real-1:buyin:1",
+        u_mgr=user_mgr,
+    )
+
+    assert duplicate.entry_id == debit.entry_id
+    assert debit.entry_kind == "buyin"
+    assert balance_mgr.get_user_balances()[0].net_cash == -100
+    with pytest.raises(ValueError, match="筹码在牌桌"):
+        balance_mgr.settle_batch(operator_id="admin")
+
+    credit = balance_mgr.record_wallet_change(
+        room_id="cash-1",
+        room_name="现金桌",
+        player_id="real_1",
+        player_name="Alice",
+        avatar="🦊",
+        chips_delta=1250,
+        buyin_chips=1000,
+        cash_value=100,
+        entry_kind="cashout",
+        idempotency_key="cash-1:real-1:cashout:1",
+        u_mgr=user_mgr,
+    )
+    assert credit.entry_kind == "cashout"
+    assert balance_mgr.get_user_balances()[0].net_cash == 25
+
+    restored = BalanceManager(database_path=balance_mgr.storage_path)
+    records = restored.get_user_records("real_1")
+    assert {record["entry_kind"] for record in records} == {"buyin", "cashout"}

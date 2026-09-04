@@ -62,6 +62,7 @@ class LedgerEntry:
     chip_to_cash_ratio: float
     buyin_chips: int
     cash_value: float
+    entry_kind: str = "settlement"       # settlement, buyin, cashout, mode_change
     settled_at: Optional[float] = None
     settled_by: Optional[str] = None
     batch_id: Optional[str] = None
@@ -80,6 +81,7 @@ class LedgerEntry:
             "chip_to_cash_ratio": self.chip_to_cash_ratio,
             "buyin_chips": self.buyin_chips,
             "cash_value": self.cash_value,
+            "entry_kind": self.entry_kind,
             "settled_at": self.settled_at,
             "settled_by": self.settled_by,
             "batch_id": self.batch_id,
@@ -100,6 +102,7 @@ class LedgerEntry:
             chip_to_cash_ratio=float(data.get("chip_to_cash_ratio", 0.1)),
             buyin_chips=int(data.get("buyin_chips", 1000)),
             cash_value=float(data.get("cash_value", 100.0)),
+            entry_kind=data.get("entry_kind", "settlement"),
             settled_at=data.get("settled_at"),
             settled_by=data.get("settled_by"),
             batch_id=data.get("batch_id"),
