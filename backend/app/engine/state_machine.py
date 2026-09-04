@@ -1251,6 +1251,7 @@ class TableStateMachine:
                 hand_results.append({
                     "player_id": p.player_id,
                     "name": p.name,
+                    "avatar": p.avatar,
                     "seat_index": p.seat_index,
                     "total_bet": total_bet,
                     "payout_amount": payout_amt,

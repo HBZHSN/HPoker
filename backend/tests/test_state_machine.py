@@ -228,8 +228,8 @@ def test_run_it_twice_flow():
 
 def test_show_card_feature():
     table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
-    table.sit_down("p1", "Alice", seat_index=0, chips=100)
-    table.sit_down("p2", "Bob", seat_index=1, chips=100)
+    table.sit_down("p1", "Alice", seat_index=0, chips=100, avatar="🦊")
+    table.sit_down("p2", "Bob", seat_index=1, chips=100, avatar="🐼")
 
     table.start_new_hand()
     table.handle_action("p1", ActionType.RAISE, raise_total_amount=10)
@@ -243,6 +243,8 @@ def test_show_card_feature():
     assert p2_view["seats"][0]["shown_cards"] == []
     assert p2_view["hand_results"][0]["hole_cards"] == []
     assert p2_view["hand_results"][0]["shown_cards"] == []
+    avatars = {result["player_id"]: result["avatar"] for result in p2_view["hand_results"]}
+    assert avatars == {"p1": "🦊", "p2": "🐼"}
 
     # Show single card 0
     assert table.show_card("p1", card_index=0) is True
@@ -429,4 +431,3 @@ def test_equity_assistant_status_and_reset():
     table.start_new_hand()
     assert table.seats[0].using_assistant is False
     assert table.seats[1].using_assistant is False
-
