@@ -234,6 +234,48 @@ class SQLiteDatabase:
                     FOREIGN KEY (batch_id) REFERENCES settlement_batches(batch_id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS poker_hands (
+                    hand_id TEXT PRIMARY KEY,
+                    room_id TEXT NOT NULL,
+                    room_name TEXT NOT NULL,
+                    hand_number INTEGER NOT NULL CHECK (hand_number > 0),
+                    ended_at REAL NOT NULL,
+                    money_mode TEXT NOT NULL CHECK (money_mode IN ('real', 'play')),
+                    small_blind INTEGER NOT NULL CHECK (small_blind > 0),
+                    big_blind INTEGER NOT NULL CHECK (big_blind > 0),
+                    chip_to_cash_ratio REAL NOT NULL CHECK (chip_to_cash_ratio >= 0),
+                    total_pot INTEGER NOT NULL CHECK (total_pot >= 0),
+                    board_json TEXT NOT NULL,
+                    board_2_json TEXT NOT NULL,
+                    actions_json TEXT NOT NULL,
+                    UNIQUE (room_id, hand_number)
+                );
+                CREATE INDEX IF NOT EXISTS idx_poker_hands_room_time
+                    ON poker_hands(room_id, ended_at DESC);
+
+                CREATE TABLE IF NOT EXISTS poker_hand_players (
+                    hand_id TEXT NOT NULL,
+                    player_id TEXT NOT NULL,
+                    player_name TEXT NOT NULL,
+                    avatar TEXT NOT NULL,
+                    seat_index INTEGER,
+                    is_test INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0, 1)),
+                    hole_cards_json TEXT NOT NULL,
+                    shown_cards_json TEXT NOT NULL,
+                    starting_chips INTEGER NOT NULL CHECK (starting_chips >= 0),
+                    contributed_chips INTEGER NOT NULL CHECK (contributed_chips >= 0),
+                    payout_chips INTEGER NOT NULL CHECK (payout_chips >= 0),
+                    ending_chips INTEGER NOT NULL CHECK (ending_chips >= 0),
+                    net_chips INTEGER NOT NULL,
+                    net_cash_cents INTEGER NOT NULL,
+                    hand_description TEXT NOT NULL,
+                    is_winner INTEGER NOT NULL DEFAULT 0 CHECK (is_winner IN (0, 1)),
+                    PRIMARY KEY (hand_id, player_id),
+                    FOREIGN KEY (hand_id) REFERENCES poker_hands(hand_id) ON DELETE CASCADE
+                );
+                CREATE INDEX IF NOT EXISTS idx_poker_hand_players_user_result
+                    ON poker_hand_players(player_id, net_chips, hand_id);
+
                 INSERT OR IGNORE INTO schema_migrations(version, applied_at)
                     VALUES (1, CAST(strftime('%s', 'now') AS REAL));
                 """
@@ -251,7 +293,11 @@ class SQLiteDatabase:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (2, time.time()),
             )
-            connection.execute("PRAGMA user_version = 2")
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (3, time.time()),
+            )
+            connection.execute("PRAGMA user_version = 3")
 
     @staticmethod
     def _encode(payload: dict) -> str:
@@ -492,6 +538,7 @@ class SQLiteDatabase:
                     for entry in entries
                 ],
             )
+
             connection.executemany(
                 """INSERT INTO ledger_participants(
                        entry_id, position, player_id, username, nickname, avatar,
@@ -608,3 +655,127 @@ class SQLiteDatabase:
                     for position, transaction in enumerate(batch.get("transactions", []))
                 ],
             )
+
+    def save_hand_history(self, hand: dict) -> bool:
+        """Insert one immutable hand and its private player rows exactly once."""
+        with self.connection(write=True) as connection:
+            cursor = connection.execute(
+                """INSERT OR IGNORE INTO poker_hands(
+                       hand_id, room_id, room_name, hand_number, ended_at,
+                       money_mode, small_blind, big_blind, chip_to_cash_ratio,
+                       total_pot, board_json, board_2_json, actions_json
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    hand["hand_id"], hand["room_id"], hand["room_name"],
+                    int(hand["hand_number"]), float(hand["ended_at"]),
+                    hand.get("money_mode", "real"), int(hand["small_blind"]),
+                    int(hand["big_blind"]),
+                    float(hand.get("chip_to_cash_ratio", 0.0)),
+                    int(hand.get("total_pot", 0)),
+                    self._encode({"cards": hand.get("board", [])}),
+                    self._encode({"cards": hand.get("board_2", [])}),
+                    self._encode({"actions": hand.get("actions", [])}),
+                ),
+            )
+            if cursor.rowcount == 0:
+                return False
+            connection.executemany(
+                """INSERT INTO poker_hand_players(
+                       hand_id, player_id, player_name, avatar, seat_index,
+                       is_test, hole_cards_json, shown_cards_json,
+                       starting_chips, contributed_chips, payout_chips,
+                       ending_chips, net_chips, net_cash_cents,
+                       hand_description, is_winner
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                [(
+                    hand["hand_id"], player["player_id"],
+                    player.get("player_name", player["player_id"]),
+                    player.get("avatar", "👤"), player.get("seat_index"),
+                    int(bool(player.get("is_test", False))),
+                    self._encode({"cards": player.get("hole_cards", [])}),
+                    self._encode({"cards": player.get("shown_cards", [])}),
+                    int(player.get("starting_chips", 0)),
+                    int(player.get("contributed_chips", 0)),
+                    int(player.get("payout_chips", 0)),
+                    int(player.get("ending_chips", 0)),
+                    int(player.get("net_chips", 0)),
+                    int(round(float(player.get("net_cash", 0.0)) * 100)),
+                    player.get("hand_description", ""),
+                    int(bool(player.get("is_winner", False))),
+                ) for player in hand.get("players", [])],
+            )
+        return True
+
+    def query_user_hand_history(
+        self, user_id: str, *, outcome: Optional[str] = None,
+        room_id: Optional[str] = None, started_at: Optional[float] = None,
+        ended_at: Optional[float] = None, sort_by: str = "ended_at",
+        order: str = "desc", limit: int = 50, offset: int = 0,
+    ) -> list[dict]:
+        """Return only ``user_id``'s private row joined to public hand data."""
+        sort_columns = {"ended_at": "h.ended_at", "net_chips": "p.net_chips"}
+        if sort_by not in sort_columns:
+            raise ValueError("sort_by must be 'ended_at' or 'net_chips'")
+        normalized_order = order.lower()
+        if normalized_order not in {"asc", "desc"}:
+            raise ValueError("order must be 'asc' or 'desc'")
+        if outcome not in {None, "win", "loss", "even"}:
+            raise ValueError("outcome must be 'win', 'loss', or 'even'")
+
+        clauses = ["p.player_id = ?"]
+        params: list[object] = [user_id]
+        if outcome == "win":
+            clauses.append("p.net_chips > 0")
+        elif outcome == "loss":
+            clauses.append("p.net_chips < 0")
+        elif outcome == "even":
+            clauses.append("p.net_chips = 0")
+        if room_id:
+            clauses.append("h.room_id = ?")
+            params.append(room_id)
+        if started_at is not None:
+            clauses.append("h.ended_at >= ?")
+            params.append(float(started_at))
+        if ended_at is not None:
+            clauses.append("h.ended_at <= ?")
+            params.append(float(ended_at))
+
+        params.extend([max(1, min(int(limit), 100_000)), max(0, int(offset))])
+        sql = f"""SELECT
+                    h.hand_id, h.room_id, h.room_name, h.hand_number,
+                    h.ended_at, h.money_mode, h.small_blind, h.big_blind,
+                    h.chip_to_cash_ratio, h.total_pot, h.board_json,
+                    h.board_2_json, h.actions_json,
+                    p.player_name, p.avatar, p.seat_index, p.is_test,
+                    p.hole_cards_json, p.shown_cards_json, p.starting_chips,
+                    p.contributed_chips, p.payout_chips, p.ending_chips,
+                    p.net_chips, p.net_cash_cents, p.hand_description,
+                    p.is_winner
+                FROM poker_hands h
+                JOIN poker_hand_players p ON p.hand_id = h.hand_id
+                WHERE {' AND '.join(clauses)}
+                ORDER BY {sort_columns[sort_by]} {normalized_order.upper()},
+                         h.ended_at DESC
+                LIMIT ? OFFSET ?"""
+        with self.connection() as connection:
+            rows = connection.execute(sql, params).fetchall()
+
+        results = []
+        for row in rows:
+            item = dict(row)
+            item["is_test"] = bool(item["is_test"])
+            item["is_winner"] = bool(item["is_winner"])
+            item["net_cash"] = item.pop("net_cash_cents") / 100
+            item["board"] = json.loads(item.pop("board_json"))["cards"]
+            item["board_2"] = json.loads(item.pop("board_2_json"))["cards"]
+            item["actions"] = json.loads(item.pop("actions_json"))["actions"]
+            item["hole_cards"] = json.loads(item.pop("hole_cards_json"))["cards"]
+            item["shown_cards"] = json.loads(item.pop("shown_cards_json"))["cards"]
+            results.append(item)
+        return results
+
+    def clear_hand_histories(self) -> int:
+        with self.connection(write=True) as connection:
+            count = connection.execute("SELECT COUNT(*) FROM poker_hands").fetchone()[0]
+            connection.execute("DELETE FROM poker_hands")
+        return int(count)

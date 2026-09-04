@@ -28,6 +28,7 @@ import pytest
 from backend.app.models.user import User, hash_password
 from backend.app.services.balance_manager import balance_manager
 from backend.app.services.room_manager import room_manager
+from backend.app.services.hand_history_manager import hand_history_manager
 from backend.app.services.timeout_manager import timeout_manager
 from backend.app.services.user_manager import user_manager
 
@@ -68,6 +69,7 @@ def _reset_test_database_state() -> None:
     balance_manager._entries = {}
     balance_manager._batches = {}
     balance_manager.save_to_storage()
+    hand_history_manager.clear_all()
 
     user_manager._users = _dedicated_test_users()
     user_manager._tokens = {}
