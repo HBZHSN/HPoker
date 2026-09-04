@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   Trash2,
   Bot,
+  Eye,
+  UserPlus,
 } from 'lucide-react';
 
 const STREET_LABELS = {
@@ -48,14 +50,17 @@ export default function PokerTable({
   currentUser,
   socialHistory = [],
   seatSocialBubbles = {},
+  spectatorSocialBubbles = [],
   onSendWsEvent,
   onLeaveRoom,
+  onStandUpToSpectate,
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
   const [leaveRequested, setLeaveRequested] = useState(false);
   const [isEquityOpen, setIsEquityOpen] = useState(false);
+  const [showSpectatorList, setShowSpectatorList] = useState(false);
 
   const table = room?.table;
   const isHost = room?.host_player_id === currentUser?.user_id;
@@ -139,9 +144,36 @@ export default function PokerTable({
     return screenIdx;
   };
 
+  const spectators = useMemo(() => room?.spectators || table?.spectators || [], [room?.spectators, table?.spectators]);
+  const spectatorCount = room?.spectator_count ?? table?.spectator_count ?? spectators.length;
+  const isSpectator = !selfSeat;
+  const hasEmptySeats = useMemo(() => (table?.seats || []).some((s) => !s), [table?.seats]);
+
   // Actions
   const handleSitDown = (seatIndex) => {
     onSendWsEvent('SIT_DOWN', { seat_index: seatIndex });
+  };
+
+  const handleQuickSitDown = () => {
+    if (!table?.seats) return;
+    const emptyIndex = table.seats.findIndex((s) => !s);
+    if (emptyIndex >= 0) {
+      handleSitDown(emptyIndex);
+    }
+  };
+
+  const handleStandUpClick = () => {
+    if (
+      selfSeat &&
+      !['IDLE', 'HAND_END'].includes(table?.street) &&
+      (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
+    ) {
+      alert('全下牌局请等待本手结束');
+      return;
+    }
+    if (window.confirm('确定要站起并转为观战模式吗？在桌筹码将退回您的余额。')) {
+      onStandUpToSpectate?.();
+    }
   };
 
   const handleLeaveTable = () => {
@@ -292,7 +324,7 @@ export default function PokerTable({
     <div className="poker-table-root relative w-full h-screen max-h-screen overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
       {/* Top Navigation Bar */}
       <header className="poker-table-header flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
           <button
             onClick={handleLeaveTable}
             disabled={Boolean(
@@ -304,11 +336,92 @@ export default function PokerTable({
               )
             )}
             className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
+            title="离开房间返回大厅"
           >
             <LogOut className="w-3.5 h-3.5 text-amber-400" />
             <span className="hidden sm:inline">大厅</span>
             <span className="sm:hidden">离开</span>
           </button>
+
+          {selfSeat && (
+            <button
+              onClick={handleStandUpClick}
+              disabled={Boolean(
+                leaveRequested ||
+                (
+                  !['IDLE', 'HAND_END'].includes(table?.street) &&
+                  (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
+                )
+              )}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-indigo-950/80 hover:bg-indigo-900 disabled:opacity-40 disabled:cursor-not-allowed text-indigo-200 rounded-xl text-xs font-bold border border-indigo-500/40 transition active:scale-95 cursor-pointer shadow"
+              title="站起退出座位，转为观战模式留在桌边"
+            >
+              <Eye className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">站起观战</span>
+              <span className="sm:hidden">观战</span>
+            </button>
+          )}
+
+          {isSpectator && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-indigo-950/90 text-indigo-300 rounded-full text-xs font-black border border-indigo-400/50 shadow">
+              <Eye className="w-3.5 h-3.5 text-indigo-300" />
+              观战中
+            </span>
+          )}
+
+          {/* 观战人数与列表弹窗 */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSpectatorList((v) => !v)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-900/90 hover:bg-slate-800 text-slate-300 rounded-full text-[11px] font-bold border border-slate-700 transition cursor-pointer shadow"
+              title="查看当前房间观战玩家列表"
+            >
+              <Eye className="w-3.5 h-3.5 text-amber-400" />
+              <span>{spectatorCount} 观战</span>
+            </button>
+            {showSpectatorList && (
+              <div className="absolute top-full left-0 mt-2 w-52 bg-slate-950/95 border border-slate-700 rounded-2xl p-2.5 shadow-2xl backdrop-blur-xl z-50 flex flex-col gap-1.5 animate-fade-in">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-800 text-[11px] font-black text-amber-300">
+                  <span>观战玩家 ({spectatorCount})</span>
+                  <button
+                    onClick={() => setShowSpectatorList(false)}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="max-h-40 overflow-y-auto flex flex-col gap-1 py-1">
+                  {spectators.length === 0 ? (
+                    <div className="text-center text-[10px] text-slate-500 py-2">暂无观战者</div>
+                  ) : (
+                    spectators.map((sp) => (
+                      <div
+                        key={sp.user_id}
+                        className="flex items-center gap-2 px-2 py-1 rounded-xl bg-slate-900/80 border border-slate-800/80 text-xs text-slate-200"
+                      >
+                        <span className="text-sm">{sp.avatar || '👀'}</span>
+                        <span className="font-bold truncate flex-1">{sp.name}</span>
+                        {sp.user_id === currentUser?.user_id && (
+                          <span className="text-[9px] text-amber-400 font-bold bg-amber-950/60 px-1 py-0.2 rounded">我</span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {isSpectator && hasEmptySeats && (
+            <button
+              onClick={handleQuickSitDown}
+              className="flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-black shadow-glow-cyan transition active:scale-95 cursor-pointer"
+              title="牌桌有空座，点击入座对局"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              入座
+            </button>
+          )}
 
           <div className="poker-table-room-summary flex flex-col">
             <div className="flex items-center gap-2">
@@ -343,7 +456,7 @@ export default function PokerTable({
             {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-amber-400" />}
           </button>
 
-          {/* Rebuy Button (only when all chips are lost, chips === 0) */}
+          {/* Rebuy Button (only when in-seat and all chips are lost, chips === 0) */}
           {canRebuy && (
             <button
               onClick={handleRebuy}
@@ -367,11 +480,13 @@ export default function PokerTable({
             </button>
           )}
 
-          {/* Equity / Win Rate Trigger Button */}
-          <EquityTrigger
-            isOpen={isEquityOpen}
-            onToggle={handleToggleEquity}
-          />
+          {/* Equity / Win Rate Trigger Button (仅在座玩家可见) */}
+          {selfSeat && (
+            <EquityTrigger
+              isOpen={isEquityOpen}
+              onToggle={handleToggleEquity}
+            />
+          )}
 
           {/* Host Delete/Disband Room Button */}
           {(isHost || currentUser?.is_admin) && !room?.is_ended && (
@@ -431,6 +546,28 @@ export default function PokerTable({
 
             {/* Inner Content Area (Overlay, Seats, Center Area - NOT clipped, allowing overflow) */}
             <div className="poker-table-inner relative w-full h-full">
+              {/* Floating Spectator Reactions */}
+              {spectatorSocialBubbles && spectatorSocialBubbles.length > 0 && (
+                <div className="absolute top-2 inset-x-0 z-40 flex flex-col items-center gap-1.5 pointer-events-none">
+                  {spectatorSocialBubbles.map((bubble) => (
+                    <div
+                      key={bubble.activity_id}
+                      className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-950/95 border border-amber-500/50 shadow-2xl backdrop-blur-md animate-bounce pointer-events-auto"
+                    >
+                      <span className="text-[10px] bg-indigo-950 text-indigo-300 px-1.5 py-0.2 rounded font-bold border border-indigo-500/40">
+                        👀 观战
+                      </span>
+                      <span className="text-xs font-bold text-slate-200">{bubble.name}:</span>
+                      {bubble.type === 'emoji' ? (
+                        <span className="text-2xl leading-none">{bubble.emoji}</span>
+                      ) : (
+                        <span className="text-xs font-medium text-amber-200">{bubble.message}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Center Table Area: Board Cards, Pots & Next Hand Countdown */}
               <div className="poker-table-center absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
                 {/* Street & Total Pot Badge */}
@@ -629,7 +766,8 @@ export default function PokerTable({
               {visualScreenPositions.map((pos, screenIdx) => {
                 const seatIdx = getTableSeatIndex(screenIdx);
                 const seatData = table?.seats?.[seatIdx] || null;
-                const isCurrentTurn = table?.current_turn_seat === seatIdx;
+                const seatHasCards = Boolean(seatData?.has_cards || (seatData?.hole_cards && seatData.hole_cards.length > 0));
+                const isCurrentTurn = Boolean(table?.current_turn_seat === seatIdx && seatHasCards && !seatData?.is_folded);
                 const isDealer = table?.dealer_seat === seatIdx;
                 const isSB = table?.sb_seat === seatIdx;
                 const isBB = table?.bb_seat === seatIdx;
@@ -740,6 +878,7 @@ export default function PokerTable({
             selfSeat={selfSeat}
             onRebuy={handleRebuy}
             canRebuy={canRebuy}
+            onQuickSitDown={handleQuickSitDown}
             currentTurnPlayer={currentTurnPlayer}
             isMyTurn={isMyTurn}
             street={table?.street || 'IDLE'}
@@ -793,7 +932,7 @@ export default function PokerTable({
       <TableSocialControls
         activities={socialHistory}
         currentUserId={currentUser?.user_id}
-        canReact={Boolean(selfSeat)}
+        canReact={true}
         onSendChat={(message) => onSendWsEvent('CHAT_MESSAGE', { message })}
         onSendEmoji={(emoji) => onSendWsEvent('EMOJI_REACTION', { emoji })}
       />

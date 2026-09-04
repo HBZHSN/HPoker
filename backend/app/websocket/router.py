@@ -172,8 +172,15 @@ async def trigger_room_turn_timer(room_id: str):
         return
 
     current_player = room.table.seats[current_seat_idx]
-    if not current_player:
+    if not current_player or len(current_player.hole_cards) == 0 or current_player.is_folded:
         timeout_manager.cancel_turn_timer(room_id)
+        next_seat = room.table._find_next_action_seat(current_seat_idx)
+        if next_seat != current_seat_idx:
+            room.table.current_turn_seat = next_seat
+            room.table.turn_started_at = time.time() if next_seat is not None else None
+            await ws_manager.broadcast_room_state(room)
+            if next_seat is not None:
+                await trigger_room_turn_timer(room_id)
         return
 
     if current_player.is_bot:
@@ -272,7 +279,15 @@ async def trigger_room_turn_timer(room_id: str):
             return
 
         target_player = r.table.seats[current_seat_idx]
-        if not target_player:
+        if not target_player or len(target_player.hole_cards) == 0 or target_player.is_folded:
+            timeout_manager.cancel_turn_timer(r_id)
+            next_seat = r.table._find_next_action_seat(current_seat_idx)
+            if next_seat != current_seat_idx:
+                r.table.current_turn_seat = next_seat
+                r.table.turn_started_at = time.time() if next_seat is not None else None
+                await ws_manager.broadcast_room_state(r)
+                if next_seat is not None:
+                    await trigger_room_turn_timer(r_id)
             return
 
         # Prioritize auto-consuming time card if available
@@ -424,7 +439,13 @@ async def lobby_websocket_endpoint(websocket: WebSocket, user_id: str, token: Op
 
 
 @ws_router.websocket("/ws/{room_id}/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, token: Optional[str] = Query(None)):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    room_id: str,
+    user_id: str,
+    token: Optional[str] = Query(None),
+    spectate: Optional[bool] = Query(False),
+):
     if room_id == "lobby":
         await lobby_websocket_endpoint(websocket, user_id, token=token)
         return
@@ -464,8 +485,8 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
     nickname = user.nickname if user else f"Spectator_{user_id[-4:]}"
     avatar = user.avatar if user else "👀"
 
-    # Auto-seat player only if room is active and user is an authenticated registered account
-    if not room.is_ended and user is not None:
+    # Auto-seat player only if room is active, user is an authenticated registered account, and not explicitly spectating
+    if not room.is_ended and user is not None and not spectate:
         is_already_seated = any(s and s.player_id == user_id for s in room.table.seats)
         if not is_already_seated:
             for idx in range(room.config.max_seats):
@@ -514,6 +535,10 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
                         ),
                     )
                     continue
+                is_seated = any(
+                    seat and seat.player_id == user_id
+                    for seat in room.table.seats
+                )
                 await ws_manager.broadcast_event(
                     room_id,
                     EventType.CHAT_MESSAGE,
@@ -523,6 +548,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
                         "name": nickname,
                         "avatar": avatar,
                         "message": message,
+                        "is_spectator": not is_seated,
                     },
                 )
 
@@ -532,7 +558,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
                     seat and seat.player_id == user_id
                     for seat in room.table.seats
                 )
-                if emoji not in ALLOWED_EMOJI_REACTIONS or not is_seated:
+                if emoji not in ALLOWED_EMOJI_REACTIONS:
                     await ws_manager.send_personal_message(
                         websocket,
                         make_message(
@@ -551,6 +577,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
                         "name": nickname,
                         "avatar": avatar,
                         "emoji": emoji,
+                        "is_spectator": not is_seated,
                     },
                 )
 
@@ -682,6 +709,15 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
 
                     await ws_manager.broadcast_room_state(room)
                     await trigger_room_after_action(room_id)
+                else:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(
+                            EventType.ERROR_MESSAGE,
+                            {"message": "非当前行动玩家或非法操作"},
+                            room_id=room_id,
+                        ),
+                    )
 
             elif event == EventType.RIT_CHOICE:
                 choice = payload.get("choice", 1)
@@ -730,7 +766,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str, t
             elif event == EventType.USE_TIME_CARD:
                 if room.table.current_turn_seat is not None:
                     curr_p = room.table.seats[room.table.current_turn_seat]
-                    if curr_p and curr_p.player_id == user_id and curr_p.time_bank_cards > 0:
+                    if curr_p and curr_p.player_id == user_id and len(curr_p.hole_cards) > 0 and not curr_p.is_folded and curr_p.time_bank_cards > 0:
                         ok = room.table.use_time_bank_for_current_player()
                         if ok:
                             timeout_manager.cancel_turn_timer(room_id)

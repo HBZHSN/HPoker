@@ -162,8 +162,15 @@ export default function TableSocialControls({
                     {activity.avatar || '👤'}
                   </span>
                   <div className={`min-w-0 max-w-[78%] ${isSelf ? 'text-right' : ''}`}>
-                    <div className="mb-0.5 truncate px-1 text-[10px] font-bold text-slate-500">
-                      {activity.name}
+                    <div className={`mb-0.5 flex items-center gap-1 truncate px-1 text-[10px] font-bold text-slate-500 ${
+                      isSelf ? 'justify-end' : 'justify-start'
+                    }`}>
+                      <span>{activity.name}</span>
+                      {activity.is_spectator && (
+                        <span className="rounded bg-indigo-950/90 px-1 py-0.2 text-[9px] font-bold text-indigo-300 border border-indigo-500/40">
+                          👀 观战
+                        </span>
+                      )}
                     </div>
                     <div className={`break-words rounded-2xl px-3 py-2 text-left text-xs leading-relaxed shadow ${
                       isSelf

@@ -914,6 +914,27 @@ class Room:
 
     def to_dict(self, viewer_player_id: Optional[str] = None) -> dict:
         pending_report = self.pending_settlement_report
+
+        spectators = []
+        try:
+            from backend.app.websocket.connection_manager import ws_manager
+            from backend.app.services.user_manager import user_manager
+            seated_ids = {s.player_id for s in self.table.seats if s}
+            spectator_ids = ws_manager.get_room_user_ids(self.room_id) - seated_ids
+            for uid in sorted(spectator_ids):
+                u = user_manager.get_user(uid)
+                spectators.append({
+                    "user_id": uid,
+                    "name": u.nickname if u else f"Spectator_{uid[-4:]}",
+                    "avatar": u.avatar if u else "👀",
+                })
+        except Exception:
+            spectators = []
+
+        table_state = self.table.get_table_state(viewer_player_id)
+        table_state["spectator_count"] = len(spectators)
+        table_state["spectators"] = spectators
+
         return {
             "room_id": self.room_id,
             "host_player_id": self.host_player_id,
@@ -923,7 +944,9 @@ class Room:
             "money_mode": self.money_mode,
             "has_active_test_players": self.has_active_test_players,
             "settlement_type": getattr(self, "settlement_type", "balance"),
-            "table": self.table.get_table_state(viewer_player_id),
+            "table": table_state,
+            "spectators": spectators,
+            "spectator_count": len(spectators),
             "settlement_report": self.settlement_report.to_dict() if self.settlement_report else None,
             "pending_settlements": copy.deepcopy(self.pending_settlements),
             "pending_settlement_report": (

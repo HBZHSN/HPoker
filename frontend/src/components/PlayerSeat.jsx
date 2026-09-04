@@ -25,13 +25,19 @@ export default function PlayerSeat({
   socialBubble = null,
   bubblePlacement = 'right',
 }) {
-  const baseTimeout = (isCurrentTurn && isUsingTimeBank)
+  const isFolded = Boolean(seatData?.is_folded);
+  const isAllIn = Boolean(seatData?.is_all_in);
+  const hasCards = Boolean(seatData?.has_cards || (seatData?.hole_cards && seatData.hole_cards.length > 0));
+  const effectiveIsCurrentTurn = Boolean(isCurrentTurn && hasCards && !isFolded);
+  const isWaitingNextHand = !hasCards && !isFolded && !['IDLE', 'HAND_END'].includes(street);
+
+  const baseTimeout = (effectiveIsCurrentTurn && isUsingTimeBank)
     ? (currentTurnDuration || 30)
     : (currentTurnDuration || actionTimeout || 15);
   const [timeLeft, setTimeLeft] = useState(baseTimeout);
 
   useEffect(() => {
-    if (!isCurrentTurn) {
+    if (!effectiveIsCurrentTurn) {
       setTimeLeft(baseTimeout);
       return;
     }
@@ -48,7 +54,7 @@ export default function PlayerSeat({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isCurrentTurn, street, turnCount, actionHistoryLength, baseTimeout, isUsingTimeBank]);
+  }, [effectiveIsCurrentTurn, street, turnCount, actionHistoryLength, baseTimeout, isUsingTimeBank]);
 
   // Empty seat
   if (!seatData) {
@@ -70,10 +76,6 @@ export default function PlayerSeat({
   const isSelf = seatData.player_id === currentUserId;
   const isBot = !!seatData.is_bot;
   const isWinner = !!payoutInfo;
-  const isFolded = seatData.is_folded;
-  const isAllIn = seatData.is_all_in;
-  const hasCards = Boolean(seatData.has_cards || (seatData.hole_cards && seatData.hole_cards.length > 0));
-  const isWaitingNextHand = !hasCards && !isFolded && !['IDLE', 'HAND_END'].includes(street);
 
   return (
     <div className={`poker-player-seat ${isSelf ? 'poker-player-seat-self' : ''} relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none`}>
@@ -126,7 +128,7 @@ export default function PlayerSeat({
       {/* Anchor Container for Avatar Card & Floating Badges & Cards (Dimmed & grayscale when folded) */}
       <div className={`poker-player-seat-body relative w-full h-full flex flex-col items-center justify-center transition-all duration-300 ${isFolded ? 'opacity-40 grayscale-[30%]' : isWaitingNextHand ? 'opacity-65' : ''}`}>
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
-        {isCurrentTurn ? (
+        {effectiveIsCurrentTurn ? (
           isUsingTimeBank ? (
             <div className={`absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-3 py-0.5 md:py-1 rounded-full ${
               timeLeft <= 5
@@ -265,9 +267,9 @@ export default function PlayerSeat({
         {/* === MAIN AVATAR CARD === */}
         <div
           className={`poker-player-avatar-card relative flex flex-col items-center justify-between w-full h-full rounded-xl md:rounded-2xl border-2 bg-gradient-to-b from-slate-850 via-slate-900 to-slate-950 shadow-2xl p-1 md:p-1.5 transition-all duration-300 overflow-hidden ${
-            isCurrentTurn && isUsingTimeBank
+            effectiveIsCurrentTurn && isUsingTimeBank
               ? 'border-purple-400 shadow-glow-cyan scale-105 ring-2 ring-purple-400/80'
-              : isCurrentTurn
+              : effectiveIsCurrentTurn
               ? 'border-amber-400 shadow-glow-gold scale-105 ring-2 ring-amber-400/60'
               : isWinner
               ? 'border-emerald-400 shadow-glow-cyan'
@@ -295,7 +297,7 @@ export default function PlayerSeat({
           </div>
 
           {/* Integrated Turn Progress Bar (Bottom Rim of Avatar Card) */}
-          {isCurrentTurn && (
+          {effectiveIsCurrentTurn && (
             <div className="absolute inset-x-0 bottom-0 h-1 bg-slate-950/80 overflow-hidden border-t border-slate-800 md:h-1.5">
               <div
                 className={`h-full transition-all duration-100 ${
