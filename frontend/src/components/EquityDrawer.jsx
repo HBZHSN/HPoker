@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import {
   TrendingUp,
   TrendingDown,
@@ -55,15 +54,65 @@ function currentHandDescription(holeCards, boardCards) {
   return null;
 }
 
+/** Header toggle button for equity analysis */
+export function EquityTrigger({
+  isOpen = false,
+  onToggle,
+  holeCards = [],
+  boardCards = [],
+  street = 'IDLE',
+}) {
+  const holeKey = useMemo(
+    () => (holeCards || []).map((c) => c?.notation || '').join('|'),
+    [holeCards?.[0]?.notation, holeCards?.[1]?.notation]
+  );
+  const boardKey = useMemo(
+    () => (boardCards || []).map((c) => c?.notation || '').join('|'),
+    [boardCards?.map((c) => c?.notation).join(',')]
+  );
+
+  const chenScore = useMemo(() => {
+    if (holeCards?.length === 2 && (!boardCards || boardCards.length === 0)) {
+      return preflopChenScore(holeCards[0], holeCards[1]);
+    }
+    return null;
+  }, [holeKey, boardKey]);
+
+  return (
+    <button
+      onClick={onToggle}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 cursor-pointer shadow ${
+        isOpen
+          ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white border-purple-300 shadow-glow-cyan'
+          : 'bg-gradient-to-r from-purple-950/80 to-indigo-950/80 hover:from-purple-900 hover:to-indigo-900 text-purple-200 border-purple-500/50'
+      }`}
+      title={isOpen ? '收起胜率分析' : '展开胜率分析'}
+    >
+      <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
+      <span>胜率</span>
+      {chenScore !== null && (
+        <span className="px-1.5 py-0.5 bg-amber-500/90 text-slate-950 rounded text-[10px] font-black">
+          {chenScore}
+        </span>
+      )}
+      {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+    </button>
+  );
+}
+
+/** Equity analysis side panel (renders in-flow to compress the table) */
 export default function EquityDrawer({
+  isOpen = false,
+  onClose,
   holeCards = [],
   boardCards = [],
   street = 'IDLE',
   numOpponents = 1,
   potSize = 0,
   toCall = 0,
+  isSeated = true,
+  isFolded = false,
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [result, setResult] = useState(null);
@@ -81,8 +130,9 @@ export default function EquityDrawer({
   const shouldCompute = useMemo(() => {
     if (['IDLE', 'HAND_END'].includes(street)) return false;
     if (!holeCards || holeCards.length < 2) return false;
+    if (isFolded) return false;
     return true;
-  }, [holeKey, street]);
+  }, [holeKey, street, isFolded]);
 
   const chenScore = useMemo(() => {
     if (holeCards?.length === 2 && (!boardCards || boardCards.length === 0)) {
@@ -95,13 +145,14 @@ export default function EquityDrawer({
 
   const runCalculation = useCallback(async () => {
     if (!shouldCompute) {
-      setResult(null);
+      if (street === 'IDLE') {
+        setResult(null);
+      }
       setErrorMsg(null);
       return;
     }
     setLoading(true);
     setErrorMsg(null);
-    setResult(null);
 
     try {
       const body = {
@@ -109,7 +160,6 @@ export default function EquityDrawer({
         board_cards: (boardCards || []).map((c) => ({ notation: c.notation })),
         num_opponents: Math.max(1, oppCount),
       };
-      // Only send pot info when meaningful — avoid sending 0
       if (potSize > 0) body.pot_size = potSize;
       if (toCall > 0) body.to_call = toCall;
 
@@ -130,38 +180,50 @@ export default function EquityDrawer({
     } finally {
       setLoading(false);
     }
-  }, [shouldCompute, holeKey, boardKey, oppCount, holeCards, boardCards, potSize, toCall]);
+  }, [shouldCompute, holeCards, boardCards, oppCount, potSize, toCall, street]);
 
   useEffect(() => {
-    if (isOpen) runCalculation();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, holeKey, boardKey, street, oppCount]);
+    if (isOpen && shouldCompute) {
+      runCalculation();
+    }
+  }, [isOpen, shouldCompute, holeKey, boardKey, street, oppCount, potSize, toCall, runCalculation]);
+
+  if (!isOpen) return null;
 
   // ---------- UI Components ----------
   const WinBar = ({ win, tie }) => (
     <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
-      <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
-        style={{ width: `${Math.round((win || 0) * 100)}%` }} />
-      <div className="h-full bg-amber-500/80 transition-all duration-500"
-        style={{ width: `${Math.round((tie || 0) * 100)}%` }} />
-      <div className="h-full bg-red-500/70 transition-all duration-500"
-        style={{ width: `${Math.max(0, Math.round((1 - (win || 0) - (tie || 0)) * 100))}%` }} />
+      <div
+        className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
+        style={{ width: `${Math.round((win || 0) * 100)}%` }}
+      />
+      <div
+        className="h-full bg-amber-500/80 transition-all duration-500"
+        style={{ width: `${Math.round((tie || 0) * 100)}%` }}
+      />
+      <div
+        className="h-full bg-red-500/70 transition-all duration-500"
+        style={{ width: `${Math.max(0, Math.round((1 - (win || 0) - (tie || 0)) * 100))}%` }}
+      />
     </div>
   );
 
   const CategoryBar = ({ name, pct }) => {
     const pctClamp = Math.max(0, Math.min(1, pct));
-    const tierClass = pctClamp >= 0.05
-      ? 'from-emerald-500 to-teal-400'
-      : pctClamp >= 0.01
+    const tierClass =
+      pctClamp >= 0.05
+        ? 'from-emerald-500 to-teal-400'
+        : pctClamp >= 0.01
         ? 'from-amber-500 to-amber-400'
         : 'from-slate-600 to-slate-500';
     return (
       <div className="flex items-center gap-2 text-xs">
         <span className="w-20 text-slate-300 font-bold flex-shrink-0">{name}</span>
         <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
-          <div className={`h-full bg-gradient-to-r ${tierClass} transition-all duration-700`}
-            style={{ width: `${Math.round(pctClamp * 100)}%` }} />
+          <div
+            className={`h-full bg-gradient-to-r ${tierClass} transition-all duration-700`}
+            style={{ width: `${Math.round(pctClamp * 100)}%` }}
+          />
         </div>
         <span className="w-12 text-right font-mono text-amber-300">
           {(pctClamp * 100).toFixed(1)}%
@@ -169,27 +231,6 @@ export default function EquityDrawer({
       </div>
     );
   };
-
-  const ToggleButton = () => (
-    <button
-      onClick={() => setIsOpen((o) => !o)}
-      disabled={!shouldCompute}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 cursor-pointer shadow
-        ${shouldCompute
-          ? 'bg-gradient-to-r from-purple-900/80 to-indigo-900/80 hover:from-purple-800 hover:to-indigo-800 text-purple-200 border-purple-500/50'
-          : 'bg-slate-900/50 text-slate-600 border-slate-700 cursor-not-allowed'}`}
-      title={shouldCompute ? '查看胜率分析' : '发牌后可用'}
-    >
-      <BarChart3 className="w-3.5 h-3.5" />
-      胜率
-      {chenScore !== null && (
-        <span className="px-1.5 py-0.5 bg-amber-500/90 text-slate-950 rounded text-[10px] font-black">
-          {chenScore}
-        </span>
-      )}
-      {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-    </button>
-  );
 
   // ---------- Render ----------
   const equity = result?.equity;
@@ -199,31 +240,64 @@ export default function EquityDrawer({
 
   return (
     <>
-      <div data-equity-trigger><ToggleButton /></div>
+      {/* Mobile backdrop for < lg */}
+      <div
+        className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm animate-fade-in"
+        onClick={onClose}
+      />
 
-      {createPortal(
-        isOpen && shouldCompute && (
-          <div
-            className="fixed top-0 left-0 h-full w-[360px] max-w-[85vw] z-[9999] animate-slide-in-left bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 border-r border-purple-500/50 shadow-2xl shadow-purple-500/30 overflow-y-auto"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-purple-900/60 to-indigo-900/60 border-b border-purple-500/30 sticky top-0 z-10">
-              <div className="flex items-center gap-2">
-                <Dices className="w-4 h-4 text-amber-400" />
-                <span className="text-sm font-black text-purple-100 tracking-wide">
-                  胜率分析
-                </span>
+      {/* Main in-flow sidebar on desktop (compresses table), drawer overlay on mobile */}
+      <aside className="poker-table-equity fixed inset-y-0 left-0 w-[320px] max-w-[85vw] z-50 lg:static lg:inset-auto lg:h-full lg:w-72 xl:w-80 2xl:w-[350px] lg:z-20 lg:flex-shrink-0 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 border-r border-purple-500/40 shadow-2xl overflow-y-auto flex flex-col animate-slide-in-left lg:animate-none select-none">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-purple-900/60 to-indigo-900/60 border-b border-purple-500/30 sticky top-0 z-10 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Dices className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-black text-purple-100 tracking-wide">
+              胜率分析
+            </span>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="text-purple-200 hover:text-white text-lg leading-none cursor-pointer px-2 py-1 rounded-lg hover:bg-purple-500/20 transition"
+              title="收起胜率分析"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        <div className="px-4 py-3 space-y-3 flex-1">
+          {!shouldCompute ? (
+            <div className="flex flex-col items-center justify-center py-16 px-4 text-center space-y-3 text-slate-400">
+              <div className="w-12 h-12 rounded-2xl bg-purple-950/50 border border-purple-500/30 flex items-center justify-center text-purple-300">
+                <Dices className="w-6 h-6 animate-pulse text-amber-400" />
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-purple-200 hover:text-white text-lg leading-none cursor-pointer px-2 py-1 rounded-lg hover:bg-purple-500/20"
-                title="关闭"
-              >
-                ✕
-              </button>
+              <div className="text-sm font-bold text-slate-300">
+                {isFolded
+                  ? '本局已弃牌'
+                  : street === 'HAND_END'
+                  ? '本局结算中'
+                  : street === 'IDLE'
+                  ? '等待开局发牌'
+                  : !isSeated
+                  ? '未入座'
+                  : '等待发牌'}
+              </div>
+              <p className="text-xs text-slate-500 max-w-[220px] leading-relaxed">
+                {isFolded
+                  ? '你已弃牌，下一局发牌后将自动重新计算胜率。'
+                  : street === 'HAND_END'
+                  ? '本局牌局已结束，下一局发牌后将自动重新分析。'
+                  : street === 'IDLE'
+                  ? '牌局尚未开始，开局发牌后将在此实时展示胜率与决策建议。'
+                  : !isSeated
+                  ? '入座参与对局后，此处将自动展示实时胜率与跟注建议。'
+                  : '手牌发给玩家后，将实时计算胜率、Outs 及底池赔率。'}
+              </p>
             </div>
-
-            <div className="px-4 py-3 space-y-3">
+          ) : (
+            <>
               {/* Status line */}
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400">
@@ -424,11 +498,10 @@ export default function EquityDrawer({
                   ↻ 重新计算
                 </button>
               </div>
-            </div>
-          </div>
-        ),
-        document.body
-      )}
+            </>
+          )}
+        </div>
+      </aside>
     </>
   );
 }
