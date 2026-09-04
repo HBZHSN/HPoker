@@ -237,7 +237,7 @@ export default function Lobby({
                             <>
                               <span className="text-slate-600">·</span>
                               <span className="flex items-center gap-1 text-purple-300 font-medium">
-                                辅助赢额: {Math.round(r.assistant_win_ratio * 100)}%
+                                辅助净盈利: {Math.round(r.assistant_win_ratio * 100)}%
                               </span>
                             </>
                           )}
@@ -499,8 +499,8 @@ export default function Lobby({
 
               <div>
                 <label className="text-slate-400 font-semibold block mb-1">
-                  辅助获胜比例 (%)
-                  <span className="text-slate-500 font-normal ml-1">(开启胜率辅助获胜时按此比例分池，剩余补偿给对手)</span>
+                  辅助净盈利保留比例 (%)
+                  <span className="text-slate-500 font-normal ml-1">(使用辅助获胜时本金全额返还，仅对净盈利按此比例分配)</span>
                 </label>
                 <div className="flex items-center gap-3">
                   <input

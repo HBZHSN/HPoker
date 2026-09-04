@@ -128,7 +128,7 @@ export default function HandResultModal({
             <div className="flex items-center gap-2 px-3.5 py-2 bg-purple-950/50 border border-purple-500/40 rounded-2xl text-xs text-purple-200">
               <span className="text-base select-none">⚖️</span>
               <span className="leading-snug">
-                本局赢家使用了胜率辅助，赢池已依房间规则折让并补偿给对手（详见下方<strong>「原应 ➔ 调整」</strong>明细）。
+                本局赢家使用了胜率辅助，本金全额返还，仅对净盈利按房间规则折算并补偿给对手（详见下方<strong>「原应 ➔ 调整」</strong>明细）。
               </span>
             </div>
           )}

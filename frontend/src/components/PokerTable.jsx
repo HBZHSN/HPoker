@@ -365,9 +365,9 @@ export default function PokerTable({
               {room?.config?.assistant_win_ratio !== undefined && room?.config?.assistant_win_ratio < 1.0 && (
                 <span
                   className="text-[11px] bg-purple-950/90 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/40 font-bold"
-                  title="使用胜率辅助获胜时按此比例折让"
+                  title="使用胜率辅助获胜时本金全额返还，仅对净盈利按此比例分配"
                 >
-                  辅助赢额: {Math.round(room.config.assistant_win_ratio * 100)}%
+                  辅助净盈利: {Math.round(room.config.assistant_win_ratio * 100)}%
                 </span>
               )}
             </div>

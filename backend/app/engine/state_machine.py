@@ -1028,12 +1028,13 @@ class TableStateMachine:
                     continue
 
                 if used_assistant:
-                    raw_reduced = pot_amt * self.assistant_win_ratio
-                    units = int(round(raw_reduced / sb))
-                    if pot_amt >= sb:
-                        units = max(1, min(pot_amt // sb, units))
-                    win_amt = units * sb
-                    deducted = pot_amt - win_amt
+                    win_amt, deducted = self.pot_manager.assistant_adjusted_payout(
+                        pot=pot,
+                        player_id=winner.player_id,
+                        original_amount=pot_amt,
+                        assistant_win_ratio=self.assistant_win_ratio,
+                        small_blind=sb,
+                    )
 
                     winner.chips += win_amt
                     self.payouts.append(PotPayout(
