@@ -32,9 +32,11 @@ def test_normalize_chat_message():
 
 def test_reaction_allowlist_is_fixed_and_unique():
     assert "🔥" in ALLOWED_EMOJI_REACTIONS
+    assert "?" in ALLOWED_EMOJI_REACTIONS
+    assert "❓" in ALLOWED_EMOJI_REACTIONS
     assert "not-an-emoji" not in ALLOWED_EMOJI_REACTIONS
     assert len(ALLOWED_EMOJI_REACTIONS) == len(set(ALLOWED_EMOJI_REACTIONS))
-    assert len(ALLOWED_EMOJI_REACTIONS) >= 60
+    assert len(ALLOWED_EMOJI_REACTIONS) >= 140
 
 
 def test_frontend_emoji_picker_matches_server_allowlist():
