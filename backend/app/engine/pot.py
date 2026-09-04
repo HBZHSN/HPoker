@@ -21,6 +21,10 @@ class Pot:
     name: str                           # e.g., "主池", "边池 1", "边池 2"
     amount: int                         # Total chips in this pot
     eligible_players: Set[str]          # IDs of players eligible to win this pot
+    # Contribution allocated to this pot for each player.  This is kept
+    # internal (and intentionally omitted from ``to_dict``) so assistant
+    # settlement can return a winner's principal before applying its ratio.
+    player_contributions: Dict[str, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -139,7 +143,14 @@ class PotManager:
                     main_pot_amt = self.total_pot_amount
 
                 if main_pot_amt > 0:
-                    pots.append(Pot(name="主池", amount=main_pot_amt, eligible_players={winner_id}))
+                    pots.append(Pot(
+                        name="主池",
+                        amount=main_pot_amt,
+                        eligible_players={winner_id},
+                        player_contributions={
+                            winner_id: winner_contrib - refunds.get(winner_id, 0)
+                        },
+                    ))
             return pots, refunds
 
         # Multiple active contributors: calculate tiered pots
@@ -157,12 +168,14 @@ class PotManager:
 
             tier_amount = 0
             eligible_for_tier: Set[str] = set()
+            tier_contributions: Dict[str, int] = {}
 
             for player_id, total_amt in contributors.items():
                 if total_amt > prev_level:
                     # Player contributed to this tier
                     contributed_to_tier = min(total_amt - prev_level, tier_diff)
                     tier_amount += contributed_to_tier
+                    tier_contributions[player_id] = contributed_to_tier
                     # Is this player eligible to win this tier? (Must not have folded)
                     if player_id not in self.folded_players:
                         eligible_for_tier.add(player_id)
@@ -173,6 +186,11 @@ class PotManager:
                     # Merge this amount into previous pot or give to lowest eligible
                     if raw_pots:
                         raw_pots[-1].amount += tier_amount
+                        for player_id, contribution in tier_contributions.items():
+                            raw_pots[-1].player_contributions[player_id] = (
+                                raw_pots[-1].player_contributions.get(player_id, 0)
+                                + contribution
+                            )
                 elif len(eligible_for_tier) == 1:
                     # Uncalled bet from single active player in this tier -> Refund!
                     refund_player = next(iter(eligible_for_tier))
@@ -182,7 +200,8 @@ class PotManager:
                     raw_pots.append(Pot(
                         name="",
                         amount=tier_amount,
-                        eligible_players=eligible_for_tier
+                        eligible_players=eligible_for_tier,
+                        player_contributions=tier_contributions,
                     ))
 
             prev_level = level
@@ -192,6 +211,11 @@ class PotManager:
         for pot in raw_pots:
             if merged_pots and merged_pots[-1].eligible_players == pot.eligible_players:
                 merged_pots[-1].amount += pot.amount
+                for player_id, contribution in pot.player_contributions.items():
+                    merged_pots[-1].player_contributions[player_id] = (
+                        merged_pots[-1].player_contributions.get(player_id, 0)
+                        + contribution
+                    )
             else:
                 merged_pots.append(pot)
 
@@ -203,6 +227,61 @@ class PotManager:
                 pot.name = f"边池 {idx}"
 
         return merged_pots, refunds
+
+    def assistant_adjusted_payout(
+        self,
+        pot: Pot,
+        player_id: str,
+        original_amount: int,
+        assistant_win_ratio: float,
+        small_blind: int,
+    ) -> Tuple[int, int]:
+        """Return ``(adjusted_payout, deducted_amount)`` for an assistant winner.
+
+        The assistant ratio applies only to profit.  A winner first keeps the
+        principal they contributed to this pot, then retains the configured
+        ratio of the positive profit.  Profit is quantized to small-blind
+        units; any resulting deduction is returned to the other eligible
+        contenders by the caller.
+        """
+        if original_amount <= 0 or assistant_win_ratio >= 1.0:
+            return original_amount, 0
+
+        principal = pot.player_contributions.get(player_id)
+        if principal is None:
+            # Compatibility fallback for callers that construct a Pot without
+            # the internal contribution breakdown.
+            principal = min(self.total_contributions.get(player_id, 0), original_amount)
+        principal = max(0, principal)
+
+        profit = original_amount - principal
+        if profit <= 0:
+            return original_amount, 0
+
+        sb = max(1, small_blind)
+        adjusted_profit = int(round(profit * assistant_win_ratio / sb)) * sb
+        # Rounding must never turn the assistant adjustment into a bonus.
+        adjusted_profit = max(0, min(profit, adjusted_profit))
+        adjusted_amount = principal + adjusted_profit
+        deducted = original_amount - adjusted_amount
+        return adjusted_amount, max(0, deducted)
+
+    @staticmethod
+    def _split_player_contributions(
+        pot: Pot,
+        first_amount: int,
+    ) -> Tuple[Dict[str, int], Dict[str, int]]:
+        """Split a pot's principal contribution map across two runouts."""
+        if pot.amount <= 0 or not pot.player_contributions:
+            return {}, {}
+
+        first_contributions: Dict[str, int] = {}
+        second_contributions: Dict[str, int] = {}
+        for player_id, contribution in pot.player_contributions.items():
+            first = (contribution * first_amount) // pot.amount
+            first_contributions[player_id] = first
+            second_contributions[player_id] = contribution - first
+        return first_contributions, second_contributions
 
     def _distribute_pots_internal(
         self,
@@ -263,19 +342,21 @@ class PotManager:
                 for i in range(remainder):
                     winner_payouts[ordered_winners[i]] += 1
 
-            # Assistant penalty reduction:
-            # If assistant_win_ratio < 1.0 and any winner used assistant
+            # Assistant profit-only reduction:
+            # A winner keeps the principal contributed to this pot and only
+            # the positive profit is subject to assistant_win_ratio.
             total_deducted = 0
             if assistant_win_ratio < 1.0:
                 for w in list(winners):
                     if w in assistant_set:
                         orig_amt = winner_payouts[w]
-                        raw_reduced = orig_amt * assistant_win_ratio
-                        units = int(round(raw_reduced / sb))
-                        if orig_amt >= sb:
-                            units = max(1, min(orig_amt // sb, units))
-                        reduced_amt = units * sb
-                        deducted = orig_amt - reduced_amt
+                        reduced_amt, deducted = self.assistant_adjusted_payout(
+                            pot=pot,
+                            player_id=w,
+                            original_amount=orig_amt,
+                            assistant_win_ratio=assistant_win_ratio,
+                            small_blind=sb,
+                        )
                         if deducted > 0:
                             winner_payouts[w] = reduced_amt
                             total_deducted += deducted
@@ -449,17 +530,23 @@ class PotManager:
             if half_1 < half_2:
                 half_1, half_2 = half_2, half_1
 
+            contributions_1, contributions_2 = self._split_player_contributions(
+                pot, half_1
+            )
+
             if half_1 > 0:
                 pots_1.append(Pot(
                     name=f"{pot.name} (第1次)",
                     amount=half_1,
-                    eligible_players=set(pot.eligible_players)
+                    eligible_players=set(pot.eligible_players),
+                    player_contributions=contributions_1,
                 ))
             if half_2 > 0:
                 pots_2.append(Pot(
                     name=f"{pot.name} (第2次)",
                     amount=half_2,
-                    eligible_players=set(pot.eligible_players)
+                    eligible_players=set(pot.eligible_players),
+                    player_contributions=contributions_2,
                 ))
 
         payouts_1 = self._distribute_pots_internal(

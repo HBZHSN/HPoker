@@ -26,7 +26,7 @@ class RoomConfig:
     initial_time_cards: int = 3      # Starting time cards per player
     max_time_cards: int = 5          # Maximum time cards per player
     time_card_replenish_interval: int = 900  # 15 minutes replenishment interval (in seconds)
-    assistant_win_ratio: float = 0.70  # Ratio of pot won when using equity assistant (0.1 to 1.0)
+    assistant_win_ratio: float = 0.70  # Ratio of positive profit retained when using equity assistant (0.1 to 1.0)
 
     def __post_init__(self) -> None:
         if self.small_blind < 1:

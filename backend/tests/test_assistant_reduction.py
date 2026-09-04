@@ -30,7 +30,7 @@ def test_room_config_assistant_win_ratio():
 
 
 def test_pot_showdown_assistant_win_reduction():
-    """Winner used assistant, gets 70% rounded to small_blind, runner up gets 30%."""
+    """Assistant keeps principal and 70% of the positive profit."""
     pm = PotManager()
     # 2 players contribute 100 each -> pot = 200
     pm.record_bet("p1", 100)
@@ -48,18 +48,46 @@ def test_pot_showdown_assistant_win_reduction():
         small_blind=10,
     )
 
-    # 200 * 0.70 = 140 -> 14 units of 10
-    # Winner p1 gets 140, runner-up p2 gets remaining 60
+    # p1's principal is 100, so its profit is 200 - 100 = 100.
+    # p1 keeps 100 + 100 * 0.70 = 170; p2 receives the remaining 30.
     payout_dict = {p.player_id: p.amount for p in payouts}
-    assert payout_dict["p1"] == 140
-    assert payout_dict["p2"] == 60
+    assert payout_dict["p1"] == 170
+    assert payout_dict["p2"] == 30
     assert sum(p.amount for p in payouts) == 200
+
+
+def test_two_player_allin_call_assistant_uses_profit_only():
+    """Heads-up All-in/Call returns principal before applying the assistant ratio."""
+    table = TableStateMachine(small_blind=10, big_blind=20, assistant_win_ratio=0.70)
+    table.sit_down("p1", "Alice", seat_index=0, chips=100)
+    table.sit_down("p2", "Bob", seat_index=1, chips=100)
+    assert table.start_new_hand() is True
+
+    table.seats[0].using_assistant = True
+    assert table.handle_action("p1", ActionType.ALL_IN) is True
+    assert table.handle_action("p2", ActionType.CALL) is True
+    assert table.street == Street.RIT_DECISION
+
+    table.board_cards = cards("2c 3d 4s 7h 9c")
+    table.seats[0].hole_cards = cards("Ah Ad")
+    table.seats[1].hole_cards = cards("Kh Kd")
+    table.enter_showdown()
+
+    payout_dict = {}
+    for payout in table.payouts:
+        payout_dict[payout.player_id] = payout_dict.get(payout.player_id, 0) + payout.amount
+
+    # Both players contributed 100; p1 wins the 200-chip pot.
+    assert payout_dict["p1"] == 170
+    assert payout_dict["p2"] == 30
+    assert table.seats[0].chips == 170
+    assert table.seats[1].chips == 30
 
 
 def test_pot_showdown_small_blind_quantization():
     """Verify that when 70% produces non-multiples of small_blind, chips are rounded to SB and conserved."""
     pm = PotManager()
-    # Pot of 125 chips, small_blind = 10
+    # Total contributions are 125 chips, small_blind = 10.
     pm.record_bet("p1", 65)
     pm.record_bet("p2", 60)
 
@@ -71,8 +99,10 @@ def test_pot_showdown_small_blind_quantization():
     assert refunds == {"p1": 5}
     assert pots[0].amount == 120
 
-    # 120 * 0.70 = 84 -> units = round(84/10) = 8 -> 80 chips
-    # Deducted = 40 chips (4 SB units)
+    # p1's principal in the pot is 60 and its profit is 60.
+    # 60 * 0.70 = 42 -> 40 chips after SB quantization; p1 gets 100 from
+    # the pot, plus its separate 5-chip refund.  The 20-chip deduction goes
+    # to p2.
     payouts = pm.resolve_showdown(
         hand_evaluations={"p1": eval_p1, "p2": eval_p2},
         seat_order_from_sb=["p1", "p2"],
@@ -88,8 +118,8 @@ def test_pot_showdown_small_blind_quantization():
     # Check pot payouts
     pot_payout_p1 = sum(p.amount for p in payouts if p.player_id == "p1" and p.pot_name != "多余下注退回")
     pot_payout_p2 = sum(p.amount for p in payouts if p.player_id == "p2")
-    assert pot_payout_p1 == 80
-    assert pot_payout_p2 == 40
+    assert pot_payout_p1 == 100
+    assert pot_payout_p2 == 20
     # Strict chip conservation: 125 total bet == sum of all payouts
     assert sum(p.amount for p in payouts) == 125
 
@@ -109,10 +139,9 @@ def test_pot_showdown_multiple_runner_ups():
     eval_p3 = evaluate_hand(cards("Ac As 2h 3c 4d"))
 
     # Pot = 300, SB = 10, ratio = 0.70
-    # Winner p1 (used assistant) gets 300 * 0.70 = 210
-    # Deducted = 90 (9 SB units)
-    # 2 runner-ups (p2, p3): 9 units // 2 = 4 units (40 chips) each.
-    # Remainder 1 unit (10 chips) goes to first in SB order (p2).
+    # p1's principal is 100 and its profit is 200.
+    # p1 gets 100 + 200 * 0.70 = 240; the 60-chip deduction is split equally
+    # between the two runner-ups.
     payouts = pm.resolve_showdown(
         hand_evaluations={"p1": eval_p1, "p2": eval_p2, "p3": eval_p3},
         seat_order_from_sb=["p2", "p3", "p1"],
@@ -125,10 +154,46 @@ def test_pot_showdown_multiple_runner_ups():
     for p in payouts:
         payout_dict[p.player_id] = payout_dict.get(p.player_id, 0) + p.amount
 
-    assert payout_dict["p1"] == 210
-    assert payout_dict["p2"] == 50  # 40 + 10 remainder unit
-    assert payout_dict["p3"] == 40
+    assert payout_dict["p1"] == 240
+    assert payout_dict["p2"] == 30
+    assert payout_dict["p3"] == 30
     assert sum(payout_dict.values()) == 300
+
+
+def test_side_pot_assistant_reduction_returns_principal_per_pot():
+    """A winner's principal is tracked separately for each side-pot tier."""
+    pm = PotManager()
+    pm.record_bet("p1", 100)
+    pm.record_bet("p2", 200)
+    pm.record_bet("p3", 200)
+
+    pots, refunds = pm.calculate_pots()
+    assert refunds == {}
+    assert [(pot.amount, pot.eligible_players) for pot in pots] == [
+        (300, {"p1", "p2", "p3"}),
+        (200, {"p2", "p3"}),
+    ]
+
+    eval_p1 = evaluate_hand(cards("9h 8h 7h 6h 5h"))  # Wins the main pot
+    eval_p2 = evaluate_hand(cards("Ah Ad 2c 3d 4s"))  # Wins the side pot
+    eval_p3 = evaluate_hand(cards("Kh Kd 2c 3d 4s"))
+
+    payouts = pm.resolve_showdown(
+        hand_evaluations={"p1": eval_p1, "p2": eval_p2, "p3": eval_p3},
+        seat_order_from_sb=["p1", "p2", "p3"],
+        assistant_players={"p1"},
+        assistant_win_ratio=0.70,
+        small_blind=10,
+    )
+
+    payout_dict = {}
+    for payout in payouts:
+        payout_dict[payout.player_id] = payout_dict.get(payout.player_id, 0) + payout.amount
+
+    # Main pot: p1 contributed 100, so it keeps 100 + (300 - 100) * 70% = 240.
+    # The 60 deduction goes to p2, who also wins the 200-chip side pot.
+    assert payout_dict == {"p1": 240, "p2": 260}
+    assert sum(payout_dict.values()) == 500
 
 
 def test_pot_showdown_non_assistant_winner_no_deduction():
@@ -175,9 +240,9 @@ def test_uncontested_fold_assistant_winner_deduction():
     # Hand ends uncontested.
     # p1's uncalled bet of 40 is refunded.
     # Active pot is 20 + 20 = 40.
-    # p1 won using assistant with ratio 0.70:
-    # 40 * 0.70 = 28 -> round(28/10) = 3 units = 30 chips.
-    # Deducted = 10 chips compensated back to p2!
+    # p1's principal in the contested pot is 20 and its profit is 20.
+    # It keeps 20 + (20 * 0.70 rounded to 10) = 30 chips from the pot.
+    # The 10-chip deduction is compensated back to p2.
     assert table.street == Street.HAND_END
     p1_refund = sum(p.amount for p in table.payouts if p.player_id == "p1" and p.pot_name == "多余下注退回")
     p1_pot_payout = sum(p.amount for p in table.payouts if p.player_id == "p1" and p.pot_name != "多余下注退回")
@@ -254,20 +319,20 @@ def test_showdown_hand_results_assistant_impact():
 
     # Pot = 200, 100 each.
     # Originally: p1 wins 200 (net +100), p2 wins 0 (net -100).
-    # With 70% assistant reduction:
-    # p1 gets 200 * 0.7 = 140 (net +40).
-    # p2 gets 60 (net -40).
-    # Adjustments: p1 -60, p2 +60.
+    # With 70% assistant profit sharing:
+    # p1 keeps its 100-chip principal plus 70% of its 100-chip profit,
+    # receiving 170 (net +70). p2 receives the remaining 30 (net -70).
+    # Adjustments: p1 -30, p2 +30.
     assert res_p1["original_payout_amount"] == 200
-    assert res_p1["payout_amount"] == 140
+    assert res_p1["payout_amount"] == 170
     assert res_p1["original_net_profit"] == 100
-    assert res_p1["net_profit"] == 40
-    assert res_p1["assistant_adjustment"] == -60
+    assert res_p1["net_profit"] == 70
+    assert res_p1["assistant_adjustment"] == -30
     assert res_p1["using_assistant"] is True
 
     assert res_p2["original_payout_amount"] == 0
-    assert res_p2["payout_amount"] == 60
+    assert res_p2["payout_amount"] == 30
     assert res_p2["original_net_profit"] == -100
-    assert res_p2["net_profit"] == -40
-    assert res_p2["assistant_adjustment"] == 60
+    assert res_p2["net_profit"] == -70
+    assert res_p2["assistant_adjustment"] == 30
     assert res_p2["using_assistant"] is False
