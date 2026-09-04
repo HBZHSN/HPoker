@@ -231,6 +231,13 @@ export default function PokerTable({
     );
   }, [table?.seats]);
 
+  const hasBotsInRoom = useMemo(() => {
+    if (room?.has_bots !== undefined) return Boolean(room.has_bots);
+    if (table?.seats?.some((s) => s && (s.is_bot || s.player_id?.startsWith('bot_')))) return true;
+    if (room?.pending_settlements?.some((p) => p && (p.is_bot || p.player_id?.startsWith('bot_')))) return true;
+    return false;
+  }, [room?.has_bots, table?.seats, room?.pending_settlements]);
+
   const handleEndRoom = () => {
     setEndRoomConfirmOpen(true);
   };
@@ -860,6 +867,7 @@ export default function PokerTable({
         <EndRoomConfirmModal
           isOpen={endRoomConfirmOpen}
           hasTestAccount={hasTestAccountInRoom}
+          hasBots={hasBotsInRoom}
           pendingSettlementCount={pendingSettlementCount}
           onConfirm={handleConfirmEndRoom}
           onClose={() => setEndRoomConfirmOpen(false)}

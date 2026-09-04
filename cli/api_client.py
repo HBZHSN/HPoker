@@ -135,12 +135,12 @@ class PokerApiClient:
         self._raise_for_status(response)
         return response.json()
 
-    async def end_room(self, room_id: str, requester_id: str) -> Dict[str, Any]:
+    async def end_room(self, room_id: str, requester_id: str, settlement_type: str = "balance") -> Dict[str, Any]:
         """End a room and return its settlement report."""
 
         response = await self.client.post(
             f"/api/rooms/{room_id}/end",
-            params={"requester_id": requester_id},
+            params={"requester_id": requester_id, "settlement_type": settlement_type},
         )
         self._raise_for_status(response)
         return response.json()

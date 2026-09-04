@@ -184,6 +184,7 @@ class Room:
             "pending_settlements": copy.deepcopy(self.pending_settlements),
             "kicked_player_ids": sorted(self.kicked_player_ids),
             "next_test_bot_number": self._next_test_bot_number,
+            "has_bots": self.has_bots,
             "table": {
                 "hand_number": self.table.hand_number,
                 "dealer_seat": self.table.dealer_seat,
@@ -443,6 +444,7 @@ class Room:
             "cash_out_chips": player.chips,
             "total_buyin_chips": player.total_buyin_chips,
             "rebuy_count": player.rebuy_count,
+            "is_bot": getattr(player, "is_bot", False),
             "reason": reason,
             "hand_number": hand_number,
             "status": "pending",
@@ -490,6 +492,21 @@ class Room:
         return player_id in self.kicked_player_ids
 
     @property
+    def has_bots(self) -> bool:
+        """Return True if any bot is currently seated or has participated in the room."""
+        for seat in self.table.seats:
+            if seat and (getattr(seat, "is_bot", False) or (isinstance(seat.player_id, str) and seat.player_id.startswith("bot_"))):
+                return True
+        for pid, history in self.historical_players.items():
+            if history.get("is_bot") or (isinstance(pid, str) and pid.startswith("bot_")):
+                return True
+        for pending in self.pending_settlements:
+            pid = pending.get("player_id", "")
+            if pending.get("is_bot") or (isinstance(pid, str) and pid.startswith("bot_")):
+                return True
+        return False
+
+    @property
     def pending_settlement_report(self) -> Optional[SettlementReport]:
         """Return a recalculated, not-yet-recorded settlement preview."""
         if self.is_ended or not any(
@@ -519,6 +536,8 @@ class Room:
             return self.settlement_report
         if settlement_type not in ("balance", "immediate"):
             raise ValueError("settlement_type must be 'balance' or 'immediate'")
+        if self.has_bots and settlement_type == "balance":
+            raise ValueError("房间内含有机器人，不允许结算到余额，只能实时结算")
 
         # A room can be closed in the middle of a hand. Return all current
         # hand contributions before taking the settlement snapshot so the
@@ -577,6 +596,7 @@ class Room:
             "host_player_id": self.host_player_id,
             "config": self.config.to_dict(),
             "is_ended": self.is_ended,
+            "has_bots": self.has_bots,
             "settlement_type": getattr(self, "settlement_type", "balance"),
             "table": self.table.get_table_state(viewer_player_id),
             "settlement_report": self.settlement_report.to_dict() if self.settlement_report else None,

@@ -252,8 +252,8 @@ class PokerWsClient:
     async def use_time_card(self) -> None:
         await self.send_event("USE_TIME_CARD", {})
 
-    async def end_room(self) -> None:
-        await self.send_event("END_ROOM", {})
+    async def end_room(self, settlement_type: str = "balance") -> None:
+        await self.send_event("END_ROOM", {"settlement_type": settlement_type})
 
     async def delete_room(self) -> None:
         await self.send_event("DELETE_ROOM", {})
