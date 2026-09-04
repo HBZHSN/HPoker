@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -13,6 +13,8 @@ import {
   DollarSign,
   AlertCircle,
   CheckCircle2,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { preflopChenScore } from '../utils/equityCalculator';
 import { evaluateHand } from '../utils/pokerEvaluator';
@@ -58,26 +60,7 @@ function currentHandDescription(holeCards, boardCards) {
 export function EquityTrigger({
   isOpen = false,
   onToggle,
-  holeCards = [],
-  boardCards = [],
-  street = 'IDLE',
 }) {
-  const holeKey = useMemo(
-    () => (holeCards || []).map((c) => c?.notation || '').join('|'),
-    [holeCards?.[0]?.notation, holeCards?.[1]?.notation]
-  );
-  const boardKey = useMemo(
-    () => (boardCards || []).map((c) => c?.notation || '').join('|'),
-    [boardCards?.map((c) => c?.notation).join(',')]
-  );
-
-  const chenScore = useMemo(() => {
-    if (holeCards?.length === 2 && (!boardCards || boardCards.length === 0)) {
-      return preflopChenScore(holeCards[0], holeCards[1]);
-    }
-    return null;
-  }, [holeKey, boardKey]);
-
   return (
     <button
       onClick={onToggle}
@@ -90,11 +73,6 @@ export function EquityTrigger({
     >
       <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
       <span>胜率</span>
-      {chenScore !== null && (
-        <span className="px-1.5 py-0.5 bg-amber-500/90 text-slate-950 rounded text-[10px] font-black">
-          {chenScore}
-        </span>
-      )}
       {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
     </button>
   );
@@ -112,10 +90,17 @@ export default function EquityDrawer({
   toCall = 0,
   isSeated = true,
   isFolded = false,
+  handNumber = 0,
+  onUseAssistant,
 }) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
   const [result, setResult] = useState(null);
+  const [isBlurred, setIsBlurred] = useState(false);
+
+  const prevHandNumberRef = useRef(handNumber);
+  const prevStreetRef = useRef(street);
+  const prevIsOpenRef = useRef(isOpen);
 
   const holeKey = useMemo(
     () => (holeCards || []).map((c) => c?.notation || '').join('|'),
@@ -128,11 +113,43 @@ export default function EquityDrawer({
   const oppCount = useMemo(() => numOpponents | 0, [numOpponents]);
 
   const shouldCompute = useMemo(() => {
-    if (['IDLE', 'HAND_END'].includes(street)) return false;
+    if (street === 'IDLE') return false;
     if (!holeCards || holeCards.length < 2) return false;
-    if (isFolded) return false;
     return true;
-  }, [holeKey, street, isFolded]);
+  }, [holeKey, street]);
+
+  // Handle hand transition & end blurring
+  useEffect(() => {
+    // When a hand ends, blur the analysis
+    if (street === 'HAND_END' && prevStreetRef.current !== 'HAND_END') {
+      setIsBlurred(true);
+    }
+    // When hand number changes (new hand starts), blur the analysis
+    if (handNumber !== prevHandNumberRef.current && handNumber > 0) {
+      setIsBlurred(true);
+    }
+    prevStreetRef.current = street;
+    prevHandNumberRef.current = handNumber;
+  }, [street, handNumber]);
+
+  // When user opens the drawer:
+  useEffect(() => {
+    if (!prevIsOpenRef.current && isOpen) {
+      if (street !== 'HAND_END' && street !== 'IDLE') {
+        // Auto unblur and notify server
+        setIsBlurred(false);
+        onUseAssistant?.();
+      } else if (street === 'HAND_END') {
+        setIsBlurred(true);
+      }
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, street, onUseAssistant]);
+
+  const handleReveal = useCallback(() => {
+    setIsBlurred(false);
+    onUseAssistant?.();
+  }, [onUseAssistant]);
 
   const chenScore = useMemo(() => {
     if (holeCards?.length === 2 && (!boardCards || boardCards.length === 0)) {
@@ -267,29 +284,21 @@ export default function EquityDrawer({
           )}
         </div>
 
-        <div className="px-4 py-3 space-y-3 flex-1">
+        <div className="px-4 py-3 space-y-3 flex-1 relative min-h-0">
           {!shouldCompute ? (
             <div className="flex flex-col items-center justify-center py-16 px-4 text-center space-y-3 text-slate-400">
               <div className="w-12 h-12 rounded-2xl bg-purple-950/50 border border-purple-500/30 flex items-center justify-center text-purple-300">
                 <Dices className="w-6 h-6 animate-pulse text-amber-400" />
               </div>
               <div className="text-sm font-bold text-slate-300">
-                {isFolded
-                  ? '本局已弃牌'
-                  : street === 'HAND_END'
-                  ? '本局结算中'
-                  : street === 'IDLE'
+                {street === 'IDLE'
                   ? '等待开局发牌'
                   : !isSeated
                   ? '未入座'
                   : '等待发牌'}
               </div>
               <p className="text-xs text-slate-500 max-w-[220px] leading-relaxed">
-                {isFolded
-                  ? '你已弃牌，下一局发牌后将自动重新计算胜率。'
-                  : street === 'HAND_END'
-                  ? '本局牌局已结束，下一局发牌后将自动重新分析。'
-                  : street === 'IDLE'
+                {street === 'IDLE'
                   ? '牌局尚未开始，开局发牌后将在此实时展示胜率与决策建议。'
                   : !isSeated
                   ? '入座参与对局后，此处将自动展示实时胜率与跟注建议。'
@@ -297,13 +306,38 @@ export default function EquityDrawer({
               </p>
             </div>
           ) : (
-            <>
-              {/* Status line */}
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400">
-                  阶段: <span className="text-amber-300 font-black">{STAGE_NAMES[street] || street}</span>
-                  {numOpponents > 0 && <span className="ml-2 text-slate-500">vs {numOpponents} 名对手</span>}
-                </span>
+            <div className="relative">
+              {/* Blur Overlay & Reveal Button */}
+              {isBlurred && (
+                <div className="absolute inset-x-0 top-6 z-30 flex flex-col items-center justify-center p-5 bg-slate-900/95 border border-purple-500/50 rounded-2xl shadow-2xl backdrop-blur-md text-center animate-fade-in">
+                  <div className="w-11 h-11 rounded-full bg-purple-950/80 border border-purple-400/60 flex items-center justify-center mb-2.5 shadow-glow-cyan">
+                    <Eye className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <h4 className="text-sm font-black text-slate-100 mb-1">
+                    {street === 'HAND_END' ? '本局已结束（胜率已模糊）' : '胜率分析已模糊锁定'}
+                  </h4>
+                  <p className="text-xs text-slate-400 mb-3.5 leading-relaxed max-w-[220px]">
+                    点击查看将向全桌玩家公开你正在使用辅助功能，并在头像上显示「辅助」标识。
+                  </p>
+                  <button
+                    onClick={handleReveal}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-glow-cyan border border-purple-300 transition active:scale-95 cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{street === 'HAND_END' ? '点击查看结算胜率' : '点击查看胜率分析'}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Main Analysis Content */}
+              <div className={`space-y-3 transition-all duration-300 ${isBlurred ? 'filter blur-md pointer-events-none select-none opacity-25' : ''}`}>
+                {/* Status line */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">
+                    阶段: <span className="text-amber-300 font-black">{STAGE_NAMES[street] || street}</span>
+                    {isFolded && <span className="ml-1 text-red-400 font-bold">(已弃牌)</span>}
+                    {numOpponents > 0 && <span className="ml-2 text-slate-500">vs {numOpponents} 名对手</span>}
+                  </span>
                 {handDesc && (
                   <span className="text-purple-300 font-bold flex items-center gap-1">
                     <Sparkles className="w-3 h-3" />{handDesc}
@@ -498,7 +532,8 @@ export default function EquityDrawer({
                   ↻ 重新计算
                 </button>
               </div>
-            </>
+            </div>
+          </div>
           )}
         </div>
       </aside>

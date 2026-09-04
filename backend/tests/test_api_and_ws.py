@@ -633,3 +633,52 @@ def test_lobby_online_users_and_websocket_lifecycle():
     final_map = {u["user_id"]: u for u in resp_all_offline.json()}
     assert final_map["u_test1"]["is_online"] is False
     assert final_map["u_test2"]["is_online"] is False
+
+
+def test_use_equity_assistant_ws_event():
+    client = TestClient(app)
+    room_resp = client.post("/api/rooms", json={
+        "host_player_id": "u_test1",
+        "room_name": "Assistant WS Room",
+        "buyin_chips": 1000,
+        "cash_value": 100.0,
+        "small_blind": 5,
+        "big_blind": 10,
+        "max_seats": 2,
+    })
+    r_id = room_resp.json()["room_id"]
+
+    def _recv_room_state(ws):
+        for _ in range(5):
+            msg = ws.receive_json()
+            if msg.get("event") == EventType.ROOM_STATE:
+                return msg
+        raise RuntimeError("No ROOM_STATE received")
+
+    with client.websocket_connect(f"/ws/{r_id}/u_test1") as ws1:
+        msg1 = _recv_room_state(ws1)
+        assert msg1["event"] == EventType.ROOM_STATE
+
+        with client.websocket_connect(f"/ws/{r_id}/u_test2") as ws2:
+            # Drain initial connection broadcast
+            _ = _recv_room_state(ws1)
+            _ = _recv_room_state(ws2)
+
+            # Start hand
+            ws1.send_json({"event": EventType.START_GAME, "payload": {}})
+            state1 = _recv_room_state(ws1)
+            state2 = _recv_room_state(ws2)
+            assert state2["payload"]["table"]["seats"][1]["using_assistant"] is False
+
+            # u_test2 opens assistant and sends USE_EQUITY_ASSISTANT
+            ws2.send_json({
+                "event": EventType.USE_EQUITY_ASSISTANT,
+                "payload": {"active": True}
+            })
+
+            # Both ws1 and ws2 receive state broadcast with using_assistant = True for seat 1
+            bcast_ws1 = _recv_room_state(ws1)
+            bcast_ws2 = _recv_room_state(ws2)
+            assert bcast_ws1["payload"]["table"]["seats"][1]["using_assistant"] is True
+            assert bcast_ws2["payload"]["table"]["seats"][1]["using_assistant"] is True
+

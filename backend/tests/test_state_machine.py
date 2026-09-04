@@ -393,3 +393,40 @@ def test_bet_and_raise_amounts_use_small_blind_as_unit():
     # A multiple of the configured small blind is accepted.
     assert table.handle_action("p1", ActionType.RAISE, raise_total_amount=50) is True
     assert table.current_round_highest_bet == 50
+
+
+def test_equity_assistant_status_and_reset():
+    table = TableStateMachine(max_seats=6, small_blind=10, big_blind=20)
+    table.sit_down("p1", "Alice", seat_index=0, chips=100)
+    table.sit_down("p2", "Bob", seat_index=1, chips=100)
+
+    table.start_new_hand()
+    # Initially False
+    assert table.seats[0].using_assistant is False
+    assert table.seats[1].using_assistant is False
+
+    # Mark p1 as using assistant
+    assert table.set_player_using_assistant("p1", True) is True
+    assert table.seats[0].using_assistant is True
+    assert table.seats[1].using_assistant is False
+
+    # Check serialized state contains using_assistant
+    state = table.get_table_state("p2")
+    assert state["seats"][0]["using_assistant"] is True
+    assert state["seats"][1]["using_assistant"] is False
+
+    # Fast forward or fold to end hand
+    table.handle_action("p1", ActionType.RAISE, raise_total_amount=50)
+    table.handle_action("p2", ActionType.FOLD)
+    assert table.street == Street.HAND_END
+
+    # In HAND_END summary, using_assistant is preserved
+    state_end = table.get_table_state("p2")
+    p1_summary = next(r for r in state_end["hand_results"] if r["player_id"] == "p1")
+    assert p1_summary["using_assistant"] is True
+
+    # Start new hand -> using_assistant resets to False
+    table.start_new_hand()
+    assert table.seats[0].using_assistant is False
+    assert table.seats[1].using_assistant is False
+
