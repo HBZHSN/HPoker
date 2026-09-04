@@ -1,23 +1,26 @@
 """Texas Hold'em Equity Calculator.
 
 Strategy:
-  - **Turn/River (4-5 board cards): EXACT enumeration** of remaining board cards.
-    47 combos for Turn, 0 for River — all precise, instant, zero noise.
-  - **Flop (3 board cards): EXACT enumeration** of C(47,2) = 1,081 board
-    combos + random opponent sampling for speed.
-  - **Preflop (0 board cards): Monte Carlo** (20,000 iterations).
-
-Also computes drawing probabilities (hero-only outcome distribution at river).
+  - **River 1v1 (5 board cards, 1 opponent)**: EXACT enumeration of all C(45,2)=990
+    possible opponent holdings. 100% precise, zero noise, instant.
+  - **Turn, Flop, Preflop, and Multi-way River**: True multi-opponent Monte Carlo simulation
+    where each opponent is dealt distinct cards from the remaining deck, and hero must
+    strictly beat all opponents simultaneously to win.
+  - **Outs Analysis**: Rigorous classification of Made-Hand Improvements (Flush draws,
+    Open-Ended Straights, Double Gutshots, Gutshots, Sets-to-Boats/Quads) with set-union
+    deduplication and exact mathematical hit probabilities.
+  - **Pot Odds & Action Recommendation**: Mathematically sound pot odds and break-even equity
+    thresholds, rational implied odds considerations, avoiding unconditional call traps.
 """
 
 from __future__ import annotations
 import itertools
-import secrets
-from typing import List, Optional, Dict, Any, Tuple
+import random
+from typing import List, Optional, Dict, Any, Tuple, Set
 from collections import Counter
 
 from backend.app.engine.card import Card, Rank, Suit
-from backend.app.engine.evaluator import evaluate_hand, HandEvaluation, HandCategory
+from backend.app.engine.evaluator import evaluate_hand, HandEvaluation, HandCategory, _check_straight
 
 
 # ----------------- Helpers -----------------
@@ -46,72 +49,44 @@ def _parse_request_cards(cards: List[Dict[str, Any]]) -> List[Card]:
     return result
 
 
-# ----------------- Core equity engine -----------------
+def suit_symbol(suit: Suit) -> str:
+    """Return unicode suit symbol for display."""
+    map_sym = {
+        "SPADES": "♠",
+        "HEARTS": "♥",
+        "CLUBS": "♣",
+        "DIAMONDS": "♦",
+    }
+    name = str(suit).split(".")[-1] if "." in str(suit) else str(suit)
+    return map_sym.get(name, str(suit))
 
-def _exact_vs_opponents(
+
+# ----------------- Core Equity Engines -----------------
+
+def _exact_river_1v1(
     hero_hand: List[Card],
     board: List[Card],
-    num_opponents: int,
-    dead: set,
-    max_opp_per_board: int = 20,
+    dead: Set[Tuple[int, Suit]],
 ) -> Tuple[float, float, float]:
-    """Enumerate all remaining board cards (exact) and sample opponent hands.
+    """Exact enumeration of all C(45, 2) = 990 opponent holdings on the river against 1 opponent.
 
     Returns (win_rate, tie_rate, lose_rate).
     """
-    hero_plus_board = hero_hand + board
-    remaining_board = 5 - len(board)
+    hero_eval = evaluate_hand(hero_hand + board)
     deck_remaining = [c for c in _full_deck() if (c.rank.value, c.suit) not in dead]
 
     wins = ties = losses = 0
     total = 0
 
-    if remaining_board == 0:
-        # River — board is fixed; only opponents vary
-        hero_eval = evaluate_hand(hero_plus_board)
-        rng = secrets.SystemRandom()
-        for _ in range(max_opp_per_board * max(1, num_opponents)):
-            if len(deck_remaining) < 2:
-                break
-            opp_hand = rng.sample(deck_remaining, 2)
-            opp_eval = evaluate_hand(list(opp_hand) + board)
-            cmp_val = (hero_eval.score_vector > opp_eval.score_vector) - (hero_eval.score_vector < opp_eval.score_vector)
-            if cmp_val > 0:
-                wins += 1
-            elif cmp_val == 0:
-                ties += 1
-            else:
-                losses += 1
-            total += 1
-            if total >= 1000:
-                break
-        return (wins / total, ties / total, losses / total) if total else (0.0, 0.0, 1.0)
-
-    # Pre-generate all board combos
-    board_combos = list(itertools.combinations(deck_remaining, remaining_board))
-    rng = secrets.SystemRandom()
-
-    for extra_board in board_combos:
-        sim_board = list(board) + list(extra_board)
-        hero_eval = evaluate_hand(hero_hand + sim_board)
-
-        # Sample opponent hands
-        opp_pool = [c for c in deck_remaining if c not in extra_board]
-        if len(opp_pool) < 2:
-            continue
-        for _ in range(max_opp_per_board):
-            opp_hand = rng.sample(opp_pool, 2)
-            opp_eval = evaluate_hand(opp_hand + sim_board)
-            cmp_val = (hero_eval.score_vector > opp_eval.score_vector) - (hero_eval.score_vector < opp_eval.score_vector)
-            if cmp_val > 0:
-                wins += 1
-            elif cmp_val == 0:
-                ties += 1
-            else:
-                losses += 1
-            total += 1
-            if total >= 800:
-                return (wins / total, ties / total, losses / total)
+    for opp_combo in itertools.combinations(deck_remaining, 2):
+        opp_eval = evaluate_hand(list(opp_combo) + board)
+        if hero_eval.score_vector > opp_eval.score_vector:
+            wins += 1
+        elif hero_eval.score_vector == opp_eval.score_vector:
+            ties += 1
+        else:
+            losses += 1
+        total += 1
 
     return (wins / total, ties / total, losses / total) if total else (0.0, 0.0, 1.0)
 
@@ -120,35 +95,53 @@ def _mc_equity(
     hero_hand: List[Card],
     board: List[Card],
     num_opponents: int,
-    dead: set,
-    iterations: int = 800,
+    dead: Set[Tuple[int, Suit]],
+    iterations: int = 600,
 ) -> Tuple[float, float, float]:
-    """Pure Monte Carlo — used when enumeration is infeasible (preflop)."""
-    rng = secrets.SystemRandom()
-    dead_local = set(dead)  # copy
+    """True multi-opponent Monte Carlo simulation.
+
+    In every iteration:
+      - Remaining community cards (if any) are dealt.
+      - Each of the `num_opponents` opponents is dealt 2 distinct cards from the deck.
+      - Hero wins only if hero's evaluation strictly beats all opponents.
+      - Hero ties if hero ties with the highest opponent and no opponent beats hero.
+      - Otherwise, hero loses.
+
+    Returns (win_rate, tie_rate, lose_rate).
+    """
+    deck_base = [c for c in _full_deck() if (c.rank.value, c.suit) not in dead]
+    remaining_board = 5 - len(board)
+    num_opponents = max(1, num_opponents)
+
+    cards_needed = remaining_board + 2 * num_opponents
+    if len(deck_base) < cards_needed:
+        return (0.0, 0.0, 1.0)
 
     wins = ties = losses = 0
+    deck = list(deck_base)
+    rng = random.Random()
+
     for _ in range(iterations):
-        deck = [c for c in _full_deck() if (c.rank.value, c.suit) not in dead_local]
         rng.shuffle(deck)
-        remaining_board = 5 - len(board)
         sim_board = list(board)
-        for _ in range(remaining_board):
-            sim_board.append(deck.pop())
+        if remaining_board > 0:
+            sim_board.extend(deck[:remaining_board])
 
         hero_eval = evaluate_hand(hero_hand + sim_board)
 
         hero_best = True
         hero_tied = False
+        idx = remaining_board
+
         for _ in range(num_opponents):
-            if len(deck) < 2:
-                break
-            opp = [deck.pop(), deck.pop()]
+            opp = [deck[idx], deck[idx + 1]]
+            idx += 2
             opp_eval = evaluate_hand(opp + sim_board)
+
             if hero_eval.score_vector < opp_eval.score_vector:
                 hero_best = False
                 break
-            if hero_eval.score_vector == opp_eval.score_vector:
+            elif hero_eval.score_vector == opp_eval.score_vector:
                 hero_tied = True
 
         if hero_best:
@@ -166,38 +159,35 @@ def _mc_equity(
 def _draw_probabilities(
     hero_hand: List[Card],
     board: List[Card],
-    dead: set,
-    mc_iterations: int = 800,
+    dead: Set[Tuple[int, Suit]],
+    mc_iterations: int = 600,
 ) -> Dict[int, float]:
-    """Compute probability of each hand category at showdown.
+    """Compute probability of each hand category at river showdown.
 
-    Uses exact enumeration when feasible (remaining_board <= 3, i.e. Turn/River).
-    Falls back to Monte Carlo for Preflop/Flop where C(n,k) explodes.
+    Uses exact enumeration when remaining_board <= 2 (Turn: 46 combos, Flop: 1081 combos).
+    Uses Monte Carlo for Preflop (remaining_board == 5).
     """
-    hero_plus_board = hero_hand + board
     remaining = 5 - len(board)
     total = 0
-    category_counts = Counter()
+    category_counts: Counter[int] = Counter()
     deck = [c for c in _full_deck() if (c.rank.value, c.suit) not in dead]
 
     if remaining == 0:
-        ev = evaluate_hand(hero_plus_board)
-        category_counts[ev.category] += 1
+        ev = evaluate_hand(hero_hand + board)
+        category_counts[ev.category.value] += 1
         total = 1
     elif remaining <= 2:
-        # Exact enumeration — cheap enough
         for extra in itertools.combinations(deck, remaining):
             ev = evaluate_hand(hero_hand + list(board) + list(extra))
-            category_counts[ev.category] += 1
+            category_counts[ev.category.value] += 1
             total += 1
     else:
-        # MC for Preflop/Flop — exact would be C(47,5)=1.5M for preflop
-        rng = secrets.SystemRandom()
+        rng = random.Random()
         for _ in range(mc_iterations):
             rng.shuffle(deck)
             sim_board = list(board) + deck[:remaining]
             ev = evaluate_hand(hero_hand + sim_board)
-            category_counts[ev.category] += 1
+            category_counts[ev.category.value] += 1
             total += 1
 
     return {cat: count / total for cat, count in category_counts.items()}
@@ -210,254 +200,173 @@ def _current_hand_eval(hero_hand: List[Card], board: List[Card]) -> Optional[Han
     return None
 
 
-def _hero_only_strength(
-    hero_hand: List[Card],
-    current_board: List[Card],
-    target_count: int,
-    dead: set,
-) -> float:
-    """Estimate hero-only hand strength at a future stage.
-
-    Specifically: enumerate (or MC-simulate) board cards up to target_count
-    AND to river, count what fraction give hero at least a Pair+.
-    Returns a number 0..1 representing relative strength.
-
-    Fast — exact enumeration for target_count - current_board <= 2.
-    """
-    current_len = len(current_board)
-    deck = [c for c in _full_deck() if (c.rank.value, c.suit) not in dead]
-
-    # Strategy: pick hero cards + fill board to 5 (river completion)
-    # Count how often hero's category >= ONE_PAIR (cat >= 2)
-    total = 0
-    pair_or_better = 0
-
-    # Compute total cards we need to add from current to river (target_count is intermediate)
-    from_current_to_river = 5 - current_len
-
-    # If target_count is the same as current_len, just fill to river
-    # If target_count > current_len, we first check hero at target_count (partial),
-    # then also fill to river to see final outcome.
-    # For simplicity, evaluate hero at RIVER always — most meaningful.
-
-    if from_current_to_river <= 2:
-        # Exact
-        for extra in itertools.combinations(deck, from_current_to_river):
-            full = list(current_board) + list(extra)
-            ev = evaluate_hand(hero_hand + full)
-            if ev.category.value >= HandCategory.ONE_PAIR.value:
-                pair_or_better += 1
-            total += 1
-    else:
-        rng = secrets.SystemRandom()
-        for _ in range(500):
-            rng.shuffle(deck)
-            full = list(current_board) + deck[:from_current_to_river]
-            ev = evaluate_hand(hero_hand + full)
-            if ev.category.value >= HandCategory.ONE_PAIR.value:
-                pair_or_better += 1
-            total += 1
-
-    # This isn't a "win rate" — it's a "pair-or-better frequency" — but it
-    # gives a quick visual indicator of hand strength trajectory.
-    return pair_or_better / total if total else 0.0
-
+# ----------------- Outs Identification -----------------
 
 def _identify_outs(
     hero_hand: List[Card],
     board: List[Card],
-    dead: set,
-) -> Dict[str, Any]:
-    """Identify hero's drawing possibilities (outs) against a random opponent range.
+    dead: Set[Tuple[int, Suit]],
+) -> Optional[Dict[str, Any]]:
+    """Identify hero's drawing outs with rigorous poker rules and set deduplication.
 
-    Returns a dict with:
-      - categories: list of {name, outs, desc}  for each draw type
-      - total_outs:  weighted sum avoiding double-counting
-      - turn_hit_pct:  单张出现概率
-      - river_hit_pct: Rule-of-2 (turn) + Rule-of-4 (turn+river)
-      - de:  decision equivalence — 需要的胜率 (赢+平)
+    Applicable on Flop (3 board cards) and Turn (4 board cards).
+    Returns None on River.
     """
-    all_cards = hero_hand + board
-    dead_local = set(dead)
-    # Already made-hand strength
-    from backend.app.engine.evaluator import HandCategory
-    current_eval = evaluate_hand(all_cards)
-    remaining_deck = 52 - len(board) - 2  # minus hero, board (dead_local has both)
-    remaining_single = 52 - 2 - len(board)  # deck minus hero and board cards = cards left
+    board_len = len(board)
+    if board_len not in (3, 4):
+        return None
+
+    current_eval = evaluate_hand(hero_hand + board)
+    deck_remaining = [c for c in _full_deck() if (c.rank.value, c.suit) not in dead]
 
     cats: List[Dict[str, Any]] = []
-    effective_outs = 0
+    all_out_cards: Set[Card] = set()
 
     # --- 1. Flush Draw ---
-    hero_suits = [c.suit for c in hero_hand]
-    board_suits = [c.suit for c in board]
-    for suit in set(hero_suits):
-        hero_count = hero_suits.count(suit)
-        board_count = board_suits.count(suit)
-        total_suit = hero_count + board_count
-        if total_suit >= 4 and current_eval.category.value < HandCategory.FLUSH.value:
-            outs = 13 - total_suit
-            if outs > 0:
-                cats.append({
-                    "name": f"{suit_symbol(suit)} 同花听牌",
-                    "outs": outs,
-                    "desc": f"需要再出一张 {suit_symbol(suit)}",
-                })
-                effective_outs += outs
+    if current_eval.category < HandCategory.FLUSH:
+        for suit in Suit:
+            hero_suit_count = sum(1 for c in hero_hand if c.suit == suit)
+            board_suit_count = sum(1 for c in board if c.suit == suit)
+            if hero_suit_count >= 1 and hero_suit_count + board_suit_count == 4:
+                flush_outs = {c for c in deck_remaining if c.suit == suit}
+                if flush_outs:
+                    cats.append({
+                        "name": f"{suit_symbol(suit)} 同花听牌",
+                        "outs": len(flush_outs),
+                        "desc": f"补任意一张 {suit_symbol(suit)} 即成同花",
+                    })
+                    all_out_cards |= flush_outs
 
-    # --- 2. Straight Draw (open-ended, gutshot) ---
-    ranks = sorted(set(c.rank.value for c in all_cards))
-    straight_outs = _calc_straight_outs(ranks)
-    if straight_outs["open"] > 0 and current_eval.category.value < HandCategory.STRAIGHT.value:
-        cats.append({
-            "name": "两头顺子",
-            "outs": straight_outs["open"],
-            "desc": "8 outs，两头都能补",
-        })
-        effective_outs += straight_outs["open"]
-    if straight_outs["gutshot"] > 0 and current_eval.category.value < HandCategory.STRAIGHT.value:
-        cats.append({
-            "name": "卡门顺子",
-            "outs": straight_outs["gutshot"],
-            "desc": "4 outs，只能补中间",
-        })
-        effective_outs += straight_outs["gutshot"]
+    # --- 2. Straight Draw ---
+    if current_eval.category < HandCategory.STRAIGHT:
+        straight_cards: Set[Card] = set()
+        straight_ranks: Set[Rank] = set()
 
-    # --- 3. Pair / Set Draw ---
-    # Hero has no pair? Overcards to board: 2 cards per overcard
-    hero_ranks = [c.rank.value for c in hero_hand]
-    board_ranks = [c.rank.value for c in board]
-    hero_pair = len(set(hero_ranks)) == 1  # pocket pair
-    if hero_pair:
-        # Pocket pair — 2 outs to set (each rank has 3 remaining cards, minus 2 hero = 2)
-        pair_rank = hero_ranks[0]
-        if current_eval.category.value < HandCategory.THREE_OF_A_KIND.value:
+        for r in Rank:
+            r_cards = [c for c in deck_remaining if c.rank == r]
+            if not r_cards:
+                continue
+            hero_ranks_with_r = [c.rank.value for c in hero_hand + board] + [r.value]
+            straight_top = _check_straight(hero_ranks_with_r)
+            if straight_top is not None:
+                board_ranks_with_r = [c.rank.value for c in board] + [r.value]
+                board_top = _check_straight(board_ranks_with_r) if len(board_ranks_with_r) >= 5 else None
+                if board_top is None or straight_top > board_top:
+                    straight_cards.update(r_cards)
+                    straight_ranks.add(r)
+
+        if straight_cards:
+            all_out_cards |= straight_cards
+            sorted_rank_vals = sorted(r.value for r in straight_ranks)
+
+            if len(straight_ranks) == 1:
+                name = "卡门顺子"
+                target_sym = list(straight_ranks)[0].display_name
+                desc = f"内嵌顺子，补一张 {target_sym} 即成顺子"
+            elif len(straight_ranks) == 2:
+                if sorted_rank_vals[1] - sorted_rank_vals[0] == 5:
+                    name = "两头顺子"
+                    desc = "两端开放，两头都能成顺"
+                else:
+                    name = "双卡顺子"
+                    syms = "/".join(r.display_name for r in sorted(straight_ranks, key=lambda x: x.value))
+                    desc = f"双卡门顺子，补 {syms} 均可成顺"
+            else:
+                name = "多头顺子"
+                desc = "多向顺子听牌"
+
             cats.append({
-                "name": f"{Rank(pair_rank).display_name} 暗三条",
-                "outs": 2,
-                "desc": "翻出第三张即成三条",
+                "name": name,
+                "outs": len(straight_cards),
+                "desc": desc,
             })
-            effective_outs += 2
-        # Already set? -> boat outs 3 per board card rank
-        elif current_eval.category.value < HandCategory.FULL_HOUSE.value:
-            # Board has pair? 1 out to boat (same rank as board pair)
-            board_pair_rank = next(
-                (r for r in board_ranks if board_ranks.count(r) >= 2), None
-            )
-            if board_pair_rank:
-                cats.append({
-                    "name": "葫芦",
-                    "outs": 1,
-                    "desc": f"board 有 {Rank(board_pair_rank).display_name}{Rank(board_pair_rank).display_name}，补一张即成葫芦",
-                })
-                effective_outs += 1
 
-    # Overcards (hero has 2 unpaired cards, none on board)
-    if not hero_pair and len(board) > 0:
-        overcards = [r for r in hero_ranks if r > max(board_ranks)]
-        if len(overcards) >= 1 and current_eval.category.value <= HandCategory.HIGH_CARD.value:
-            # If neither hero card pairs board, overcards might still win unimproved —
-            # but that's a reverse-implied-odds scenario. Show as "high card strength".
-            pass
+    # --- 3. Trips to Full House / Quads ---
+    if current_eval.category == HandCategory.THREE_OF_A_KIND:
+        boat_quad_cards: Set[Card] = set()
+        for c in deck_remaining:
+            ev = evaluate_hand(hero_hand + board + [c])
+            if ev.category in (HandCategory.FULL_HOUSE, HandCategory.FOUR_OF_A_KIND):
+                if len(board) + 1 >= 5:
+                    board_ev = evaluate_hand(board + [c])
+                    if board_ev.category >= ev.category and ev.score_vector <= board_ev.score_vector:
+                        continue
+                boat_quad_cards.add(c)
+        if boat_quad_cards:
+            all_out_cards |= boat_quad_cards
+            cats.append({
+                "name": "葫芦/四条",
+                "outs": len(boat_quad_cards),
+                "desc": "补一张同点数牌即成葫芦或四条",
+            })
 
-    # Top pair → two pair / trips: each hero card has 3 remaining (or 2 if it's the pairing one)
-    if current_eval.category.value == HandCategory.ONE_PAIR.value:
-        pair_rank_val = current_eval.category  # not useful, pair rank hidden
-        # Rough: ~5 outs for pair → trips / 2nd pair when hero has 2 non-paired cards on board
-        # Actually too complex; skip detailed count here.
+    # --- 4. Two Pair to Full House ---
+    elif current_eval.category == HandCategory.TWO_PAIR:
+        boat_cards: Set[Card] = set()
+        for c in deck_remaining:
+            ev = evaluate_hand(hero_hand + board + [c])
+            if ev.category == HandCategory.FULL_HOUSE:
+                if len(board) + 1 >= 5:
+                    board_ev = evaluate_hand(board + [c])
+                    if board_ev.category >= ev.category and ev.score_vector <= board_ev.score_vector:
+                        continue
+                boat_cards.add(c)
+        if boat_cards:
+            all_out_cards |= boat_cards
+            cats.append({
+                "name": "葫芦",
+                "outs": len(boat_cards),
+                "desc": "补一张成对牌即成葫芦",
+            })
 
-    # --- Effective outs (de-dupe flush+straight overlaps by half) ---
-    # Simplify: if both flush and straight outs exist, merge some overlap
-    has_flush = any("同花" in c["name"] for c in cats)
-    has_straight = any("顺子" in c["name"] for c in cats)
-    if has_flush and has_straight:
-        # Some outs overlap (flush that also completes straight)
-        effective_outs -= 1  # rough correction
+    # --- 5. Overcards / Pair Improvement (Only shown if no primary draw) ---
+    if not cats:
+        if current_eval.category == HandCategory.HIGH_CARD:
+            board_max_rank = max((c.rank.value for c in board), default=0)
+            overcard_ranks = {c.rank.value for c in hero_hand if c.rank.value > board_max_rank}
+            if overcard_ranks:
+                over_cards = {c for c in deck_remaining if c.rank.value in overcard_ranks}
+                if over_cards:
+                    all_out_cards |= over_cards
+                    syms = "/".join(Rank(r).display_name for r in sorted(overcard_ranks, reverse=True))
+                    cats.append({
+                        "name": "高牌击中",
+                        "outs": len(over_cards),
+                        "desc": f"补 {syms} 击中顶对",
+                    })
+        elif current_eval.category == HandCategory.ONE_PAIR:
+            counts = Counter(c.rank.value for c in hero_hand + board)
+            pair_rank = next((r for r, cnt in counts.items() if cnt == 2), None)
+            if pair_rank is not None:
+                hero_kicker_ranks = {c.rank.value for c in hero_hand if c.rank.value != pair_rank}
+                improve_cards = {
+                    c for c in deck_remaining
+                    if c.rank.value == pair_rank or c.rank.value in hero_kicker_ranks
+                }
+                if improve_cards:
+                    all_out_cards |= improve_cards
+                    cats.append({
+                        "name": "两对/三条",
+                        "outs": len(improve_cards),
+                        "desc": "补强为更高级两对或暗三条",
+                    })
 
-    effective_outs = max(0, min(effective_outs, 47))
-    turn_out_pct = effective_outs / max(1, remaining_single - 0)
-    river_out_pct = (
-        effective_outs / max(1, remaining_single - 1)
-        + (1 - effective_outs / max(1, remaining_single)) * effective_outs / max(1, remaining_single - 1)
-    ) if len(board) >= 3 else 0.0  # only 2 more cards max
+    total_outs = len(all_out_cards)
+
+    # Calculate precise probabilities based on street
+    if board_len == 3:  # Flop
+        turn_hit_pct: Optional[float] = total_outs / 47.0
+        river_hit_pct = 1.0 - ((47.0 - total_outs) / 47.0) * ((46.0 - total_outs) / 46.0)
+    else:  # Turn
+        turn_hit_pct = None
+        river_hit_pct = total_outs / 46.0
 
     return {
         "categories": cats,
-        "total_outs": effective_outs,
-        "turn_hit_pct": turn_out_pct,
-        "river_hit_pct": min(1.0, river_out_pct),
+        "total_outs": total_outs,
+        "turn_hit_pct": turn_hit_pct,
+        "river_hit_pct": max(0.0, min(1.0, river_hit_pct)),
     }
-
-
-def suit_symbol(suit: Suit) -> str:
-    """Return unicode suit symbol for display."""
-    map_sym = {
-        "SPADES": "♠",
-        "HEARTS": "♥",
-        "CLUBS": "♣",
-        "DIAMONDS": "♦",
-    }
-    name = str(suit).split(".")[-1] if "." in str(suit) else str(suit)
-    return map_sym.get(name, str(suit))
-
-
-def _calc_straight_outs(ranks: List[int]) -> Dict[str, int]:
-    """Given sorted unique rank values (2-14 where A=14), count straight outs.
-
-    Returns {"open": int, "gutshot": int}.
-    """
-    if len(ranks) < 3:
-        return {"open": 0, "gutshot": 0}
-
-    # Include low-A: treat A as rank 1 too
-    all_ranks = set(ranks)
-    if 14 in all_ranks:
-        all_ranks.add(1)
-
-    def _can_make_straight(five: List[int]) -> bool:
-        s = sorted(set(five))
-        if len(s) < 5:
-            return False
-        if s[4] - s[0] == 4:
-            return True
-        # Wheel A-2-3-4-5
-        if s == [1, 2, 3, 4, 5]:
-            return True
-        return False
-
-    open_outs = 0
-    gutshot_outs = 0
-
-    # Enumerate missing ranks to complete a 5-card straight pattern
-    # Simplified: check sliding 5-rank windows within 1..14
-    for low in range(1, 11):  # A(1) .. T as low
-        window = set(range(low, low + 5))
-        overlap = window & all_ranks
-        if len(overlap) < 3:
-            continue
-        missing = window - all_ranks
-        if len(missing) == 1:
-            # Can we put hero cards into this window?
-            # We check if the missing card is exactly the one we need
-            mid = list(missing)[0]
-            if mid != low and mid != low + 4:
-                # Gutshot: missing middle
-                gutshot_outs += 1
-            else:
-                # Open ended: missing one of the ends
-                open_outs += 1
-        elif len(missing) == 0:
-            pass  # already straight
-
-    # Dedup by suit (each "missing" rank has 4 cards)
-    open_outs *= 4
-    gutshot_outs *= 4
-
-    # But each missing rank might already be dead... approximate by capping
-    open_outs = min(open_outs, 12)  # max reasonable open-ended
-    gutshot_outs = min(gutshot_outs, 8)
-
-    return {"open": open_outs, "gutshot": gutshot_outs}
 
 
 # ----------------- Public API -----------------
@@ -477,42 +386,37 @@ def compute_equity(
     pot_size: Optional[int] = None,
     to_call: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Compute equity + draw probs + outs + pot odds + decision suggestion.
+    """Compute poker equity, drawing probabilities, outs, and rational pot odds recommendations.
 
     Args:
-        hero_cards: 2 hero hole cards.
-        board_cards: 0..5 community cards currently visible.
-        num_opponents: number of active opponents still in the hand.
-        pot_size: current pot total (in chips) — optional, used for pot odds.
-        to_call: chips needed to call the current bet — optional, used for pot odds.
+        hero_cards: Exactly 2 hero hole cards.
+        board_cards: 0..5 community cards currently visible on table.
+        num_opponents: Number of active opponents still in the hand (>= 1).
+        pot_size: Current pot total (in chips) — optional, used for pot odds.
+        to_call: Chips required to call the current bet — optional, used for pot odds.
 
-    Returns a dict ready to be serialized as JSON.
+    Returns:
+        JSON-serializable dictionary with equity, outs, potOdds, currentHand, drawProbabilities.
     """
     if len(hero_cards) != 2:
         return {"error": "需要恰好 2 张手牌"}
 
     num_opponents = max(1, num_opponents)
-    dead = {(c.rank.value, c.suit) for c in hero_cards}
+    dead: Set[Tuple[int, Suit]] = {(c.rank.value, c.suit) for c in hero_cards}
     dead.update((c.rank.value, c.suit) for c in board_cards)
     board_len = len(board_cards)
 
-    # 1. Equity — choose strategy by board_len
-    strategy = "mc"
-    if board_len >= 3:
+    # 1. Equity strategy selection
+    if board_len == 5 and num_opponents == 1:
         strategy = "exact"
-    elif board_len == 0:
-        strategy = "mc"
-
-    if strategy == "exact":
-        win_rate, tie_rate, lose_rate = _exact_vs_opponents(
-            hero_cards, board_cards, num_opponents, dead
-        )
+        win_rate, tie_rate, lose_rate = _exact_river_1v1(hero_cards, board_cards, dead)
     else:
+        strategy = "mc"
         win_rate, tie_rate, lose_rate = _mc_equity(
-            hero_cards, board_cards, num_opponents, dead, iterations=800
+            hero_cards, board_cards, num_opponents, dead, iterations=600
         )
 
-    # 2. Drawing probabilities (exact whenever feasible)
+    # 2. Drawing probabilities at river
     draw_dist = _draw_probabilities(hero_cards, board_cards, dead)
     cat_name_map = {
         HandCategory.HIGH_CARD.value: "高牌",
@@ -526,52 +430,62 @@ def compute_equity(
         HandCategory.STRAIGHT_FLUSH.value: "同花顺",
         HandCategory.ROYAL_FLUSH.value: "皇家同花顺",
     }
-    draw_obj = {}
-    for cat_val, prob in draw_dist.items():
-        draw_obj[cat_val] = {"pct": prob, "name": cat_name_map.get(cat_val, "?")}
+    draw_obj = {
+        cat_val: {"pct": prob, "name": cat_name_map.get(cat_val, "?")}
+        for cat_val, prob in draw_dist.items()
+    }
 
-    # 3. Current hand description
+    # 3. Current hand evaluation
     current_eval = _current_hand_eval(hero_cards, board_cards)
 
-    # 4. Outs analysis (not applicable preflop)
-    outs = None
-    if board_len >= 2:
-        outs = _identify_outs(hero_cards, board_cards, dead)
+    # 4. Outs analysis (only for Flop and Turn)
+    outs = _identify_outs(hero_cards, board_cards, dead)
 
-    # 5. Pot odds & decision suggestion
+    # 5. Pot odds & action recommendation
     pot_odds_result = None
     if pot_size is not None and to_call is not None and to_call > 0 and pot_size > 0:
-        pot_odds_pct = to_call / (pot_size + to_call)
-        hit_rate = None
-        if outs and outs["total_outs"] > 0:
-            if board_len == 3:  # Flop
-                hit_rate = min(1.0, outs["total_outs"] * 4 / 47.0)
-            elif board_len == 4:  # Turn
-                hit_rate = min(1.0, outs["total_outs"] * 2 / 46.0)
-        need_rate = pot_odds_pct
-        decision = "fold"
-        reason = ""
+        total_pot = pot_size + to_call
+        need_rate = to_call / total_pot
+        pot_odds_ratio = pot_size / to_call
+
         effective_win = win_rate + tie_rate * 0.5
+        direct_hit_rate = 0.0
+        if outs and outs["total_outs"] > 0:
+            direct_hit_rate = (
+                outs["turn_hit_pct"] if board_len == 3 and outs["turn_hit_pct"] is not None
+                else outs["river_hit_pct"]
+            )
+
+        # Rational decision modeling:
+        # 1. Effective equity exceeds required break-even equity -> Profitable Call
         if effective_win >= need_rate:
             decision = "call"
-            reason = f"胜率 {effective_win * 100:.1f}% ≥ 底池赔率 {need_rate * 100:.1f}%，call 有利"
-        elif outs and outs["total_outs"] >= 8:
+            reason = f"当前胜率 {effective_win * 100:.1f}% ≥ 所需底池胜率 {need_rate * 100:.1f}% (赔率划算)"
+        # 2. Next-card direct out hit probability exceeds required break-even equity -> Justified Draw Call
+        elif direct_hit_rate >= need_rate:
             decision = "call"
-            reason = f"虽当前赔率不优，但有 {outs['total_outs']} outs 听牌，隐含赔率可能弥补"
-        elif hit_rate and hit_rate >= need_rate:
+            reason = f"直接补牌概率 {direct_hit_rate * 100:.1f}% ≥ 所需胜率 {need_rate * 100:.1f}% (听牌划算)"
+        # 3. On Flop with strong draw (outs >= 8) facing a relatively small bet (need_rate <= 0.22) -> Implied Odds Call
+        elif board_len == 3 and outs and outs["total_outs"] >= 8 and need_rate <= 0.22:
             decision = "call"
-            reason = f"听牌补中概率 {hit_rate * 100:.1f}% ≥ 底池赔率 {need_rate * 100:.1f}%"
+            reason = f"持 {outs['total_outs']} Outs 强听牌，直接成牌率 {direct_hit_rate * 100:.1f}%，虽略逊门槛 {need_rate * 100:.1f}% 但潜在赔率充足"
+        # 4. Negative EV -> Fold
         else:
             decision = "fold"
-            reason = f"胜率 {effective_win * 100:.1f}% < 底池赔率 {need_rate * 100:.1f}%"
+            reason = f"胜率 {effective_win * 100:.1f}% < 所需底池胜率 {need_rate * 100:.1f}% (赔率不划算)"
+
         pot_odds_result = {
             "pot_size": pot_size,
             "to_call": to_call,
-            "pot_odds_pct": pot_odds_pct,
+            "total_pot": total_pot,
+            "pot_odds_ratio": round(pot_odds_ratio, 2),
+            "pot_odds_ratio_str": f"{pot_odds_ratio:.1f}:1",
+            "pot_odds_pct": need_rate,
             "need_rate": need_rate,
             "decision": decision,
             "reason": reason,
-            "outs_hit_rate_estimate": hit_rate,
+            "direct_hit_rate": direct_hit_rate,
+            "outs_hit_rate_estimate": direct_hit_rate,
         }
 
     return {
@@ -593,50 +507,3 @@ def compute_equity(
     }
 
 
-def _mc_projection(
-    hero_hand: List[Card],
-    current_board: List[Card],
-    target_count: int,
-    num_opponents: int,
-    dead: set,
-    iterations: int = 5000,
-) -> Tuple[float, float, float]:
-    """MC sim from partial board → fill to target → finish to river → evaluate."""
-    rng = secrets.SystemRandom()
-    dead_local = set(dead)
-    current_len = len(current_board)
-
-    wins = ties = losses = 0
-    for _ in range(iterations):
-        deck = [c for c in _full_deck() if (c.rank.value, c.suit) not in dead_local]
-        rng.shuffle(deck)
-        sim_board = list(current_board)
-        for _ in range(target_count - current_len):
-            sim_board.append(deck.pop())
-        for _ in range(5 - target_count):
-            sim_board.append(deck.pop())
-
-        hero_eval = evaluate_hand(hero_hand + sim_board)
-        hero_best = True
-        hero_tied = False
-        for _ in range(num_opponents):
-            if len(deck) < 2:
-                break
-            opp = [deck.pop(), deck.pop()]
-            opp_eval = evaluate_hand(opp + sim_board)
-            if hero_eval.score_vector < opp_eval.score_vector:
-                hero_best = False
-                break
-            if hero_eval.score_vector == opp_eval.score_vector:
-                hero_tied = True
-
-        if hero_best:
-            if hero_tied:
-                ties += 1
-            else:
-                wins += 1
-        else:
-            losses += 1
-
-    total = wins + ties + losses
-    return (wins / total, ties / total, losses / total) if total else (0.0, 0.0, 1.0)

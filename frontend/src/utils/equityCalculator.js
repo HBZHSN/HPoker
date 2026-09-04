@@ -5,7 +5,7 @@
  * hero's best-5-card hand against each opponent.
  */
 
-import { generateDeck, shuffle, evaluateHand, compareEval, HandCategory } from './pokerEvaluator';
+import { generateDeck, shuffle, evaluateHand, compareEval, HandCategory } from './pokerEvaluator.js';
 
 /** Determine the street stage from board card count. */
 export function stageFromBoardCount(count) {
@@ -218,8 +218,8 @@ export function preflopChenScore(card1, card2) {
     else score -= 1;
   }
 
-  // A special bonus
-  if (lo === 14) score += 1;
+  // Wheel straight bonus for Ace with 2, 3, 4, 5
+  if (hi === 14 && lo <= 5 && hi !== lo) score += 1;
 
   // Normalize to 0-100
   return Math.min(100, Math.round((score / 25) * 100));

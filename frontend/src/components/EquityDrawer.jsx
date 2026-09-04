@@ -424,15 +424,26 @@ export default function EquityDrawer({
                   </div>
 
                   <div className="text-[11px] text-slate-400 bg-slate-900/50 rounded-lg px-3 py-2 border border-slate-700/50">
-                    <span className="text-slate-500">转牌:</span>{' '}
-                    <span className="text-cyan-300 font-bold">
-                      {(outs.turn_hit_pct * 100).toFixed(1)}%
-                    </span>
-                    <span className="text-slate-600 mx-2">·</span>
-                    <span className="text-slate-500">到河:</span>{' '}
-                    <span className="text-cyan-300 font-bold">
-                      {(outs.river_hit_pct * 100).toFixed(1)}%
-                    </span>
+                    {outs.turn_hit_pct !== null && outs.turn_hit_pct !== undefined ? (
+                      <>
+                        <span className="text-slate-500">转牌:</span>{' '}
+                        <span className="text-cyan-300 font-bold">
+                          {(outs.turn_hit_pct * 100).toFixed(1)}%
+                        </span>
+                        <span className="text-slate-600 mx-2">·</span>
+                        <span className="text-slate-500">到河:</span>{' '}
+                        <span className="text-cyan-300 font-bold">
+                          {(outs.river_hit_pct * 100).toFixed(1)}%
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-slate-500">河牌成牌:</span>{' '}
+                        <span className="text-cyan-300 font-bold">
+                          {(outs.river_hit_pct * 100).toFixed(1)}%
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -444,8 +455,8 @@ export default function EquityDrawer({
                     ? 'bg-emerald-950/40 border-emerald-500/50'
                     : 'bg-red-950/40 border-red-500/50'}`}>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-bold
-                      ${potOdds.decision === 'call' ? 'text-emerald-300' : 'text-red-300'}">
+                    <div className={`flex items-center gap-2 text-xs font-bold
+                      ${potOdds.decision === 'call' ? 'text-emerald-300' : 'text-red-300'}`}>
                       <DollarSign className="w-3.5 h-3.5" /> 底池赔率
                     </div>
                     <div className={`flex items-center gap-1 font-black text-sm
@@ -471,16 +482,22 @@ export default function EquityDrawer({
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-slate-400">底池赔率</span>
                     <span className="text-slate-200 font-mono">
-                      {potOdds.to_call} : {potOdds.pot_size} = {(potOdds.pot_odds_pct * 100).toFixed(1)}%
+                      {potOdds.pot_odds_ratio_str || `${(potOdds.pot_size / potOdds.to_call).toFixed(1)}:1`}
                     </span>
                   </div>
 
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">门槛</span>
+                    <span className="text-slate-400">需胜率门槛</span>
                     <span className="text-slate-200 font-mono">
                       ≥ {(potOdds.need_rate * 100).toFixed(1)}%
                     </span>
                   </div>
+
+                  {potOdds.reason && (
+                    <div className="text-[10px] text-slate-400 bg-slate-950/60 rounded px-2.5 py-1.5 border border-slate-800 leading-relaxed">
+                      {potOdds.reason}
+                    </div>
+                  )}
 
                 </div>
               )}
