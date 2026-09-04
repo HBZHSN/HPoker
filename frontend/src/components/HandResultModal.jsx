@@ -2,7 +2,7 @@ import React from 'react';
 import CardView from './CardView';
 import CommunityBoard from './CommunityBoard';
 import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
-import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers } from 'lucide-react';
+import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers, LogOut } from 'lucide-react';
 
 export default function HandResultModal({
   isOpen,
@@ -26,6 +26,8 @@ export default function HandResultModal({
   onToggleReady,
   onRebuy,
   onStartNextHand,
+  onLeaveTable,
+  isLeaving = false,
   onClose,
 }) {
   if (!isOpen) return null;
@@ -394,6 +396,17 @@ export default function HandResultModal({
         {/* Footer: Confirm Ready / Start Hand Controls */}
         <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-slate-800 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-3 w-full sm:w-auto">
+            {onLeaveTable && (
+              <button
+                onClick={onLeaveTable}
+                disabled={isLeaving}
+                className="flex-1 sm:flex-none px-5 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-wait text-slate-200 font-black text-sm rounded-xl border border-slate-700 hover:border-amber-500/60 transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-4 h-4 text-amber-400" />
+                {isLeaving ? '离开中…' : '离开牌桌'}
+              </button>
+            )}
+
             {isBusted && onRebuy ? (
               <button
                 onClick={onRebuy}

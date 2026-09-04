@@ -145,6 +145,7 @@ export default function PokerTable({
   };
 
   const handleLeaveTable = () => {
+    if (leaveRequested) return;
     if (!selfSeat) {
       onLeaveRoom({ notifyServer: false });
       return;
@@ -294,9 +295,12 @@ export default function PokerTable({
           <button
             onClick={handleLeaveTable}
             disabled={Boolean(
-              selfSeat &&
-              !['IDLE', 'HAND_END'].includes(table?.street) &&
-              (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
+              leaveRequested ||
+              (
+                selfSeat &&
+                !['IDLE', 'HAND_END'].includes(table?.street) &&
+                (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
+              )
             )}
             className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 rounded-xl text-xs font-bold border border-slate-700 transition active:scale-95 cursor-pointer shadow"
           >
@@ -786,6 +790,8 @@ export default function PokerTable({
           }}
           onRebuy={handleRebuy}
           onStartNextHand={handleStartGame}
+          onLeaveTable={handleLeaveTable}
+          isLeaving={leaveRequested}
           onClose={() => setHandResultDismissed(true)}
         />
       )}
