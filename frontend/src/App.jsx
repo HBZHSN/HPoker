@@ -548,11 +548,8 @@ export default function App() {
           onSendWsEvent={sendWsEvent}
           onLeaveRoom={handleLeaveRoom}
           onStandUpToSpectate={handleStandUpToSpectate}
-          onInstallApp={pwa.promptInstall}
           onToggleFullscreen={pwa.toggleFullscreen}
           isFullscreen={pwa.isFullscreen}
-          isStandalone={pwa.isStandalone}
-          isInstallable={pwa.isInstallable}
         />
       ) : activeRoomId ? (
         <div className="w-full h-full min-h-screen bg-[#080b11] flex flex-col items-center justify-center gap-4 text-center p-6">

@@ -1345,3 +1345,11 @@ html.ios-device .poker-table-root {
   font-weight: 900;
   line-height: 1;
 }
+
+/* Hide selected header controls (PWA install / fullscreen) on mobile viewports;
+   PWA gate and standalone mode already cover installation on phones. */
+@media (max-width: 1023px) {
+  .poker-mobile-hidden {
+    display: none !important;
+  }
+}
