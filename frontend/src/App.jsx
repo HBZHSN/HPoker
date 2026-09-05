@@ -586,6 +586,7 @@ export default function App() {
           isFullscreen={pwa.isFullscreen}
           isStandalone={pwa.isStandalone}
           isInstallable={pwa.isInstallable}
+          pwaAcknowledged={pwaGateDismissed}
         />
       )}
 

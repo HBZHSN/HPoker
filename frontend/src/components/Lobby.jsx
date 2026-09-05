@@ -34,6 +34,7 @@ export default function Lobby({
   onToggleFullscreen,
   isFullscreen = false,
   isStandalone = false,
+  pwaAcknowledged = false,
 }) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [roomName, setRoomName] = useState('新现金桌');
@@ -196,7 +197,7 @@ export default function Lobby({
         {/* Left Column: 牌桌列表 (一行一个) */}
         <section className="lg:col-span-8 flex flex-col gap-4">
           {/* PWA Mobile Banner */}
-          {onInstallApp && !isStandalone && (
+          {onInstallApp && !isStandalone && !pwaAcknowledged && (
             <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-amber-950/40 via-slate-900/90 to-slate-900 border border-amber-500/30 rounded-2xl shadow-lg">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-black shadow-glow-gold flex-shrink-0">
