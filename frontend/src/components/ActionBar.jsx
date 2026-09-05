@@ -453,9 +453,9 @@ export default function ActionBar({
 
   return (
     <div className="poker-action-bar flex flex-col gap-2 lg:gap-3 w-full h-full text-slate-100 select-none">
-      {/* 1. Turn Status & Countdown Banner */}
+      {/* 1. Turn Status & Countdown Banner (Fixed Height on PC to eliminate Layout Shift) */}
       <div
-        className={`poker-action-turn-status ${effectiveIsMyTurn ? 'poker-action-turn-status-self' : ''} p-2 lg:p-3 rounded-xl lg:rounded-2xl border transition-all duration-300 ${
+        className={`poker-action-turn-status ${effectiveIsMyTurn ? 'poker-action-turn-status-self' : ''} p-2.5 lg:p-3 rounded-xl lg:rounded-2xl border transition-colors duration-200 flex flex-col justify-between flex-shrink-0 lg:h-[110px] ${
           effectiveIsMyTurn && isUsingTimeBank
             ? 'bg-gradient-to-r from-purple-950/90 via-slate-900 to-indigo-950 border-purple-400 shadow-glow-cyan'
             : effectiveIsMyTurn
@@ -465,21 +465,22 @@ export default function ActionBar({
             : 'bg-slate-900/60 border-slate-800'
         }`}
       >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 lg:gap-2">
+        {/* Row 1: Status & Countdown Badge (fixed h-7) */}
+        <div className="flex items-center justify-between h-7">
+          <div className="flex items-center gap-1.5 lg:gap-2 min-w-0">
             {effectiveIsMyTurn ? (
-              <span className="flex h-2.5 w-2.5 lg:h-3 lg:w-3 relative">
+              <span className="flex h-2.5 w-2.5 lg:h-3 lg:w-3 relative flex-shrink-0">
                 <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${isUsingTimeBank ? 'bg-purple-400' : 'bg-amber-400'} opacity-75`}></span>
                 <span className={`relative inline-flex rounded-full h-2.5 w-2.5 lg:h-3 lg:w-3 ${isUsingTimeBank ? 'bg-purple-500' : 'bg-amber-500'}`}></span>
               </span>
             ) : (
-              <Clock className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-slate-400" />
+              <Clock className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-slate-400 flex-shrink-0" />
             )}
-            <span className="text-xs lg:text-sm font-black tracking-wide">
+            <span className="text-xs lg:text-sm font-black tracking-wide truncate">
               {effectiveIsMyTurn && isUsingTimeBank
-                ? '时间卡'
+                ? '时间卡生效中'
                 : effectiveIsMyTurn
-                ? '轮到你'
+                ? '轮到你行动'
                 : selfSeat && !hasCards && !['IDLE', 'HAND_END'].includes(street)
                 ? (currentTurnPlayer ? `等下局 · 等待 ${currentTurnPlayer.name}` : '等待下一局')
                 : currentTurnPlayer
@@ -490,63 +491,71 @@ export default function ActionBar({
             </span>
           </div>
 
-          {currentTurnPlayer && (
-            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] lg:text-xs font-black transition-all ${
-              turnTimeLeft <= 5
+          <div className={`flex items-center justify-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] lg:text-xs font-black min-w-[58px] h-6 flex-shrink-0 transition-all ${
+            currentTurnPlayer
+              ? turnTimeLeft <= 5
                 ? 'bg-red-950/90 border-red-500 text-red-200 shadow-glow-red animate-bounce'
                 : isUsingTimeBank
                 ? 'bg-purple-950 border-purple-400/70 text-purple-200 shadow-glow-cyan'
                 : 'bg-slate-950/80 border-amber-500/40 text-amber-300'
-            }`}>
-              <Clock className={`w-2.5 h-2.5 lg:w-3 lg:h-3 ${turnTimeLeft <= 5 ? 'text-red-400 animate-spin' : isUsingTimeBank ? 'text-purple-300 animate-spin' : 'text-amber-400 animate-spin'}`} />
-              <span>{Math.ceil(turnTimeLeft)}s</span>
-            </div>
-          )}
+              : 'bg-slate-950/40 border-slate-800/80 text-slate-500'
+          }`}>
+            <Clock className={`w-3 h-3 ${
+              currentTurnPlayer
+                ? turnTimeLeft <= 5
+                  ? 'text-red-400 animate-spin'
+                  : isUsingTimeBank
+                  ? 'text-purple-300 animate-spin'
+                  : 'text-amber-400 animate-spin'
+                : 'text-slate-600'
+            }`} />
+            <span>{currentTurnPlayer ? `${Math.ceil(turnTimeLeft)}s` : '—'}</span>
+          </div>
         </div>
 
-        {/* Real-time turn progress bar */}
-        {currentTurnPlayer && (
-          <div className="poker-action-turn-progress w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mt-2">
-            <div
-              className={`h-full transition-all duration-100 rounded-full ${
-                isUsingTimeBank
-                  ? 'bg-gradient-to-r from-purple-400 via-indigo-400 to-fuchsia-400 shadow-[0_0_10px_rgba(192,132,252,0.9)]'
-                  : turnTimeLeft > 7
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
-                  : turnTimeLeft > 3
-                  ? 'bg-gradient-to-r from-amber-400 to-yellow-500'
-                  : 'bg-gradient-to-r from-red-500 to-rose-600 animate-pulse'
-              }`}
-              style={{ width: `${Math.min(100, (turnTimeLeft / effectiveTimeout) * 100)}%` }}
-            />
-          </div>
-        )}
+        {/* Row 2: Real-time turn progress bar (always fixed height) */}
+        <div className="poker-action-turn-progress w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800 mt-2 flex-shrink-0">
+          <div
+            className={`h-full transition-all duration-100 rounded-full ${
+              isUsingTimeBank
+                ? 'bg-gradient-to-r from-purple-400 via-indigo-400 to-fuchsia-400 shadow-[0_0_10px_rgba(192,132,252,0.9)]'
+                : turnTimeLeft > 7
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                : turnTimeLeft > 3
+                ? 'bg-gradient-to-r from-amber-400 to-yellow-500'
+                : 'bg-gradient-to-r from-red-500 to-rose-600 animate-pulse'
+            }`}
+            style={{ width: currentTurnPlayer ? `${Math.min(100, (turnTimeLeft / effectiveTimeout) * 100)}%` : '0%' }}
+          />
+        </div>
 
-        {/* Manual Time Card Button inside My Turn banner */}
-        {effectiveIsMyTurn && (
-          <div className="poker-action-time-card-row flex items-center justify-between mt-1.5 lg:mt-2 pt-1.5 lg:pt-2 border-t border-slate-800/80">
-            <div className="flex items-center gap-1.5 text-[11px] lg:text-xs text-slate-300 font-bold">
-              <span>时间卡:</span>
-              <span className="text-amber-400 font-black">{selfSeat?.time_bank_cards ?? 3} 张</span>
-            </div>
-            {!isUsingTimeBank && (selfSeat?.time_bank_cards ?? 0) > 0 && onUseTimeCard ? (
-              <button
-                onClick={onUseTimeCard}
-                className="px-2 py-0.5 lg:px-2.5 lg:py-1 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-purple-100 rounded-lg text-[11px] lg:text-xs font-black border border-purple-400/50 shadow-md transition active:scale-95 cursor-pointer flex items-center gap-1"
-              >
-                <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-purple-300 animate-spin" />
-                <span>+30 秒</span>
-              </button>
-            ) : isUsingTimeBank ? (
-              <span className="text-[10px] lg:text-[11px] font-black text-purple-300 animate-pulse">
-                +30 秒
-              </span>
-            ) : (
-              null
-            )}
+        {/* Row 3: Time Card Row (always fixed height on PC to prevent shift) */}
+        <div className="poker-action-time-card-row flex items-center justify-between mt-2 pt-2 border-t border-slate-800/80 h-7 flex-shrink-0">
+          <div className="flex items-center gap-1.5 text-[11px] lg:text-xs text-slate-300 font-bold">
+            <span>时间卡:</span>
+            <span className="text-amber-400 font-black">{selfSeat?.time_bank_cards ?? 3} 张</span>
           </div>
-        )}
-
+          {effectiveIsMyTurn && !isUsingTimeBank && (selfSeat?.time_bank_cards ?? 0) > 0 && onUseTimeCard ? (
+            <button
+              type="button"
+              onClick={onUseTimeCard}
+              className="px-2.5 py-1 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-purple-100 rounded-lg text-[11px] lg:text-xs font-black border border-purple-400/50 shadow-md transition active:scale-95 cursor-pointer flex items-center gap-1 h-6"
+            >
+              <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-purple-300 animate-spin" />
+              <span>+30 秒</span>
+            </button>
+          ) : effectiveIsMyTurn && isUsingTimeBank ? (
+            <span className="px-2.5 py-1 bg-purple-950/80 border border-purple-500/40 rounded-lg text-[10px] lg:text-[11px] font-black text-purple-300 animate-pulse flex items-center gap-1 h-6">
+              <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-purple-400 animate-spin" />
+              <span>+30 秒</span>
+            </span>
+          ) : (
+            <span className="px-2.5 py-1 bg-slate-950/40 border border-slate-800/60 rounded-lg text-[10px] lg:text-[11px] font-semibold text-slate-500 flex items-center gap-1 h-6 select-none">
+              <Clock className="w-2.5 h-2.5 lg:w-3 lg:h-3 text-slate-600" />
+              <span>+30 秒</span>
+            </span>
+          )}
+        </div>
       </div>
 
       {!selfSeat ? (
@@ -626,12 +635,12 @@ export default function ActionBar({
 
       {/* 3. My Hand & Chips Overview Card */}
       {selfSeat && (
-        <div className="poker-action-self-overview bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex items-center justify-between shadow-lg">
-          <div className="flex flex-col gap-1">
+        <div className="poker-action-self-overview bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex items-center justify-between shadow-lg lg:h-[94px] flex-shrink-0">
+          <div className="flex flex-col gap-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-xs lg:text-sm font-black text-slate-100">{selfSeat.name}</span>
+              <span className="text-xs lg:text-sm font-black text-slate-100 truncate">{selfSeat.name}</span>
               {selfSeat.rebuy_count > 1 && (
-                <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full font-bold">
+                <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded-full font-bold flex-shrink-0">
                   买入 x{selfSeat.rebuy_count}
                 </span>
               )}
@@ -652,13 +661,15 @@ export default function ActionBar({
           </div>
 
           {/* My Hole Cards Preview */}
-          <div className="flex -space-x-2 lg:-space-x-3">
+          <div className="flex items-center justify-end -space-x-2 lg:-space-x-3 h-[58px] lg:h-[68px] min-w-[70px] lg:min-w-[84px] flex-shrink-0">
             {orderedHoleCards.length === 2 ? (
               orderedHoleCards.map((c, i) => (
-                <CardView key={i} card={c} size="md" className="shadow-xl" />
+                <CardView key={i} card={c} size="sm" className="shadow-xl" />
               ))
             ) : (
-              <div className="text-xs text-slate-500 font-medium italic">暂无手牌</div>
+              <div className="h-[52px] lg:h-[68px] w-[70px] lg:w-[84px] border border-dashed border-slate-700/80 rounded-lg flex items-center justify-center text-[11px] text-slate-500 font-bold bg-slate-950/40">
+                暂无手牌
+              </div>
             )}
           </div>
         </div>
@@ -1006,8 +1017,8 @@ export default function ActionBar({
       {/* 4. Desktop Action Console (hidden lg:flex): Classic Spacious 2x2 Action Buttons + Slider & Dedicated Sizing Console */}
       <div className="hidden lg:flex flex-col gap-2 lg:gap-2.5 w-full">
         {/* Desktop Main Action Buttons Grid (2x2) */}
-        <div className="poker-action-controls bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col gap-2 lg:gap-2.5 shadow-xl">
-          <div className="flex items-center justify-between">
+        <div className="poker-action-controls bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2 lg:p-3 flex flex-col gap-2 lg:gap-2.5 shadow-xl flex-shrink-0">
+          <div className="flex items-center justify-between h-7 flex-shrink-0">
             <div className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider flex items-center gap-1">
               <Zap className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-amber-400" />
               <span>
@@ -1018,14 +1029,14 @@ export default function ActionBar({
                   : '操作'}
               </span>
             </div>
-            {canPreAction && preAction && (
+            {canPreAction && preAction ? (
               <button
                 type="button"
                 onClick={() => {
                   setPreAction(null);
                   setPreActionData(null);
                 }}
-                className="text-[10px] lg:text-[11px] text-amber-300 hover:text-amber-200 bg-amber-950/80 hover:bg-amber-900/90 border border-amber-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold cursor-pointer transition shadow"
+                className="text-[10px] lg:text-[11px] text-amber-300 hover:text-amber-200 bg-amber-950/80 hover:bg-amber-900/90 border border-amber-500/50 px-2 py-0.5 rounded-full flex items-center gap-1 font-bold cursor-pointer transition shadow h-6"
               >
                 <span>预选：{
                   preAction === PRE_ACTIONS.CHECK_FOLD
@@ -1036,15 +1047,12 @@ export default function ActionBar({
                 }</span>
                 <span className="text-amber-400 font-extrabold">✕</span>
               </button>
-            )}
+            ) : selfSeat && !hasCards && !['IDLE', 'HAND_END'].includes(street) ? (
+              <span className="text-[10px] lg:text-[11px] text-amber-400/90 font-bold bg-amber-950/40 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                等待下一局开始
+              </span>
+            ) : null}
           </div>
-
-          {selfSeat && !hasCards && !['IDLE', 'HAND_END'].includes(street) && (
-            <div className="flex items-center justify-center gap-1.5 py-1.5 px-2.5 bg-slate-950/85 border border-amber-500/30 rounded-lg text-xs text-amber-300 font-bold">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span>本局未参与，等待下一局开始</span>
-            </div>
-          )}
 
           <div className="grid grid-cols-2 gap-1.5 lg:gap-2">
             {/* Col 1, Row 1: Fold / Check-Fold Button */}
@@ -1053,7 +1061,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => onAction('FOLD')}
                 disabled={disabled || !legalActions?.can_fold}
-                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
+                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
               >
                 <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
                 <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">[F]</span>
@@ -1063,7 +1071,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => togglePreAction(PRE_ACTIONS.CHECK_FOLD)}
                 disabled={disabled}
-                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg ${
+                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px] ${
                   preAction === PRE_ACTIONS.CHECK_FOLD
                     ? 'bg-gradient-to-b from-red-700 via-amber-950 to-red-950 border-amber-400 ring-2 ring-amber-400/80 text-amber-200 shadow-glow-gold'
                     : 'bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
@@ -1089,7 +1097,7 @@ export default function ActionBar({
               <button
                 type="button"
                 disabled={true}
-                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg"
+                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
               >
                 <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
                 <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">[F]</span>
@@ -1103,7 +1111,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => onAction('CHECK')}
                   disabled={disabled}
-                  className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
+                  className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
                 >
                   <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
                   <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
@@ -1113,7 +1121,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => onAction('CALL', legalActions?.call_amount || 0)}
                   disabled={disabled || !legalActions?.can_call}
-                  className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer"
+                  className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
                 >
                   <span className="text-sm lg:text-base font-black tracking-wide">
                     跟注 ${legalActions?.call_amount || 0}
@@ -1126,7 +1134,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => togglePreAction(PRE_ACTIONS.CHECK_CALL)}
                 disabled={disabled}
-                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg ${
+                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-extrabold rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border lg:border-2 shadow-lg h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px] ${
                   preAction === PRE_ACTIONS.CHECK_CALL
                     ? 'bg-gradient-to-b from-emerald-600 to-emerald-950 border-emerald-400 ring-2 ring-emerald-400/80 text-white shadow-[0_0_15px_rgba(52,211,153,0.5)]'
                     : 'bg-gradient-to-b from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
@@ -1152,7 +1160,7 @@ export default function ActionBar({
               <button
                 type="button"
                 disabled={true}
-                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg"
+                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 opacity-35 cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
               >
                 <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
                 <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
@@ -1161,7 +1169,7 @@ export default function ActionBar({
 
             {/* Col 1, Row 2: Horizontal Sizing Slider */}
             <div
-              className={`poker-action-slider-container flex flex-col justify-between py-1.5 lg:py-2 px-2 lg:px-2.5 rounded-lg lg:rounded-xl border shadow-lg transition-all min-h-[52px] lg:min-h-[60px] ${
+              className={`poker-action-slider-container flex flex-col justify-between py-1.5 lg:py-2 px-2 lg:px-2.5 rounded-lg lg:rounded-xl border shadow-lg transition-all h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px] ${
                 (effectiveIsMyTurn && (legalActions?.can_bet || legalActions?.can_raise)) || (canPreAction && maxVal > 0)
                   ? isAllIn
                     ? 'bg-gradient-to-b from-slate-900 via-purple-950/40 to-slate-950 border-purple-500/60 shadow-[0_0_12px_rgba(168,85,247,0.25)]'
@@ -1221,7 +1229,7 @@ export default function ActionBar({
                 type="button"
                 onClick={handleRaiseSubmit}
                 disabled={disabled || (!legalActions?.can_bet && !legalActions?.can_raise && !(isAllIn && legalActions?.can_all_in))}
-                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed min-h-[52px] lg:min-h-[60px] ${
+                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px] ${
                   isAllIn
                     ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
                     : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
@@ -1253,7 +1261,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => togglePreAction(PRE_ACTIONS.RAISE)}
                 disabled={disabled || maxVal <= 0}
-                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed min-h-[52px] lg:min-h-[60px] ${
+                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px] ${
                   preAction === PRE_ACTIONS.RAISE
                     ? isAllIn
                       ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 border-purple-400 ring-2 ring-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.5)] text-amber-200'
@@ -1283,7 +1291,7 @@ export default function ActionBar({
               <button
                 type="button"
                 disabled={true}
-                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg opacity-35 cursor-not-allowed min-h-[52px] lg:min-h-[60px] bg-gradient-to-b from-amber-500 to-amber-900 text-white"
+                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 font-black rounded-lg lg:rounded-xl border lg:border-2 shadow-lg opacity-35 cursor-not-allowed h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px] bg-gradient-to-b from-amber-500 to-amber-900 text-white"
               >
                 <span className="text-sm lg:text-base font-black tracking-wide">加注</span>
                 <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">[R]</span>
@@ -1293,8 +1301,8 @@ export default function ActionBar({
         </div>
 
         {/* Desktop Raise / Bet Sizing Console */}
-        <div className="poker-action-sizing bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2.5 lg:p-3 flex flex-col gap-2 lg:gap-2.5 shadow-xl">
-          <div className="flex items-center justify-between">
+        <div className="poker-action-sizing bg-slate-900/90 border border-slate-800 rounded-xl lg:rounded-2xl p-2.5 lg:p-3 flex flex-col gap-2 lg:gap-2.5 shadow-xl flex-shrink-0">
+          <div className="flex items-center justify-between h-7 flex-shrink-0">
             <span className="text-[11px] lg:text-xs font-extrabold text-slate-400 uppercase tracking-wider">
               {canPreAction && !effectiveIsMyTurn ? '预设额度' : '下注额'}
             </span>
@@ -1355,7 +1363,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => handlePresetClick(amount, preset.isMax)}
                   disabled={isPresetDisabled}
-                  className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border ${
+                  className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border h-[42px] lg:h-[46px] flex-shrink-0 ${
                     isSelected
                       ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
                       : preset.isMax
@@ -1401,7 +1409,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => handlePresetClick(amount, false)}
                   disabled={isBbDisabled}
-                  className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border ${
+                  className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border h-[34px] lg:h-[38px] flex-shrink-0 ${
                     isSelected
                       ? 'bg-amber-950/60 border-amber-400/80 shadow-[0_0_8px_rgba(251,191,36,0.2)]'
                       : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/70'
