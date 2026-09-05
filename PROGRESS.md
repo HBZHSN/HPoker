@@ -820,6 +820,20 @@
 - [x] 79.5 视口同步与离线缓存升级 (`pwa.js`, `pwa.test.mjs`, `sw.js`)：在 `initAppHeightSync` 中补全 iOS 浏览器模式 `visualViewport.height` 监听，新增单元测试；升级 Service Worker 缓存至 `hpoker-shell-v3`
 - [x] 79.6 全量测试与生产构建：全部 193 项 Python 后端单元测试与 40 项前端单元测试 100% 通过，Vite 生产构建成功
 
+---
+
+### 阶段 80：手机端强制 PWA 桌面应用准入拦截与自带浏览器安装指引 (Mobile Mandatory PWA Gate & Native Browser Guidance)
+- [x] 80.1 物理移动设备与内置浏览器精准判别 (`pwa.js`)：实现 `isMobileDevice`（严格按 UA、iPadOS 与多点触控物理屏识别移动设备，避免桌面宽屏调整误伤）与 `isInAppBrowser`（精准拦截微信 MicroMessenger、手机 QQ、微博、抖音等内置 Webview 浏览器），补充 4 项单元测试并全量通过
+- [x] 80.2 手机端强制 PWA 启动拦截门禁 (`App.jsx`)：在移动设备访问且非独立模式（`!isStandalone`）时，直接拦截登录窗、大厅与牌桌渲染，展示专属黑金奢华 `MobilePWAGate` 门禁，要求用户必须通过安装至手机桌面的 PWA 图标启动；支持开发调试 `?bypass_pwa=1` 参数绕过
+- [x] 80.3 强化手机自带浏览器安装指引界面 (`MobilePWAGate.jsx`)：
+  - 醒目高亮「必须使用手机自带浏览器打开本站进行安装」警示卡片；
+  - 针对微信/QQ 等应用内浏览器：醒目红金警示卡片提示点击右上角「···」选择「在系统浏览器打开」，并提供一键复制网址功能；
+  - 针对 iOS Safari：提供自带 Safari 3 步全屏安装图文教程（点击底部「分享」按钮 -> 选择「添加到主屏幕」 -> 回到桌面打开应用）；
+  - 针对 Android Chrome / 系统浏览器：支持在支持环境下一键唤起「立即安装到手机桌面」原生弹窗，及系统菜单添加指引；
+  - 包含「已经添加到主屏幕？按 Home 键返回桌面打开」贴心提示。
+- [x] 80.4 全量测试与生产构建：42 项前端单元测试 100% 通过，193 项 Python 后端单元测试 100% 通过，Vite 生产打包验证成功
+
+
 
 
 

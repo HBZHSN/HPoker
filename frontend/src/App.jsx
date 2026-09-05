@@ -6,6 +6,7 @@ import ProfileModal from './components/ProfileModal';
 import AdminUserModal from './components/AdminUserModal';
 import BalanceCenterModal from './components/BalanceCenterModal';
 import PWAInstallModal from './components/PWAInstallModal';
+import MobilePWAGate from './components/MobilePWAGate';
 import { soundEngine } from './sound/SoundEngine';
 import { usePWA } from './utils/usePWA';
 
@@ -464,6 +465,24 @@ export default function App() {
   const handleJoinRoom = (roomId, options = {}) => {
     rememberAndEnterRoom(roomId, options);
   };
+
+  // Mobile device mandatory PWA enforcement
+  const isBypassed = typeof window !== 'undefined' && (
+    window.location.search.includes('bypass_pwa=1') ||
+    localStorage.getItem('hpoker_bypass_pwa') === 'true'
+  );
+  const requiresMobilePWAGate = Boolean(pwa.isMobileDevice && !pwa.isStandalone && !isBypassed);
+
+  if (requiresMobilePWAGate) {
+    return (
+      <MobilePWAGate
+        isIOS={pwa.isIOS}
+        isInAppBrowser={pwa.isInAppBrowser}
+        hasNativePrompt={pwa.hasNativePrompt}
+        onInstallNative={pwa.promptInstall}
+      />
+    );
+  }
 
   // If not authenticated, require login
   if (!token || !currentUser) {

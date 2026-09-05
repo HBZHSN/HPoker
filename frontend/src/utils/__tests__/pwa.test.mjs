@@ -4,6 +4,8 @@ import {
   isStandaloneMode,
   isIOS,
   isMobile,
+  isMobileDevice,
+  isInAppBrowser,
   isFullscreenActive,
   getInstallGuideType,
   initAppHeightSync,
@@ -81,6 +83,59 @@ test('isMobile: detects mobile viewport and mobile user agent', () => {
   // Desktop screen with Desktop UA
   const desktopNav = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' };
   assert.equal(isMobile(desktopWin, desktopNav), false);
+});
+
+test('isMobileDevice: accurately discriminates physical mobile devices from desktop browsers', () => {
+  assert.equal(isMobileDevice(null), false);
+
+  // iPhone
+  const iphoneNav = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' };
+  assert.equal(isMobileDevice(iphoneNav), true);
+
+  // Android
+  const androidNav = { userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8)' };
+  assert.equal(isMobileDevice(androidNav), true);
+
+  // iPadOS
+  const ipadNav = { platform: 'MacIntel', maxTouchPoints: 5 };
+  assert.equal(isMobileDevice(ipadNav), true);
+
+  // Desktop Windows PC with narrow resized window
+  const desktopWin = { screen: { width: 1920, height: 1080 }, innerWidth: 400 };
+  const windowsNav = {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+    platform: 'Win32',
+    maxTouchPoints: 0,
+  };
+  assert.equal(isMobileDevice(windowsNav, desktopWin), false);
+});
+
+test('isInAppBrowser: detects WeChat, QQ, and in-app webviews where PWA install is blocked', () => {
+  assert.equal(isInAppBrowser(null), false);
+
+  // WeChat on iPhone
+  const wechatNav = {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 MicroMessenger/8.0.38',
+  };
+  assert.equal(isInAppBrowser(wechatNav), true);
+
+  // QQ app on Android
+  const qqNav = {
+    userAgent: 'Mozilla/5.0 (Linux; Android 14) Mobile QQ/8.9.70',
+  };
+  assert.equal(isInAppBrowser(qqNav), true);
+
+  // Standard Mobile Safari
+  const safariNav = {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1',
+  };
+  assert.equal(isInAppBrowser(safariNav), false);
+
+  // Standard Chrome on Android
+  const chromeNav = {
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36',
+  };
+  assert.equal(isInAppBrowser(chromeNav), false);
 });
 
 test('isFullscreenActive: detects standard and vendor fullscreen elements', () => {
