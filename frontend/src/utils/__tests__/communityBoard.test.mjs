@@ -103,3 +103,26 @@ test('mobile community board footprint maintains safe horizontal clearance from 
   }
 });
 
+test('mobile community board background container is at least as wide as the 5 cards with padding', () => {
+  const viewports = [360, 390, 414, 430];
+  const horizontalPadding = 16; // 8px left + 8px right
+  const border = 2; // 1px left + 1px right
+
+  for (const screenWidth of viewports) {
+    const rawCardWidth = screenWidth * 0.082;
+    const cardWidth = Math.max(28.48, Math.min(36, rawCardWidth));
+    const gap = 3;
+    const cardsTotalSpan = 5 * cardWidth + 4 * gap;
+    const backgroundPlateWidth = cardsTotalSpan + horizontalPadding + border;
+
+    assert.ok(
+      backgroundPlateWidth >= cardsTotalSpan,
+      `Background plate width (${backgroundPlateWidth}px) must be >= cards span (${cardsTotalSpan}px)`,
+    );
+    assert.ok(
+      backgroundPlateWidth - cardsTotalSpan >= 16,
+      `Background plate must provide at least 16px horizontal frame/padding around cards`,
+    );
+  }
+});
+

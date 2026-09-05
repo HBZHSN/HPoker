@@ -884,7 +884,7 @@ export default function PokerTable({
 
                 {/* On phones the board stays in the sticky summary instead of
                     taking space in the middle of the felt. */}
-                <div className="poker-table-center-board">
+                <div className="poker-table-center-board flex items-center justify-center w-max max-w-full">
                   <CommunityBoard
                     boardCards={table?.board_cards || []}
                     boardCards2={table?.board_cards_2 || []}
