@@ -803,7 +803,7 @@ export default function PokerTable({
               )}
 
               {/* Center Table Area: Board Cards, Pots & Next Hand Countdown */}
-              <div className="poker-table-center absolute inset-0 flex flex-col items-center justify-center gap-3 z-10 pointer-events-none">
+              <div className="poker-table-center absolute inset-0 flex flex-col items-center justify-center gap-3 z-30 pointer-events-none">
                 {/* Street & Total Pot Badge */}
                 <div className="poker-table-pot-summary flex flex-col items-center gap-1.5 pointer-events-auto">
                   <div className="poker-table-pot-badge flex items-center gap-3 bg-slate-950/85 px-4 py-1.5 rounded-full border-2 border-amber-500/40 backdrop-blur-md shadow-2xl">
@@ -1083,6 +1083,7 @@ export default function PokerTable({
                       actionTimeout={room?.config?.action_timeout || 15}
                       currentTurnDuration={table?.current_turn_duration || room?.config?.action_timeout || 15}
                       isUsingTimeBank={table?.is_using_time_bank || false}
+                      onUseTimeCard={() => onSendWsEvent('USE_TIME_CARD', {})}
                       payoutInfo={payout}
                       street={table?.street || 'IDLE'}
                       turnCount={table?.turn_count || 0}

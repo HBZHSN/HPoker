@@ -33,19 +33,6 @@ function BoardRow({
           );
           const isClickable = isHidden && canReveal && !isRevealing;
 
-          if (isHidden && !canReveal && !marksPostHandReveal) {
-            return (
-              <div
-                key={index}
-                data-card-size={size}
-                className="poker-board-placeholder relative flex-shrink-0 flex items-center justify-center rounded-lg bg-black/45 border border-emerald-500/25 shadow-inner"
-                aria-label={`公共牌第 ${index + 1} 张 (待发)`}
-              >
-                <span className="text-emerald-500/30 font-serif text-sm md:text-base select-none">♠</span>
-              </div>
-            );
-          }
-
           return (
             <button
               key={index}
@@ -54,9 +41,11 @@ function BoardRow({
               disabled={!isClickable}
               aria-label={
                 isHidden
-                  ? '翻开公共牌'
+                  ? canReveal
+                    ? '翻开公共牌'
+                    : `公共牌第 ${index + 1} 张 (待发)`
                   : isPostHandRevealed
-                  ? `公共牌第 ${index + 1} 张`
+                  ? `公共牌第 ${index + 1} 张 (摊牌揭晓)`
                   : `公共牌第 ${index + 1} 张`
               }
               className={`relative flex-shrink-0 rounded-lg p-0 border-0 bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
