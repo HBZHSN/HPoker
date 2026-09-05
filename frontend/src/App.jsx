@@ -475,7 +475,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gg-dark text-slate-100 flex flex-col font-sans">
+    <div className="w-full h-full min-h-screen min-h-[100dvh] bg-[#080b11] text-slate-100 flex flex-col font-sans flex-1 overflow-hidden">
       {activeRoomId && roomData ? (
         <PokerTable
           room={roomData}

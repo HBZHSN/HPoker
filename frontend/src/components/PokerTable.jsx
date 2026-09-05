@@ -342,7 +342,7 @@ export default function PokerTable({
   ]);
 
   return (
-    <div className="poker-table-root relative w-full h-screen max-h-screen overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
+    <div className="poker-table-root relative w-full h-full min-h-full overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
       {/* Top Navigation Bar */}
       <header className="poker-table-header flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
         <div className="poker-table-mobile-header">
@@ -1149,7 +1149,7 @@ export default function PokerTable({
         </main>
 
         {/* Right Side: Action & Betting Console Sidebar */}
-        <aside className={`poker-table-actions w-full h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20 transition-all duration-300 ${
+        <aside className={`poker-table-actions w-full h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-0 lg:p-4 z-20 transition-all duration-300 ${
           isEquityOpen ? 'lg:w-80 xl:w-96 2xl:w-[410px]' : 'lg:w-96 xl:w-[410px]'
         }`}>
           <ActionBar

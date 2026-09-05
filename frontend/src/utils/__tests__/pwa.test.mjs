@@ -6,6 +6,7 @@ import {
   isMobile,
   isFullscreenActive,
   getInstallGuideType,
+  initAppHeightSync,
 } from '../pwa.js';
 
 test('isStandaloneMode: correctly identifies standalone mode across platforms', () => {
@@ -118,3 +119,29 @@ test('getInstallGuideType: prioritizes already installed, native prompt, and iOS
   const genericNav = { userAgent: 'Mozilla/5.0 (Windows NT 10.0)' };
   assert.equal(getInstallGuideType(genericNav, browserWin, false), 'manual');
 });
+
+test('initAppHeightSync: sets --app-height based on window.innerHeight and listens for events', () => {
+  const customProps = {};
+  const mockDoc = {
+    documentElement: {
+      style: {
+        setProperty: (key, val) => {
+          customProps[key] = val;
+        },
+      },
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  const mockWin = {
+    innerHeight: 844,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+
+  const cleanup = initAppHeightSync(mockWin, mockDoc);
+  assert.equal(customProps['--app-height'], '844px');
+  assert.equal(typeof cleanup, 'function');
+  cleanup();
+});
+
