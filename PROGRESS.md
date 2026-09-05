@@ -861,6 +861,18 @@
 - [x] 83.2 房主开始、自动倒计时与准备按钮紧凑排布 (`HandResultModal.jsx`)：将「开始下一局」、「准备倒计时勾选框」、「准备 (或补码)」三个控件重构为单行自适应弹性容器，赋予全部控件 `flex-shrink-0 whitespace-nowrap`，即便在 360px 屏幕上也严丝合缝平铺在同一行内
 - [x] 83.3 全量回归测试与生产验证：44 项前端单元测试通过，193 项后端单元测试全部通过，Vite 生产构建成功
 
+---
+
+### 阶段 84：移动端 PWA 安装按钮常驻化与弹窗多次唤起修复 (Mobile Persistent PWA Install Buttons & Repeatable Modal Invocation)
+- [x] 84.1 修复移动端门禁与未登录视图下的 PWA 安装弹窗挂载缺陷 (`App.jsx`)：在 `requiresMobilePWAGate` 与 `!token` 提前返回分支中一并挂载 `<PWAInstallModal />` 并传递 `onOpenInstallModal={pwa.openInstallModal}`，确保在门禁和未登录模式下点击安装按钮时弹窗能 100% 正常弹出
+- [x] 84.2 解决原生安装提示只弹一次后失效及静默无反应的问题 (`usePWA.js`)：在 `promptInstall` 中，当用户未接受/取消原生弹窗或原生 prompt 不存在/已被消费时，自动打开指引弹窗 `setIsModalOpen(true)`，使用户后续每次点击均能稳定唤出安装指引
+- [x] 84.3 手机端安装门禁常驻安装按钮与指引弹窗触发 (`MobilePWAGate.jsx`)：
+  - 增加常驻核心主按钮：「立即安装 HPoker (系统安装)」/「📲 点击弹出 PWA 安装指引弹窗」，无论是否有原生 prompt、无论处于 iOS 还是 Android，按钮始终常驻可见；
+  - 增加图文安装弹窗次级触发按钮；并在 iOS 和 Android 步骤卡片内均挂载「弹出安装步骤弹窗」按钮，支持反复多次点击唤出；
+- [x] 84.4 牌桌移动端顶栏常驻 PWA 安装图标按钮 (`PokerTable.jsx`)：在 `poker-mobile-header-tools` 中为非 standalone 状态增设快捷安装按钮，支持在牌桌内随时一键弹出 PWA 安装弹窗
+- [x] 84.5 状态机回归单元测试与生产构建 (`pwa.test.mjs`)：补充原生 prompt 消费后降级平台指引与弹窗多次重复唤起状态机测试（46/46 前端单元测试全部通过），后端 193 单元测试全部通过，Vite 生产构建成功
+
+
 
 
 
