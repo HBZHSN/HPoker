@@ -861,8 +861,8 @@ export default function ActionBar({
                 </span>
                 <span className="text-xs sm:text-sm font-black tracking-wide whitespace-nowrap truncate">
                   {isAllIn
-                    ? `预选全下 $${maxVal}`
-                    : (effectiveHighestBet === 0 ? `预选下注 $${currentAmount}` : `预选加注 $${currentAmount}`)}
+                    ? `全下 $${maxVal}`
+                    : (effectiveHighestBet === 0 ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`)}
                 </span>
               </div>
               <span className={`text-[10px] font-medium ${
@@ -1269,8 +1269,8 @@ export default function ActionBar({
                   </span>
                   <span className="text-sm lg:text-base font-black tracking-wide whitespace-nowrap">
                     {isAllIn
-                      ? `预选全下 $${maxVal}`
-                      : (effectiveHighestBet === 0 ? `预选下注 $${currentAmount}` : `预选加注至 $${currentAmount}`)}
+                      ? `全下 $${maxVal}`
+                      : (effectiveHighestBet === 0 ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`)}
                   </span>
                 </div>
                 <span className={`text-[10px] lg:text-[11px] font-medium ${
