@@ -137,8 +137,17 @@ button, a, input, select {
     z-index: 15;
   }
 
+  .poker-table-center-board {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: max-content;
+    max-width: 100%;
+  }
+
   .poker-table-center .poker-community-board {
-    width: 100%;
+    width: max-content;
+    min-width: max-content;
     max-width: 100%;
     overflow-x: auto;
     overflow-y: visible;
@@ -608,15 +617,22 @@ button, a, input, select {
   }
 
   .poker-table-center-board {
-    display: block;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: max-content;
+    max-width: 100%;
   }
 
   .poker-table-center .poker-community-board {
-    max-width: calc(100% - 24px);
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: 100%;
+    box-sizing: border-box;
     gap: 3px;
     overflow: visible;
-    padding: 3px 5px;
-    border-radius: 10px;
+    padding: 4px 8px;
+    border-radius: 12px;
   }
 
   .poker-table-center .poker-board-row,

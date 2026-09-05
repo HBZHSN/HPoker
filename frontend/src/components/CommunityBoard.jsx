@@ -114,8 +114,8 @@ export default function CommunityBoard({
     (hasSecondBoard && secondBoard.length < BOARD_SIZE);
   const canReveal = isHandEnd && !boardCardsRevealed && hasHiddenCards && typeof onReveal === 'function';
   const rootClassName = compact
-    ? 'pointer-events-auto flex flex-col items-center gap-1.5 bg-black/55 p-1.5 rounded-xl border border-slate-800/90 shadow-xl'
-    : 'pointer-events-auto flex flex-col items-center gap-1.5 bg-black/45 p-2 md:p-3 rounded-2xl border border-emerald-500/30 backdrop-blur-md shadow-2xl';
+    ? 'pointer-events-auto flex flex-col items-center gap-1.5 bg-black/55 p-1.5 rounded-xl border border-slate-800/90 shadow-xl w-max min-w-max'
+    : 'pointer-events-auto flex flex-col items-center gap-1.5 bg-black/45 p-2 md:p-3 rounded-2xl border border-emerald-500/30 backdrop-blur-md shadow-2xl w-max min-w-max';
 
   return (
     <div className={`poker-community-board ${rootClassName}`}>
