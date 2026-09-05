@@ -1,5 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { PlusCircle, Users, DollarSign, Clock, ShieldCheck, Play, ArrowRight, Trash2, Wallet, Eye } from 'lucide-react';
+import {
+  PlusCircle,
+  Users,
+  DollarSign,
+  Clock,
+  ShieldCheck,
+  Play,
+  ArrowRight,
+  Trash2,
+  Wallet,
+  Eye,
+  Smartphone,
+  Download,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 import { filterVisibleLobbyUsers } from '../utils/lobbyUsers';
 
 export default function Lobby({
@@ -15,6 +30,10 @@ export default function Lobby({
   onCreateRoom,
   onDeleteRoom,
   onJoinRoom,
+  onInstallApp,
+  onToggleFullscreen,
+  isFullscreen = false,
+  isStandalone = false,
 }) {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [roomName, setRoomName] = useState('新现金桌');
@@ -135,6 +154,32 @@ export default function Lobby({
               </button>
             )}
 
+            {/* PWA Install Button */}
+            {onInstallApp && !isStandalone && (
+              <button
+                onClick={onInstallApp}
+                className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 text-xs font-bold rounded-xl border border-amber-500/40 transition active:scale-95 cursor-pointer flex items-center gap-1 shadow"
+                title="安装到主屏幕，全屏沉浸游玩"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">安装应用</span>
+                <span className="sm:hidden">安装</span>
+              </button>
+            )}
+
+            {/* Fullscreen Button */}
+            {onToggleFullscreen && (
+              <button
+                onClick={onToggleFullscreen}
+                className={`p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer ${
+                  isFullscreen ? 'border-amber-400 bg-amber-950/40 text-amber-300' : ''
+                }`}
+                title={isFullscreen ? '退出全屏' : '全屏模式'}
+              >
+                {isFullscreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
+            )}
+
             {/* Logout Button */}
             <button
               onClick={onLogout}
@@ -150,6 +195,36 @@ export default function Lobby({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: 牌桌列表 (一行一个) */}
         <section className="lg:col-span-8 flex flex-col gap-4">
+          {/* PWA Mobile Banner */}
+          {onInstallApp && !isStandalone && (
+            <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-amber-950/40 via-slate-900/90 to-slate-900 border border-amber-500/30 rounded-2xl shadow-lg">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center text-slate-950 font-black shadow-glow-gold flex-shrink-0">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-white truncate">
+                      安装到手机主屏幕
+                    </span>
+                    <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30 font-bold">
+                      全屏游玩
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 truncate">
+                    无浏览器地址栏干扰，沉浸式极速对局
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={onInstallApp}
+                className="flex-shrink-0 ml-3 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>安装</span>
+              </button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-amber-400" />

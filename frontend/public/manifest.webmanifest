@@ -1,0 +1,70 @@
+{
+  "id": "/",
+  "name": "HPoker 德州扑克在线现金局",
+  "short_name": "HPoker",
+  "description": "HPoker 在线德州扑克现金局，沉浸式竞技对局与实时结算",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "fullscreen",
+    "standalone",
+    "minimal-ui",
+    "window-controls-overlay"
+  ],
+  "orientation": "any",
+  "theme_color": "#0B0E14",
+  "background_color": "#0B0E14",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": [
+    "games",
+    "entertainment"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "进入大厅",
+      "short_name": "大厅",
+      "description": "打开 HPoker 游戏大厅",
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

@@ -82,7 +82,9 @@
 | **阶段 71** | 桌面端左下角悬浮聊天与表情按钮恢复与响应式隔离 | 3 | 3 | 已完成 |
 | **阶段 72** | PC端下注控制台恢复为经典大尺寸布局与移动端独立隔离 | 3 | 3 | 已完成 |
 | **阶段 73** | 加注按键预选状态文案精简与视觉一致性优化 | 2 | 2 | 已完成 |
-| **总计** | **全部功能模块** | **342** | **342** | 已完成 |
+| **阶段 74** | PC端右侧栏各区块高度固化与防布局抖动优化 | 6 | 6 | 已完成 |
+| **阶段 75** | 手机端 PWA 桌面安装与全屏沉浸式游玩支持 | 6 | 6 | 已完成 |
+| **总计** | **全部功能模块** | **354** | **354** | 已完成 |
 
 ---
 
@@ -768,6 +770,17 @@
 - [x] 74.4 桌面端下注微调与预设区（.poker-action-sizing）高度锁定：标题与 -1BB/+1BB 输入行锁定为 `h-7 flex-shrink-0`，8 档底池比例按钮统一锁定为 `h-[42px] lg:h-[46px]`，4 档大盲倍数按钮统一锁定为 `h-[34px] lg:h-[38px]`，无论何种预设状态均尺寸严丝合缝
 - [x] 74.5 严格隔离移动端代码不受任何影响：所有高度锁定与防抖调整均通过 `lg:` 前缀或桌面端专有容器限制，移动端单行三键与移动端滑块保持原样独立运行
 - [x] 74.6 全量测试回归验证：通过全部 192 项后端单元测试、32 项前端单元测试与 Vite 生产构建打包
+
+---
+
+### 阶段 75：手机端 PWA 桌面安装与全屏沉浸式游玩支持 (Mobile PWA & Fullscreen Experience)
+- [x] 75.1 PWA 核心资产与清单配置：编写 `manifest.webmanifest`（定义应用短名称 HPoker、主屏独立窗口 `display: standalone` 与 `display_override: ["fullscreen", "standalone"]`、obsidian 深黑主题背景色与类别）与 `sw.js` 服务工作线程（实现离线 App Shell 预缓存、stale-while-revalidate 资源更新机制、API 与 WebSocket 绝对旁路直连）
+- [x] 75.2 全套高清拟真黑金 PWA 图标系统：编写脚本自动生成 192×192、512×512 标准及自适应 Maskable 图标、180×180 Apple Touch Icon、Favicon SVG 与 ICO 多尺寸文件
+- [x] 75.3 HTML5 全面屏与 iOS PWA 元标签支持：在 `index.html` 中引入 `viewport-fit=cover`、`apple-mobile-web-app-capable`、`apple-mobile-web-app-status-bar-style: black-translucent`，并在 `index.css` 中适配全面屏/刘海屏安全区 `env(safe-area-inset-*)`，消除移动端下拉刷新抖动与触控缩放延迟
+- [x] 75.4 PWA 安装响应式 Hook 与指引弹窗：封装 `usePWA` 自定义 Hook（监听 `beforeinstallprompt` 与 `appinstalled`、跨平台检测独立模式、iOS Safari 与全屏状态），实现沉浸式 `PWAInstallModal`，支持 Android/Chrome 一键安装及 iOS Safari 3 步添加到主屏幕直观指引
+- [x] 75.5 大厅与牌桌全屏交互闭环：大厅顶栏与牌桌移动端抽屉/顶栏快捷挂载「安装到主屏幕 / 全屏游玩」与「网页全屏」切换入口，在已安装独立模式下优雅收起引导
+- [x] 75.6 全量测试与静态资源服务验证：新增 5 项前端 PWA 核心方法单元测试（覆盖独立模式判定、iOS/iPadOS检测、移动端屏幕识别、全屏API兼容），扩展后端静态托管测试验证 manifest/sw/icon 正确响应；全部 193 项后端单元测试与 37 项前端单元测试全部通过并完成 Vite 生产构建打包
+
 
 
 
