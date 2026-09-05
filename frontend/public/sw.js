@@ -3,7 +3,7 @@
  * Provides offline shell caching, instant launch, and safe bypass for real-time APIs.
  */
 
-const CACHE_NAME = 'hpoker-shell-v1';
+const CACHE_NAME = 'hpoker-shell-v2';
 
 // Core static assets to precache on install
 const PRECACHE_URLS = [

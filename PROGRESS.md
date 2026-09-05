@@ -85,7 +85,8 @@
 | **阶段 74** | PC端右侧栏各区块高度固化与防布局抖动优化 | 6 | 6 | 已完成 |
 | **阶段 75** | 手机端 PWA 桌面安装与全屏沉浸式游玩支持 | 6 | 6 | 已完成 |
 | **阶段 76** | 手机端全屏满屏自适应与消除底部空白灰条优化 | 4 | 4 | 已完成 |
-| **总计** | **全部功能模块** | **358** | **358** | 已完成 |
+| **阶段 77** | iOS PWA 沉浸全屏适配与底部灰色空白终极根除 | 5 | 5 | 已完成 |
+| **总计** | **全部功能模块** | **363** | **363** | 已完成 |
 
 ---
 
@@ -789,6 +790,16 @@
 - [x] 76.2 牌桌椭圆与毛呢主区域满屏扩容：将 `.poker-table-main` 内边距压缩并设 `flex: 1 1 0`，将 `.poker-table-shell` 尺寸自 94% 释放至 100%，充分利用手机纵向大屏高纵横比优势，消除牌桌与底栏之间的冗余间隙
 - [x] 76.3 移动端操作台沉底无缝贴合与样式精简：重构移动端 `.poker-table-actions` 为全宽贴底渐变底栏（`border-t border-amber-500/35`），内部 `.poker-action-controls-mobile` 去除重复边框与背景，底边距调整为精确适配物理手势安全区 `padding-bottom: max(6px, env(safe-area-inset-bottom, 0px))`，消除浮动卡片式双层边框造成的无内容灰条
 - [x] 76.4 视口高度同步单元测试与全量回归验证：新增 `initAppHeightSync` 单元测试，38 项前端单元测试 100% 通过，193 项后端单元测试 100% 通过，完成 Vite 生产构建与静态托管验证
+
+---
+
+### 阶段 77：iOS PWA 沉浸全屏适配与底部灰色空白终极根除 (iOS PWA Standalone True Fullscreen & Zero Bottom Gap)
+- [x] 77.1 iOS PWA 视口高度同步与屏幕尺寸补偿 (`pwa.js`)：在 `initAppHeightSync` 中精准识别 iOS 设备与 Standalone/全屏环境，当 WebKit 异常低估 `window.innerHeight` 时，以真实的设备物理屏幕尺寸（`screen.width` / `screen.height` 结合当前横竖屏取最大/最小值）为基准注入 `--app-height`，并在 `<html>` 根节点动态挂载 `pwa-standalone` 与 `ios-device` 标识类，同时监听 `visualViewport.resize`
+- [x] 77.2 全局与移动端全屏容器 CSS 强化 (`index.css`)：为 `html, body, #root, .poker-table-root` 在移动端与 `pwa-standalone` 模式下强制启用硬件级 `position: fixed; inset: 0; width: 100%; height: 100%; height: -webkit-fill-available;`，统一根层背景色为纯粹 Obsidian 黑金 `#080b11`，消除径向渐变 `#0f172a` 导致的浅色透底
+- [x] 77.3 移动端外层应用容器与大厅/牌桌空间流转优化 (`App.jsx`, `Lobby.jsx`)：优化 `App.jsx` 根容器为自适应 `w-full h-full bg-[#080b11]`，根据牌桌/大厅状态动态切换 `overflow-hidden` 与 `overflow-y-auto`，为大厅增加移动端上下安全区内边距 `pt-[max(16px,env(safe-area-inset-top,0px))] pb-[max(24px,env(safe-area-inset-bottom,0px))]`，确保大厅与牌桌全屏无缝平铺
+- [x] 77.4 PWA Manifest、元标签与 Service Worker 缓存版本升级 (`index.html`, `manifest.webmanifest`, `manifest.json`, `sw.js`)：统一所有 Manifest 主题色与背景色为 `#080b11`，升级 Service Worker 缓存标识至 `hpoker-shell-v2` 并在更新时触发自刷新，彻底刷新客户端旧缓存
+- [x] 77.5 单元测试扩展与全量回归验证：扩展前端测试覆盖 iOS 视口补偿与属性注入，运行全量后端与前端测试确保 100% 通过，验证生产构建
+
 
 
 

@@ -122,8 +122,13 @@ test('getInstallGuideType: prioritizes already installed, native prompt, and iOS
 
 test('initAppHeightSync: sets --app-height based on window.innerHeight and listens for events', () => {
   const customProps = {};
+  const mockClasses = new Set();
   const mockDoc = {
     documentElement: {
+      classList: {
+        add: (cls) => mockClasses.add(cls),
+        remove: (cls) => mockClasses.delete(cls),
+      },
       style: {
         setProperty: (key, val) => {
           customProps[key] = val;
@@ -142,6 +147,51 @@ test('initAppHeightSync: sets --app-height based on window.innerHeight and liste
   const cleanup = initAppHeightSync(mockWin, mockDoc);
   assert.equal(customProps['--app-height'], '844px');
   assert.equal(typeof cleanup, 'function');
+  cleanup();
+});
+
+test('initAppHeightSync: compensates iOS standalone underreported innerHeight using physical screen', () => {
+  const customProps = {};
+  const mockClasses = new Set();
+  const mockDoc = {
+    documentElement: {
+      classList: {
+        add: (cls) => mockClasses.add(cls),
+        remove: (cls) => mockClasses.delete(cls),
+      },
+      style: {
+        setProperty: (key, val) => {
+          customProps[key] = val;
+        },
+      },
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  const mockWin = {
+    innerHeight: 780, // WebKit underreported height due to safe-area/phantom toolbar
+    navigator: {
+      standalone: true, // iOS PWA standalone mode
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+    },
+    screen: {
+      width: 390,
+      height: 844,
+    },
+    innerWidth: 390,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    visualViewport: {
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    },
+  };
+
+  const cleanup = initAppHeightSync(mockWin, mockDoc);
+  // Should compensate to 844px (physical screen height) instead of 780px
+  assert.equal(customProps['--app-height'], '844px');
+  assert.equal(mockClasses.has('pwa-standalone'), true);
+  assert.equal(mockClasses.has('ios-device'), true);
   cleanup();
 });
 
