@@ -18,6 +18,7 @@ export default function MobilePWAGate({
   isInAppBrowser = false,
   hasNativePrompt = false,
   onInstallNative,
+  onOpenInstallModal,
 }) {
   const [activeTab, setActiveTab] = useState(isIOS ? 'ios' : 'android');
   const [copied, setCopied] = useState(false);
@@ -107,6 +108,41 @@ export default function MobilePWAGate({
           </div>
         )}
 
+        {/* Core Persistent Install Action Button */}
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (hasNativePrompt && onInstallNative) {
+                onInstallNative();
+              } else if (onOpenInstallModal) {
+                onOpenInstallModal();
+              } else if (onInstallNative) {
+                onInstallNative();
+              }
+            }}
+            className="w-full py-3.5 px-4 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 text-slate-950 font-black rounded-2xl shadow-glow-gold hover:brightness-110 active:scale-98 transition flex items-center justify-center gap-2 text-sm cursor-pointer"
+          >
+            <Download className="w-5 h-5 stroke-[2.5]" />
+            <span>
+              {hasNativePrompt
+                ? '立即安装 HPoker (系统快捷安装)'
+                : '📲 点击弹出 PWA 安装指引弹窗'}
+            </span>
+          </button>
+
+          {hasNativePrompt && onOpenInstallModal && (
+            <button
+              type="button"
+              onClick={onOpenInstallModal}
+              className="w-full py-2 px-3 rounded-xl bg-slate-900/80 border border-slate-700 hover:border-amber-400/50 text-slate-300 hover:text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition active:scale-98"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>查看图文安装步骤弹窗</span>
+            </button>
+          )}
+        </div>
+
         {/* OS Platform Selector Tabs */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950/80 rounded-2xl border border-slate-800">
           <button
@@ -183,6 +219,17 @@ export default function MobilePWAGate({
                 </div>
               </div>
             </div>
+
+            {onOpenInstallModal && (
+              <button
+                type="button"
+                onClick={onOpenInstallModal}
+                className="w-full mt-1 py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>弹出 iPhone 安装步骤演示弹窗</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -197,58 +244,69 @@ export default function MobilePWAGate({
               <span className="text-[10px] text-slate-500 font-bold">推荐自带浏览器</span>
             </div>
 
-            {hasNativePrompt && onInstallNative ? (
-              <div className="flex flex-col gap-2">
+            {hasNativePrompt && onInstallNative && (
+              <div className="flex flex-col gap-1.5 pb-2 border-b border-slate-800">
                 <button
                   type="button"
                   onClick={onInstallNative}
                   className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 text-slate-950 font-black rounded-xl shadow-glow-gold hover:brightness-110 active:scale-98 transition flex items-center justify-center gap-2 text-xs cursor-pointer"
                 >
                   <Download className="w-4 h-4 stroke-[2.5]" />
-                  <span>立即安装到手机桌面 (点击安装)</span>
+                  <span>立即安装到手机桌面 (系统安装)</span>
                 </button>
                 <span className="text-[10px] text-center text-slate-400">
                   点击后在系统弹出窗口中确认「安装」即可
                 </span>
               </div>
-            ) : (
-              <div className="flex flex-col gap-2.5 text-xs text-slate-300">
-                <div className="flex items-start gap-2.5">
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
-                    1
-                  </span>
-                  <div className="leading-relaxed">
-                    在手机自带浏览器或 <strong className="text-white">Chrome</strong> 中打开本网址
-                  </div>
-                </div>
+            )}
 
-                <div className="flex items-start gap-2.5">
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
-                    2
-                  </span>
-                  <div className="leading-relaxed">
-                    点击右上角或底部菜单按钮 <strong className="text-amber-300">「⋮」</strong> 或 <strong className="text-amber-300">「≡」</strong>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5">
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
-                    3
-                  </span>
-                  <div className="leading-relaxed">
-                    选择 <strong className="text-amber-300">「安装应用」</strong> 或 <strong className="text-amber-300">「添加到主屏幕」</strong>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5">
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
-                    4
-                  </span>
-                  <div className="leading-relaxed">
-                    确认添加后，返回手机桌面点击 <strong className="text-amber-300">「HPoker」</strong> 图标启动！
-                  </div>
+            <div className="flex flex-col gap-2.5 text-xs text-slate-300">
+              <div className="flex items-start gap-2.5">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
+                  1
+                </span>
+                <div className="leading-relaxed">
+                  在手机自带浏览器或 <strong className="text-white">Chrome</strong> 中打开本网址
                 </div>
               </div>
+
+              <div className="flex items-start gap-2.5">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
+                  2
+                </span>
+                <div className="leading-relaxed">
+                  点击右上角或底部菜单按钮 <strong className="text-amber-300">「⋮」</strong> 或 <strong className="text-amber-300">「≡」</strong>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
+                  3
+                </span>
+                <div className="leading-relaxed">
+                  选择 <strong className="text-amber-300">「安装应用」</strong> 或 <strong className="text-amber-300">「添加到主屏幕」</strong>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-black text-[11px] flex-shrink-0 mt-0.5">
+                  4
+                </span>
+                <div className="leading-relaxed">
+                  确认添加后，返回手机桌面点击 <strong className="text-amber-300">「HPoker」</strong> 图标启动！
+                </div>
+              </div>
+            </div>
+
+            {onOpenInstallModal && (
+              <button
+                type="button"
+                onClick={onOpenInstallModal}
+                className="w-full mt-1 py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition active:scale-98 cursor-pointer"
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>弹出安卓安装指引弹窗</span>
+              </button>
             )}
           </div>
         )}

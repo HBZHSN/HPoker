@@ -407,6 +407,17 @@ export default function PokerTable({
             >
               {isMuted ? <VolumeX className="text-red-400" /> : <Volume2 className="text-amber-400" />}
             </button>
+            {onInstallApp && !isStandalone && (
+              <button
+                type="button"
+                onClick={onInstallApp}
+                className="poker-mobile-tool-button bg-amber-500/15 border-amber-400/50 text-amber-300"
+                aria-label="安装到主屏幕"
+                title="安装到主屏幕 (PWA)"
+              >
+                <Smartphone className="w-4 h-4 text-amber-400" />
+              </button>
+            )}
             {onToggleFullscreen && (
               <button
                 type="button"

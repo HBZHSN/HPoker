@@ -290,3 +290,68 @@ test('initAppHeightSync: uses visualViewport height when available in standard b
   cleanup();
 });
 
+test('getInstallGuideType: correctly falls back to platform guide when native prompt is absent or consumed', () => {
+  const androidNav = { userAgent: 'Mozilla/5.0 (Linux; Android 14)' };
+  const iosNav = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' };
+  const browserWin = { navigator: { standalone: false }, matchMedia: () => ({ matches: false }) };
+
+  // When native prompt is active
+  assert.equal(getInstallGuideType(androidNav, browserWin, true), 'native');
+
+  // Once native prompt is consumed (becomes false), falls back to manual guide
+  assert.equal(getInstallGuideType(androidNav, browserWin, false), 'manual');
+
+  // On iOS, always guides to iOS Safari instructions
+  assert.equal(getInstallGuideType(iosNav, browserWin, false), 'ios');
+});
+
+test('pwa install flow: repeatable modal popup state machine verification', async () => {
+  // Simulate usePWA state machine behavior
+  let deferredPrompt = {
+    prompt: async () => {},
+    userChoice: Promise.resolve({ outcome: 'dismissed' }),
+  };
+  let isModalOpen = false;
+  let isStandalone = false;
+
+  const promptInstall = async () => {
+    if (deferredPrompt) {
+      try {
+        await deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice && choice.outcome === 'accepted') {
+          isStandalone = true;
+          isModalOpen = false;
+        } else {
+          isModalOpen = true;
+        }
+      } finally {
+        deferredPrompt = null;
+      }
+    } else {
+      isModalOpen = true;
+    }
+  };
+
+  // 1st click: User dismisses native prompt; modal opens as fallback
+  await promptInstall();
+  assert.equal(isModalOpen, true);
+  assert.equal(deferredPrompt, null);
+
+  // User closes modal
+  isModalOpen = false;
+  assert.equal(isModalOpen, false);
+
+  // 2nd click: Native prompt is null, but modal should open immediately and reliably
+  await promptInstall();
+  assert.equal(isModalOpen, true);
+
+  // User closes modal again
+  isModalOpen = false;
+
+  // 3rd click: Modal opens again without issue
+  await promptInstall();
+  assert.equal(isModalOpen, true);
+});
+
+

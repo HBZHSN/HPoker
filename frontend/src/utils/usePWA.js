@@ -68,14 +68,19 @@ export function usePWA() {
         const choice = await deferredPrompt.userChoice;
         if (choice && choice.outcome === 'accepted') {
           setIsStandalone(true);
+          setIsModalOpen(false);
+        } else {
+          // User dismissed or cancelled native prompt; open guidance modal for manual add
+          setIsModalOpen(true);
         }
       } catch (err) {
         console.warn('[PWA] Native install prompt error:', err);
+        setIsModalOpen(true);
       } finally {
         setDeferredPrompt(null);
       }
     } else {
-      // Open instructional guidance modal
+      // Open instructional guidance modal when native prompt is absent or already consumed
       setIsModalOpen(true);
     }
   }, [deferredPrompt]);

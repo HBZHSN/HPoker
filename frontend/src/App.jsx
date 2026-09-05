@@ -475,12 +475,24 @@ export default function App() {
 
   if (requiresMobilePWAGate) {
     return (
-      <MobilePWAGate
-        isIOS={pwa.isIOS}
-        isInAppBrowser={pwa.isInAppBrowser}
-        hasNativePrompt={pwa.hasNativePrompt}
-        onInstallNative={pwa.promptInstall}
-      />
+      <>
+        <MobilePWAGate
+          isIOS={pwa.isIOS}
+          isInAppBrowser={pwa.isInAppBrowser}
+          hasNativePrompt={pwa.hasNativePrompt}
+          onInstallNative={pwa.promptInstall}
+          onOpenInstallModal={pwa.openInstallModal}
+        />
+        <PWAInstallModal
+          isOpen={pwa.isModalOpen}
+          onClose={pwa.closeInstallModal}
+          onInstallNative={pwa.promptInstall}
+          hasNativePrompt={pwa.hasNativePrompt}
+          guideType={pwa.guideType}
+          onToggleFullscreen={pwa.toggleFullscreen}
+          isFullscreen={pwa.isFullscreen}
+        />
+      </>
     );
   }
 
@@ -489,6 +501,15 @@ export default function App() {
     return (
       <div className="w-full h-full min-h-screen bg-[#080b11] text-slate-100 flex flex-col font-sans">
         <LoginModal onLoginSuccess={handleLoginSuccess} />
+        <PWAInstallModal
+          isOpen={pwa.isModalOpen}
+          onClose={pwa.closeInstallModal}
+          onInstallNative={pwa.promptInstall}
+          hasNativePrompt={pwa.hasNativePrompt}
+          guideType={pwa.guideType}
+          onToggleFullscreen={pwa.toggleFullscreen}
+          isFullscreen={pwa.isFullscreen}
+        />
       </div>
     );
   }
