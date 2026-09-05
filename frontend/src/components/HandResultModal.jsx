@@ -470,31 +470,29 @@ export default function HandResultModal({
           )}
         </div>
 
-        {/* Footer: Bottom-Left (Host Start Hand) & Bottom-Right (Auto-ready Checkbox + Ready / Rebuy Button) */}
-        <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-slate-800 bg-slate-900/95 flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Bottom-Left: Host Start Next Hand Button */}
-          <div className="flex items-center justify-start w-full sm:w-auto pl-28 sm:pl-0">
-            {isHost && onStartNextHand && (
-              <button
-                onClick={onStartNextHand}
-                className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Play className="w-4 h-4 fill-slate-950" />
-                开始下一局
-              </button>
-            )}
-          </div>
+        {/* Footer: Bottom Actions Row (Host Start Hand, Auto-Ready Checkbox, Ready / Rebuy Button) */}
+        <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-t border-slate-800 bg-slate-900/95 flex flex-row items-center justify-between gap-2 sm:gap-4 overflow-x-auto">
+          {/* Host Start Next Hand Button */}
+          {isHost && onStartNextHand && (
+            <button
+              onClick={onStartNextHand}
+              className="flex-shrink-0 px-3 py-2 sm:px-5 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+            >
+              <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-slate-950 flex-shrink-0" />
+              <span>开始下一局</span>
+            </button>
+          )}
 
-          {/* Bottom-Right: Auto-ready Checkbox + Ready / Rebuy Button */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center justify-end w-full sm:w-auto gap-3 sm:gap-4 ml-auto">
+          {/* Auto-ready Checkbox + Ready / Rebuy Button */}
+          <div className={`flex flex-row items-center gap-2 sm:gap-4 flex-shrink-0 ${isHost && onStartNextHand ? 'ml-auto' : 'w-full justify-between sm:justify-end'}`}>
             {/* Auto-ready Checkbox */}
             {selfSeat && !isBusted && (
-              <label className="flex items-center gap-2 cursor-pointer select-none text-xs font-bold text-slate-300 hover:text-white transition py-1">
+              <label className="flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none text-[11px] sm:text-xs font-bold text-slate-300 hover:text-white transition py-1 whitespace-nowrap flex-shrink-0">
                 <input
                   type="checkbox"
                   checked={autoReady}
                   onChange={handleAutoReadyToggle}
-                  className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-400 focus:ring-offset-slate-900 cursor-pointer accent-amber-500"
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-400 focus:ring-offset-slate-900 cursor-pointer accent-amber-500 flex-shrink-0"
                 />
                 <span>
                   {formatAutoReadyCheckboxLabel({ autoReady, isSelfReady, countdown })}
@@ -506,15 +504,15 @@ export default function HandResultModal({
             {isBusted && onRebuy ? (
               <button
                 onClick={onRebuy}
-                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-2 animate-pulse"
+                className="flex-shrink-0 px-3.5 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap animate-pulse"
               >
-                <RefreshCw className="w-4 h-4" />
-                补码 (${buyinChips})
+                <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                <span>补码 (${buyinChips})</span>
               </button>
             ) : selfSeat ? (
               <button
                 onClick={handleManualToggleReady}
-                className={`w-full sm:w-auto px-6 py-3 rounded-xl font-black text-sm transition shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
+                className={`flex-shrink-0 px-3.5 py-2 sm:px-6 sm:py-2.5 rounded-xl font-black text-xs sm:text-sm transition shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
                   isSelfReady
                     ? 'bg-slate-800 text-emerald-300 border border-emerald-500/50'
                     : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-glow-cyan'
@@ -522,13 +520,13 @@ export default function HandResultModal({
               >
                 {isSelfReady ? (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    已准备
+                    <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 flex-shrink-0" />
+                    <span>已准备</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    {formatReadyButtonLabel({ isSelfReady, autoReady, countdown })}
+                    <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                    <span>{formatReadyButtonLabel({ isSelfReady, autoReady, countdown })}</span>
                   </>
                 )}
               </button>
