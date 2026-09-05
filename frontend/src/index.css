@@ -87,6 +87,10 @@ html,
   .poker-table-actions > .poker-action-bar {
     height: auto;
   }
+
+  .poker-action-turn-status {
+    display: none !important;
+  }
 }
 
 .poker-table-center-board {
@@ -465,6 +469,7 @@ html,
   .poker-table-center {
     gap: 4px;
     transform: translateY(-10px);
+    z-index: 30;
   }
 
   .poker-table-pot-summary {
@@ -502,46 +507,46 @@ html,
   }
 
   .poker-table-center .poker-community-board {
-    max-width: calc(100% - 74px);
-    gap: 3px;
+    max-width: calc(100% - 16px);
+    gap: 4px;
     overflow: visible;
-    padding: 4px;
-    border-radius: 9px;
+    padding: 4px 6px;
+    border-radius: 12px;
   }
 
   .poker-table-center .poker-board-row,
   .poker-table-center .poker-board-cards {
-    gap: 3px;
+    gap: 4px;
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] {
-    width: clamp(2rem, 10.5vw, 2.65rem);
-    height: clamp(3rem, 15.75vw, 3.98rem);
-    border-width: 1px;
+    width: clamp(2.45rem, 12vw, 3.15rem);
+    height: clamp(3.6rem, 17.5vw, 4.6rem);
+    border-width: 1.5px;
   }
 
   .poker-table-center .poker-card[data-card-size='md'] {
-    width: clamp(1.7rem, 8.8vw, 2.2rem);
-    height: clamp(2.55rem, 13.2vw, 3.3rem);
-    border-width: 1px;
+    width: clamp(2.05rem, 10vw, 2.65rem);
+    height: clamp(3.05rem, 14.5vw, 3.85rem);
+    border-width: 1.5px;
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] .poker-card-rank {
-    font-size: clamp(1.1rem, 5vw, 1.4rem);
+    font-size: clamp(1.2rem, 5.8vw, 1.55rem);
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] .poker-card-suit {
     margin-top: 0.1rem;
-    font-size: clamp(0.85rem, 4vw, 1.1rem);
+    font-size: clamp(0.9rem, 4.2vw, 1.2rem);
   }
 
   .poker-table-center .poker-card[data-card-size='md'] .poker-card-rank {
-    font-size: clamp(0.95rem, 4vw, 1.2rem);
+    font-size: clamp(1.05rem, 4.8vw, 1.3rem);
   }
 
   .poker-table-center .poker-card[data-card-size='md'] .poker-card-suit {
     margin-top: 0.1rem;
-    font-size: clamp(0.75rem, 3.3vw, 0.95rem);
+    font-size: clamp(0.8rem, 3.6vw, 1rem);
   }
 
   .poker-table-lobby-actions {
@@ -560,28 +565,28 @@ html,
 
   /* Mobile 6-max seat layout matching poker-mobile.png */
   .poker-table-seat-anchor[data-screen-position='0'] {
-    top: 77% !important;
+    top: 80% !important;
     left: 50% !important;
   }
   .poker-table-seat-anchor[data-screen-position='1'] {
-    top: 56% !important;
-    left: 14% !important;
+    top: 64% !important;
+    left: 13% !important;
   }
   .poker-table-seat-anchor[data-screen-position='2'] {
-    top: 24% !important;
-    left: 14% !important;
+    top: 20% !important;
+    left: 13% !important;
   }
   .poker-table-seat-anchor[data-screen-position='3'] {
-    top: 11% !important;
+    top: 9% !important;
     left: 50% !important;
   }
   .poker-table-seat-anchor[data-screen-position='4'] {
-    top: 24% !important;
-    left: 86% !important;
+    top: 20% !important;
+    left: 87% !important;
   }
   .poker-table-seat-anchor[data-screen-position='5'] {
-    top: 56% !important;
-    left: 86% !important;
+    top: 64% !important;
+    left: 87% !important;
   }
 
   .poker-player-seat,
@@ -710,14 +715,7 @@ html,
   }
 
   .poker-action-turn-status {
-    display: block;
-    padding: 4px 8px;
-    border-radius: 9px;
-  }
-
-  .poker-action-turn-status .poker-action-turn-progress {
-    height: 3px;
-    margin-top: 3px;
+    display: none !important;
   }
 
   .poker-action-rebuy {
