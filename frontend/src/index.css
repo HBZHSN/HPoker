@@ -134,6 +134,7 @@ button, a, input, select {
 
   .poker-table-center {
     gap: 4px;
+    z-index: 15;
   }
 
   .poker-table-center .poker-community-board {
@@ -572,8 +573,8 @@ button, a, input, select {
 
   .poker-table-center {
     gap: 4px;
-    transform: translateY(-10px);
-    z-index: 30;
+    transform: translateY(clamp(-34px, -6vh, -22px));
+    z-index: 15;
   }
 
   .poker-table-pot-summary {
@@ -611,46 +612,46 @@ button, a, input, select {
   }
 
   .poker-table-center .poker-community-board {
-    max-width: calc(100% - 16px);
-    gap: 4px;
+    max-width: calc(100% - 24px);
+    gap: 3px;
     overflow: visible;
-    padding: 4px 6px;
-    border-radius: 12px;
+    padding: 3px 5px;
+    border-radius: 10px;
   }
 
   .poker-table-center .poker-board-row,
   .poker-table-center .poker-board-cards {
-    gap: 4px;
+    gap: clamp(2px, 0.8vw, 3px);
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] {
-    width: clamp(2.1rem, 10vw, 2.7rem);
-    height: clamp(3.1rem, 14.5vw, 3.95rem);
+    width: clamp(1.78rem, 8.2vw, 2.25rem);
+    height: clamp(2.65rem, 12.2vw, 3.35rem);
     border-width: 1px;
   }
 
   .poker-table-center .poker-card[data-card-size='md'] {
-    width: clamp(1.8rem, 8.5vw, 2.3rem);
-    height: clamp(2.7rem, 12.5vw, 3.4rem);
+    width: clamp(1.5rem, 7vw, 1.9rem);
+    height: clamp(2.25rem, 10.5vw, 2.85rem);
     border-width: 1px;
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] .poker-card-rank {
-    font-size: clamp(1.1rem, 5vw, 1.38rem);
+    font-size: clamp(0.92rem, 4.2vw, 1.2rem);
   }
 
   .poker-table-center .poker-card[data-card-size='lg'] .poker-card-suit {
-    margin-top: 0.1rem;
-    font-size: clamp(0.82rem, 3.8vw, 1.05rem);
+    margin-top: 0.05rem;
+    font-size: clamp(0.7rem, 3.2vw, 0.9rem);
   }
 
   .poker-table-center .poker-card[data-card-size='md'] .poker-card-rank {
-    font-size: clamp(0.95rem, 4.2vw, 1.2rem);
+    font-size: clamp(0.82rem, 3.7vw, 1.05rem);
   }
 
   .poker-table-center .poker-card[data-card-size='md'] .poker-card-suit {
-    margin-top: 0.1rem;
-    font-size: clamp(0.72rem, 3.2vw, 0.92rem);
+    margin-top: 0.05rem;
+    font-size: clamp(0.62rem, 2.8vw, 0.8rem);
   }
 
   .poker-table-lobby-actions {
@@ -668,29 +669,66 @@ button, a, input, select {
   }
 
   /* Mobile 6-max seat layout matching poker-mobile.png */
+  .poker-table-seat-anchor {
+    z-index: 30;
+  }
   .poker-table-seat-anchor[data-screen-position='0'] {
     top: 80% !important;
     left: 50% !important;
   }
   .poker-table-seat-anchor[data-screen-position='1'] {
-    top: 64% !important;
-    left: 14% !important;
+    top: 65% !important;
+    left: 12% !important;
   }
   .poker-table-seat-anchor[data-screen-position='2'] {
-    top: 20% !important;
-    left: 14% !important;
+    top: 19% !important;
+    left: 13% !important;
   }
   .poker-table-seat-anchor[data-screen-position='3'] {
     top: 9% !important;
     left: 50% !important;
   }
   .poker-table-seat-anchor[data-screen-position='4'] {
-    top: 20% !important;
-    left: 86% !important;
+    top: 19% !important;
+    left: 87% !important;
   }
   .poker-table-seat-anchor[data-screen-position='5'] {
-    top: 64% !important;
-    left: 86% !important;
+    top: 65% !important;
+    left: 88% !important;
+  }
+
+  /* Tightly dock corner badges on mobile to prevent any felt/board overlap */
+  .poker-seat-badge-tr {
+    top: -5px;
+    right: -5px;
+    z-index: 25;
+  }
+  .poker-seat-badge-tl {
+    top: -5px;
+    left: -5px;
+    z-index: 25;
+  }
+  .poker-seat-badge-br {
+    bottom: -5px;
+    right: -5px;
+    z-index: 25;
+  }
+  .poker-seat-badge-bl {
+    bottom: -5px;
+    left: -5px;
+    z-index: 25;
+  }
+  .poker-seat-kick-btn {
+    top: -6px;
+    z-index: 35;
+  }
+  .poker-table-seat-anchor[data-screen-position='1'] .poker-seat-badge-tr,
+  .poker-table-seat-anchor[data-screen-position='1'] .poker-seat-badge-br {
+    right: -4px;
+  }
+  .poker-table-seat-anchor[data-screen-position='5'] .poker-seat-badge-tl,
+  .poker-table-seat-anchor[data-screen-position='5'] .poker-seat-badge-bl {
+    left: -4px;
   }
 
   .poker-player-seat,
