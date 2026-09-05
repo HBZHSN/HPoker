@@ -911,10 +911,10 @@ export default function ActionBar({
             <Plus className="w-4 h-4" />
           </button>
 
-          {/* Amount Badge */}
-          <div className="flex flex-col items-center justify-center bg-slate-900 px-2 py-0.5 rounded-lg border border-amber-500/40 min-w-[68px] sm:min-w-[76px] flex-shrink-0">
-            <div className="flex items-center text-amber-400 font-black text-xs sm:text-sm leading-tight">
-              <span>$</span>
+          {/* Amount Badge: display only current bet amount */}
+          <div className="flex items-center justify-center bg-slate-900/95 px-2.5 py-1 sm:py-1.5 rounded-xl border border-amber-500/50 min-w-[68px] sm:min-w-[80px] flex-shrink-0 shadow-inner">
+            <div className="flex items-center text-amber-400 font-black text-sm sm:text-base leading-tight">
+              <span className="mr-0.5">$</span>
               <input
                 type="number"
                 min={sizingMin}
@@ -929,12 +929,9 @@ export default function ActionBar({
                     setPreActionData((prev) => (prev ? { ...prev, targetAmount: next } : prev));
                   }
                 }}
-                className="w-10 sm:w-12 bg-transparent text-center font-black text-amber-300 text-xs sm:text-sm focus:outline-none p-0"
+                className="w-12 sm:w-14 bg-transparent text-center font-black text-amber-300 text-sm sm:text-base focus:outline-none p-0"
               />
             </div>
-            <span className="text-[9px] text-slate-400 font-semibold leading-none">
-              ${sizingMin}-${sizingMax}
-            </span>
           </div>
         </div>
 
