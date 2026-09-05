@@ -33,6 +33,19 @@ function BoardRow({
           );
           const isClickable = isHidden && canReveal && !isRevealing;
 
+          if (isHidden && !canReveal && !marksPostHandReveal) {
+            return (
+              <div
+                key={index}
+                data-card-size={size}
+                className="poker-board-placeholder relative flex-shrink-0 flex items-center justify-center rounded-lg bg-black/45 border border-emerald-500/25 shadow-inner"
+                aria-label={`公共牌第 ${index + 1} 张 (待发)`}
+              >
+                <span className="text-emerald-500/30 font-serif text-sm md:text-base select-none">♠</span>
+              </div>
+            );
+          }
+
           return (
             <button
               key={index}
@@ -113,7 +126,7 @@ export default function CommunityBoard({
   const canReveal = isHandEnd && !boardCardsRevealed && hasHiddenCards && typeof onReveal === 'function';
   const rootClassName = compact
     ? 'pointer-events-auto flex flex-col items-center gap-1.5 bg-black/55 p-1.5 rounded-xl border border-slate-800/90 shadow-xl'
-    : 'pointer-events-auto flex flex-col items-center gap-2 bg-black/60 p-3 rounded-2xl border border-amber-500/25 backdrop-blur-md shadow-2xl overflow-x-auto';
+    : 'pointer-events-auto flex flex-col items-center gap-1.5 bg-black/45 p-2 md:p-3 rounded-2xl border border-emerald-500/30 backdrop-blur-md shadow-2xl';
 
   return (
     <div className={`poker-community-board ${rootClassName}`}>
