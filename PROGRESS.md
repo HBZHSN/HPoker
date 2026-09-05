@@ -91,7 +91,8 @@
 | **阶段 80** | 手机端强制 PWA 桌面应用准入拦截与自带浏览器安装指引 | 4 | 4 | 已完成 |
 | **阶段 81** | 移动端公共牌与左右下角玩家标注防遮挡安全布局优化 | 5 | 5 | 已完成 |
 | **阶段 82** | 移动端公共牌背景底板全包覆与自适应宽度修复 | 3 | 3 | 已完成 |
-| **总计** | **全部功能模块** | **386** | **386** | 已完成 |
+| **阶段 83** | 移动端牌局结果单行操作栏与紧凑准备交互重构 | 3 | 3 | 已完成 |
+| **总计** | **全部功能模块** | **389** | **389** | 已完成 |
 
 ---
 
@@ -852,6 +853,14 @@
 - [x] 82.1 修复中心容器与背景底板宽度自适应限制 (`index.css`)：移除 `max-width: calc(100% - 24px)` 与 `width: 100%` 异常收缩约束，将 `.poker-table-center-board` 和 `.poker-community-board` 统一设置为 `width: max-content; min-width: max-content;`，确保底板完全自适应包裹卡牌
 - [x] 82.2 背景底板内边距与视觉圆角扩充 (`CommunityBoard.jsx`, `PokerTable.jsx`, `index.css`)：在组件根容器注入 `w-max min-w-max`，移动端配置 `padding: 4px 8px; border-radius: 12px;`，使黑金翡翠边框底板在左右两侧比 5 张卡牌各宽出 8px，彻底消除卡牌外溢露出问题
 - [x] 82.3 全量测试与生产构建：新增底板全包裹性断言（44/44 前端测试通过），后端 193 单元测试全量通过，Vite 生产打包验证成功
+
+---
+
+### 阶段 83：移动端牌局结果单行操作栏与紧凑准备交互重构 (Mobile Hand Result Single-Row Action Bar & Compact Ready Interaction)
+- [x] 83.1 消除垂直折行与多余偏移 (`HandResultModal.jsx`)：移除原先的 `flex-col sm:flex-row`、`flex-wrap` 以及残留的 `pl-28`，改为全局单行横排 `flex-row items-center justify-between gap-2 sm:gap-4 overflow-x-auto`，彻底杜绝按钮换行堆叠
+- [x] 83.2 房主开始、自动倒计时与准备按钮紧凑排布 (`HandResultModal.jsx`)：将「开始下一局」、「准备倒计时勾选框」、「准备 (或补码)」三个控件重构为单行自适应弹性容器，赋予全部控件 `flex-shrink-0 whitespace-nowrap`，即便在 360px 屏幕上也严丝合缝平铺在同一行内
+- [x] 83.3 全量回归测试与生产验证：44 项前端单元测试通过，193 项后端单元测试全部通过，Vite 生产构建成功
+
 
 
 
