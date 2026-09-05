@@ -183,6 +183,8 @@ export function initAppHeightSync(
       if (typeof screenH === 'number' && screenH > vh) {
         vh = screenH;
       }
+    } else if (win.visualViewport && typeof win.visualViewport.height === 'number') {
+      vh = Math.round(win.visualViewport.height);
     }
 
     if (typeof vh === 'number' && vh > 0) {
