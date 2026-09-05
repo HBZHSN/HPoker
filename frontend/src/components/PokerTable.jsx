@@ -27,7 +27,6 @@ import {
   SmilePlus,
   Maximize2,
   Minimize2,
-  Smartphone,
 } from 'lucide-react';
 
 const STREET_LABELS = {
@@ -62,10 +61,8 @@ export default function PokerTable({
   onSendWsEvent,
   onLeaveRoom,
   onStandUpToSpectate,
-  onInstallApp,
   onToggleFullscreen,
   isFullscreen = false,
-  isStandalone = false,
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
@@ -407,28 +404,6 @@ export default function PokerTable({
             >
               {isMuted ? <VolumeX className="text-red-400" /> : <Volume2 className="text-amber-400" />}
             </button>
-            {onInstallApp && !isStandalone && (
-              <button
-                type="button"
-                onClick={onInstallApp}
-                className="poker-mobile-tool-button bg-amber-500/15 border-amber-400/50 text-amber-300"
-                aria-label="安装到主屏幕"
-                title="安装到主屏幕 (PWA)"
-              >
-                <Smartphone className="w-4 h-4 text-amber-400" />
-              </button>
-            )}
-            {onToggleFullscreen && (
-              <button
-                type="button"
-                onClick={onToggleFullscreen}
-                className={`poker-mobile-tool-button ${isFullscreen ? 'border-amber-400 bg-amber-950/40 text-amber-300' : ''}`}
-                aria-label={isFullscreen ? '退出全屏' : '全屏游玩'}
-                title={isFullscreen ? '退出全屏' : '全屏游玩'}
-              >
-                {isFullscreen ? <Minimize2 className="w-4 h-4 text-amber-300" /> : <Maximize2 className="w-4 h-4 text-slate-300" />}
-              </button>
-            )}
           </div>
         </div>
 
@@ -741,29 +716,6 @@ export default function PokerTable({
                     <UserPlus aria-hidden="true" /> 快速入座
                   </button>
                 ) : null}
-                {onInstallApp && !isStandalone && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsRoomPanelOpen(false);
-                      onInstallApp();
-                    }}
-                  >
-                    <Smartphone aria-hidden="true" /> 安装到主屏幕 (全屏游玩)
-                  </button>
-                )}
-                {onToggleFullscreen && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsRoomPanelOpen(false);
-                      onToggleFullscreen();
-                    }}
-                  >
-                    {isFullscreen ? <Minimize2 aria-hidden="true" /> : <Maximize2 aria-hidden="true" />}
-                    {isFullscreen ? '退出全屏模式' : '全屏游玩模式'}
-                  </button>
-                )}
                 <button type="button" onClick={() => { setIsRoomPanelOpen(false); toggleMute(); }}>
                   {isMuted ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
                   {isMuted ? '打开声音' : '关闭声音'}

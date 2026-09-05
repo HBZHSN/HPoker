@@ -158,7 +158,7 @@ export default function Lobby({
             {onInstallApp && !isStandalone && (
               <button
                 onClick={onInstallApp}
-                className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 text-xs font-bold rounded-xl border border-amber-500/40 transition active:scale-95 cursor-pointer flex items-center gap-1 shadow"
+                className="poker-mobile-hidden px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 text-xs font-bold rounded-xl border border-amber-500/40 transition active:scale-95 cursor-pointer flex items-center gap-1 shadow"
                 title="安装到主屏幕，全屏沉浸游玩"
               >
                 <Smartphone className="w-3.5 h-3.5 text-amber-400" />
@@ -171,7 +171,7 @@ export default function Lobby({
             {onToggleFullscreen && (
               <button
                 onClick={onToggleFullscreen}
-                className={`p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer ${
+                className={`poker-mobile-hidden p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer ${
                   isFullscreen ? 'border-amber-400 bg-amber-950/40 text-amber-300' : ''
                 }`}
                 title={isFullscreen ? '退出全屏' : '全屏模式'}
