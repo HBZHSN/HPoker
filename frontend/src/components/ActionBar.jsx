@@ -390,10 +390,12 @@ export default function ActionBar({
     { label: '底池', type: 'pot', ratio: 1.0 },
     { label: '1.5 底池', type: 'pot', ratio: 1.5 },
     { label: '2 底池', type: 'pot', ratio: 2.0 },
+    { label: '3 底池', type: 'pot', ratio: 3.0 },
+    { label: '全下', type: 'allin', isMax: true },
+    { label: '2.5 BB', type: 'bb', mult: 2.5 },
     { label: '3 BB', type: 'bb', mult: 3 },
     { label: '4 BB', type: 'bb', mult: 4 },
     { label: '5 BB', type: 'bb', mult: 5 },
-    { label: '全下', type: 'allin', isMax: true },
   ];
 
   const handlePresetClick = (amount, isMax) => {
@@ -900,10 +902,10 @@ export default function ActionBar({
             type="button"
             onClick={() => adjustBB(-1)}
             disabled={(!effectiveIsMyTurn && !canPreAction) || (effectiveIsMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700 text-slate-200 font-bold transition flex-shrink-0 cursor-pointer shadow"
+            className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700 text-slate-200 font-bold transition flex-shrink-0 cursor-pointer shadow"
             aria-label="减少1个大盲"
           >
-            <Minus className="w-4 h-4" />
+            <Minus className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </button>
 
           <div className="flex-1 flex flex-col justify-center min-w-0 px-1">
@@ -934,14 +936,14 @@ export default function ActionBar({
             type="button"
             onClick={() => adjustBB(1)}
             disabled={(!effectiveIsMyTurn && !canPreAction) || (effectiveIsMyTurn && !legalActions?.can_bet && !legalActions?.can_raise) || maxVal <= 0}
-            className="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700 text-slate-200 font-bold transition flex-shrink-0 cursor-pointer shadow"
+            className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed border border-slate-700 text-slate-200 font-bold transition flex-shrink-0 cursor-pointer shadow"
             aria-label="增加1个大盲"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
           </button>
 
           {/* Amount Badge: display only current bet amount */}
-          <div className="flex items-center justify-center bg-slate-900/95 px-2.5 py-1 sm:py-1.5 rounded-xl border border-amber-500/50 min-w-[68px] sm:min-w-[80px] flex-shrink-0 shadow-inner">
+          <div className="flex items-center justify-center bg-slate-900/95 px-3 py-1.5 sm:py-2 rounded-xl border border-amber-500/50 min-w-[76px] sm:min-w-[88px] flex-shrink-0 shadow-inner">
             <div className="flex items-center text-amber-400 font-black text-sm sm:text-base leading-tight">
               <span className="mr-0.5">$</span>
               <input
@@ -958,14 +960,14 @@ export default function ActionBar({
                     setPreActionData((prev) => (prev ? { ...prev, targetAmount: next } : prev));
                   }
                 }}
-                className="w-12 sm:w-14 bg-transparent text-center font-black text-amber-300 text-sm sm:text-base focus:outline-none p-0"
+                className="w-12 sm:w-16 bg-transparent text-center font-black text-amber-300 text-sm sm:text-base focus:outline-none p-0"
               />
             </div>
           </div>
         </div>
 
-        {/* 10 Quick Bet Presets (2×5 Grid) */}
-        <div className="poker-presets-grid grid grid-cols-5 gap-1 sm:gap-1.5">
+        {/* 12 Quick Bet Presets (3×4 Grid) */}
+        <div className="poker-presets-grid grid grid-cols-4 gap-1.5 sm:gap-2">
           {quickPresets.map((preset, idx) => {
             let amount = 0;
             if (preset.isMax) {
@@ -990,7 +992,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => handlePresetClick(amount, preset.isMax)}
                 disabled={isPresetDisabled}
-                className={`poker-preset-btn flex flex-col items-center justify-center py-1 sm:py-1.5 px-0.5 rounded-lg border transition active:scale-95 cursor-pointer leading-tight ${
+                className={`poker-preset-btn flex flex-col items-center justify-center py-1.5 sm:py-2 px-1 rounded-xl border transition active:scale-95 cursor-pointer leading-tight min-h-[44px] sm:min-h-[48px] ${
                   isSelected
                     ? 'bg-amber-950/80 border-amber-400 text-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/70'
                     : preset.isMax
@@ -998,12 +1000,12 @@ export default function ActionBar({
                     : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300 hover:border-slate-700'
                 } disabled:opacity-30 disabled:cursor-not-allowed`}
               >
-                <span className={`text-[9px] sm:text-[10px] font-bold truncate max-w-full ${
+                <span className={`text-[10px] sm:text-[11px] font-bold truncate max-w-full ${
                   preset.isMax ? 'text-red-300' : isSelected ? 'text-amber-200' : 'text-slate-300'
                 }`}>
                   {preset.label}
                 </span>
-                <span className={`text-[10px] sm:text-[11px] font-black ${
+                <span className={`text-[11px] sm:text-[12px] font-black ${
                   preset.isMax ? 'text-amber-400' : isSelected ? 'text-amber-300' : 'text-amber-400/90'
                 }`}>
                   ${amount}
