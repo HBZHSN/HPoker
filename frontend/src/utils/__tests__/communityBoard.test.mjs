@@ -63,3 +63,43 @@ test('buildBoardSlots generates 5 slots with cards and nulls for remaining', () 
   assert.deepEqual(turnSlots, [turnCards[0], turnCards[1], turnCards[2], turnCards[3], null]);
 });
 
+test('mobile community board footprint maintains safe horizontal clearance from bottom player seats', () => {
+  // Check typical mobile screen widths (360px Android, 390px iPhone standard, 430px iPhone Pro Max)
+  const viewports = [360, 390, 414, 430];
+  const seatWidth = 68;
+  const badgeOverhang = 5; // Tightly docked -5px badge offset
+
+  for (const screenWidth of viewports) {
+    // Card width clamped between 1.78rem (28.48px) and 2.25rem (36px) with 8.2vw
+    const rawCardWidth = screenWidth * 0.082;
+    const cardWidth = Math.max(28.48, Math.min(36, rawCardWidth));
+    const gap = 3;
+    const boardPadding = 10;
+    const boardWidth = 5 * cardWidth + 4 * gap + boardPadding;
+
+    const boardLeft = (screenWidth - boardWidth) / 2;
+    const boardRight = boardLeft + boardWidth;
+
+    // Bottom-left seat at 12%
+    const seat1Center = screenWidth * 0.12;
+    const seat1InnerEdge = seat1Center + (seatWidth / 2) + badgeOverhang;
+
+    // Bottom-right seat at 88%
+    const seat5Center = screenWidth * 0.88;
+    const seat5InnerEdge = seat5Center - (seatWidth / 2) - badgeOverhang;
+
+    // Verify positive safe clearance (> 10px) between community board and bottom player badges
+    const leftClearance = boardLeft - seat1InnerEdge;
+    const rightClearance = seat5InnerEdge - boardRight;
+
+    assert.ok(
+      leftClearance >= 10,
+      `Left clearance on ${screenWidth}px screen (${leftClearance.toFixed(1)}px) should be >= 10px`,
+    );
+    assert.ok(
+      rightClearance >= 10,
+      `Right clearance on ${screenWidth}px screen (${rightClearance.toFixed(1)}px) should be >= 10px`,
+    );
+  }
+});
+

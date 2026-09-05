@@ -207,7 +207,7 @@ export default function PlayerSeat({
           return (
             <>
               {positionBadge && (
-                <div className="absolute -top-2 -right-2 z-20 flex items-center">
+                <div className="poker-seat-badge-tr absolute -top-2 -right-2 z-20 flex items-center">
                   <span
                     className={`w-4 h-4 md:w-5 md:h-5 rounded-full font-black text-[8px] md:text-[10px] flex items-center justify-center shadow-md ring-1 md:ring-2 ring-slate-900 ${positionBadge.className}`}
                   >
@@ -223,8 +223,12 @@ export default function PlayerSeat({
                     event.stopPropagation();
                     onKick?.(seatData.player_id, seatData.name);
                   }}
-                  className={`absolute -top-2.5 ${
-                    positionBadge ? '-right-7 md:-right-8' : '-right-2'
+                  className={`poker-seat-kick-btn absolute -top-2.5 ${
+                    screenPosition === 1 || screenPosition === 2
+                      ? '-left-7 md:-left-8'
+                      : positionBadge
+                      ? '-right-7 md:-right-8'
+                      : '-right-2'
                   } z-40 flex h-5 w-5 items-center justify-center rounded-full border border-red-400/80 bg-red-950/95 text-red-300 shadow-lg transition hover:bg-red-800 hover:text-white active:scale-90`}
                   aria-label={`将 ${seatData.name} 移出房间`}
                 >
@@ -236,7 +240,7 @@ export default function PlayerSeat({
         })()}
 
         {/* === TOP-LEFT CORNER: Buy-in Count Badge & Bot Indicator (买入次数与机器人标识) === */}
-        <div className="absolute -top-2 -left-2 z-20 flex items-center gap-0.5">
+        <div className="poker-seat-badge-tl absolute -top-2 -left-2 z-20 flex items-center gap-0.5">
           {/* Buy-in Count Badge (买入次数: 超过 1 次时展示) */}
           {seatData.rebuy_count > 1 && (
             <div
@@ -263,7 +267,7 @@ export default function PlayerSeat({
             type="button"
             onClick={(!isUsingTimeBank && (seatData.time_bank_cards ?? 0) > 0 && onUseTimeCard) ? onUseTimeCard : undefined}
             title={`时间卡: ${seatData.time_bank_cards ?? 3}张 (已玩 ${seatData.hands_played ?? 0} 手，每15手送1张)`}
-            className={`absolute -bottom-2 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap ${
+            className={`poker-seat-badge-br absolute -bottom-2 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap ${
               !isUsingTimeBank && (seatData.time_bank_cards ?? 0) > 0 && effectiveIsCurrentTurn
                 ? 'cursor-pointer hover:bg-purple-900 hover:text-purple-200 border-purple-400 animate-pulse'
                 : 'cursor-default'
@@ -276,7 +280,7 @@ export default function PlayerSeat({
         {/* === BOTTOM-LEFT CORNER: Equity Assistant Badge (胜率辅助标识) === */}
         {seatData.using_assistant && (
           <div
-            className="absolute -bottom-2 -left-2 z-20 flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 text-[8px] md:text-[9px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
+            className="poker-seat-badge-bl absolute -bottom-2 -left-2 z-20 flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 text-[8px] md:text-[9px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
           >
             <BarChart2 className="w-2.5 h-2.5 text-amber-300 stroke-[3]" />
             <span>辅助</span>
