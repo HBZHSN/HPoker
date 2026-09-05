@@ -896,6 +896,13 @@
 ### 阶段 87：PWA 启动后隐藏大厅「安装到手机主屏幕」横幅 (Hide Lobby PWA Banner After PWA Launch)
 - [x] 87.1 (`Lobby.jsx`, `App.jsx`)：新增 `pwaAcknowledged` 属性——用户已通过桌面图标（PWA 门禁放行记忆 `hpoker_pwa_dismissed`）进入时不再渲染大厅「安装到手机主屏幕 / 全屏游玩」横幅行；已识别 standalone 环境原有逻辑不变，桌面浏览器普通会话仍保留安装引导；Vite 生产构建成功
 
+---
+
+### 阶段 88：生产数据库历史测试账单污染清理与待结清单恢复 (Production Database Test Pollution Cleanup)
+- [x] 88.1 定向清理正式数据库脏账单 (`scripts/cleanup_dirty_test_balances.py`)：原子化移除 2026-09-04 调试遗留的 31 条测试流水（涵盖 `dave`, `charlie`, `bob`, `alice`, `host`），保持真实用户 (`u_hx`, `u_fwd`, `u_yy`) 账单数据 100% 完整与零和守恒
+- [x] 88.2 重启后台服务与状态验证：重载 `balance_manager` 缓存，核验待结清单 API 恢复为仅显示真实用户，总额收支平衡 (`is_balanced: true`)，193 项后端单元测试全量通过
+- [x] 88.3 补全 `.gitignore` 过滤备份文件：忽略 `backend/data/*.bak*` 与 `*.sqlite3*`，确保生产数据与备份永不污染 Git 仓库
+
 
 
 
