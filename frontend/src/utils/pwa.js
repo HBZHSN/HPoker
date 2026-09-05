@@ -23,8 +23,9 @@ export function registerServiceWorker() {
                 installingWorker.state === 'installed' &&
                 navigator.serviceWorker.controller
               ) {
-                // New content is available, prompt or reload
-                console.log('[PWA] New version ready.');
+                // New content is available, reload to pick up new version immediately
+                console.log('[PWA] New version ready, reloading to activate...');
+                window.location.reload();
               }
             });
           }
@@ -150,6 +151,9 @@ export function getInstallGuideType(nav, win, hasNativePrompt) {
  * Synchronize actual viewport height to CSS variable --app-height
  * Solves mobile browser & PWA viewport discrepancies where 100vh or 100dvh
  * leaves blank/gray bars at the bottom of the screen.
+ * On iOS PWA (standalone mode), WebKit notoriously underreports innerHeight
+ * due to phantom toolbar/safe-area deductions; this compensates using true
+ * physical device screen boundaries.
  */
 export function initAppHeightSync(
   win = typeof window !== 'undefined' ? window : null,
@@ -160,9 +164,42 @@ export function initAppHeightSync(
   }
 
   const update = () => {
-    const vh = win.innerHeight;
+    let vh = win.innerHeight;
+    const isIOSDevice = isIOS(win.navigator);
+    const isStandalone = isStandaloneMode(win);
+
+    // If on iOS in standalone/fullscreen mode, WebKit often reports window.innerHeight
+    // reduced by safe areas or phantom toolbars. The true physical standalone viewport
+    // spans the entire device screen height.
+    if (isIOSDevice && isStandalone && win.screen) {
+      const isLandscape = Boolean(
+        (win.matchMedia && win.matchMedia('(orientation: landscape)').matches) ||
+        (typeof win.orientation === 'number' && Math.abs(win.orientation) === 90) ||
+        (typeof win.innerWidth === 'number' && typeof win.innerHeight === 'number' && win.innerWidth > win.innerHeight)
+      );
+      const screenH = isLandscape
+        ? Math.min(win.screen.width, win.screen.height)
+        : Math.max(win.screen.width, win.screen.height);
+      if (typeof screenH === 'number' && screenH > vh) {
+        vh = screenH;
+      }
+    }
+
     if (typeof vh === 'number' && vh > 0) {
       doc.documentElement.style.setProperty('--app-height', `${vh}px`);
+    }
+
+    // Attach standalone and iOS platform marker classes for deterministic CSS rules
+    if (isStandalone) {
+      doc.documentElement.classList.add('pwa-standalone');
+    } else {
+      doc.documentElement.classList.remove('pwa-standalone');
+    }
+
+    if (isIOSDevice) {
+      doc.documentElement.classList.add('ios-device');
+    } else {
+      doc.documentElement.classList.remove('ios-device');
     }
   };
 
@@ -171,12 +208,18 @@ export function initAppHeightSync(
   win.addEventListener('orientationchange', update, { passive: true });
   doc.addEventListener('fullscreenchange', update, { passive: true });
   doc.addEventListener('webkitfullscreenchange', update, { passive: true });
+  if (win.visualViewport) {
+    win.visualViewport.addEventListener('resize', update, { passive: true });
+  }
 
   return () => {
     win.removeEventListener('resize', update);
     win.removeEventListener('orientationchange', update);
     doc.removeEventListener('fullscreenchange', update);
     doc.removeEventListener('webkitfullscreenchange', update);
+    if (win.visualViewport) {
+      win.visualViewport.removeEventListener('resize', update);
+    }
   };
 }
 

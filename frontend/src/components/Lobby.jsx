@@ -92,7 +92,7 @@ export default function Lobby({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+    <div className="w-full max-w-7xl mx-auto p-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-[max(24px,env(safe-area-inset-bottom,0px))] md:p-6 lg:p-8 flex flex-col gap-6">
       {/* Top Banner & User Switcher / Auth Control */}
       <header className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900/80 border border-amber-500/30 p-5 rounded-3xl backdrop-blur-md shadow-2xl">
         <div className="flex items-center gap-3">

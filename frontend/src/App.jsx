@@ -468,14 +468,14 @@ export default function App() {
   // If not authenticated, require login
   if (!token || !currentUser) {
     return (
-      <div className="min-h-screen bg-gg-dark text-slate-100 flex flex-col font-sans">
+      <div className="w-full h-full min-h-screen bg-[#080b11] text-slate-100 flex flex-col font-sans">
         <LoginModal onLoginSuccess={handleLoginSuccess} />
       </div>
     );
   }
 
   return (
-    <div className="w-full h-full min-h-screen min-h-[100dvh] bg-[#080b11] text-slate-100 flex flex-col font-sans flex-1 overflow-hidden">
+    <div className={`w-full h-full bg-[#080b11] text-slate-100 flex flex-col font-sans ${activeRoomId && roomData ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'}`}>
       {activeRoomId && roomData ? (
         <PokerTable
           room={roomData}
@@ -493,7 +493,7 @@ export default function App() {
           isInstallable={pwa.isInstallable}
         />
       ) : activeRoomId ? (
-        <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center p-6">
+        <div className="w-full h-full min-h-screen bg-[#080b11] flex flex-col items-center justify-center gap-4 text-center p-6">
           <div className="w-10 h-10 rounded-full border-4 border-slate-700 border-t-amber-400 animate-spin" />
           <div>
             <div className="text-sm font-black text-amber-300">
