@@ -3,6 +3,8 @@ import {
   isStandaloneMode,
   isIOS,
   isMobile,
+  isMobileDevice,
+  isInAppBrowser,
   isFullscreenActive,
   toggleFullscreen,
   getInstallGuideType,
@@ -15,6 +17,8 @@ export function usePWA() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [iosDevice, setIosDevice] = useState(() => isIOS());
   const [mobileDevice, setMobileDevice] = useState(() => isMobile());
+  const [physicalMobile, setPhysicalMobile] = useState(() => isMobileDevice());
+  const [inApp, setInApp] = useState(() => isInAppBrowser());
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -37,6 +41,8 @@ export function usePWA() {
 
     const handleResize = () => {
       setMobileDevice(isMobile());
+      setPhysicalMobile(isMobileDevice());
+      setInApp(isInAppBrowser());
       setIsStandalone(isStandaloneMode());
     };
 
@@ -92,6 +98,8 @@ export function usePWA() {
     isFullscreen,
     isIOS: iosDevice,
     isMobile: mobileDevice,
+    isMobileDevice: physicalMobile,
+    isInAppBrowser: inApp,
     isModalOpen,
     guideType,
     openInstallModal: () => setIsModalOpen(true),

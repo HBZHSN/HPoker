@@ -80,6 +80,32 @@ export function isMobile(
 }
 
 /**
+ * Detect physical mobile device (Phone or Tablet based on UA, platform, and touch capability)
+ * Excludes standard desktop PCs even if resized to small viewports.
+ */
+export function isMobileDevice(
+  nav = typeof navigator !== 'undefined' ? navigator : null,
+  win = typeof window !== 'undefined' ? window : null
+) {
+  if (!nav) return false;
+  const ua = nav.userAgent || '';
+  const isMobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+  const isIpadOS = nav.platform === 'MacIntel' && (nav.maxTouchPoints || 0) > 1;
+  const hasTouch = (nav.maxTouchPoints || 0) > 0;
+  const isPhysicalSmallScreen = win && win.screen && Math.min(win.screen.width, win.screen.height) <= 1024;
+  return isMobileUa || isIpadOS || (hasTouch && isPhysicalSmallScreen);
+}
+
+/**
+ * Detect in-app webviews (WeChat, QQ, Weibo, Douyin, etc.) where PWA installation is blocked
+ */
+export function isInAppBrowser(nav = typeof navigator !== 'undefined' ? navigator : null) {
+  if (!nav) return false;
+  const ua = nav.userAgent || '';
+  return /MicroMessenger|QQ\/|Weibo|Douyin|BytedanceWebview|Alipay|DingTalk/i.test(ua);
+}
+
+/**
  * Check if the document is currently in browser fullscreen mode
  */
 export function isFullscreenActive(doc = typeof document !== 'undefined' ? document : null) {
