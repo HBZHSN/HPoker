@@ -665,11 +665,11 @@ button, a, input, select {
   }
   .poker-table-seat-anchor[data-screen-position='1'] {
     top: 64% !important;
-    left: 13% !important;
+    left: 14% !important;
   }
   .poker-table-seat-anchor[data-screen-position='2'] {
     top: 20% !important;
-    left: 13% !important;
+    left: 14% !important;
   }
   .poker-table-seat-anchor[data-screen-position='3'] {
     top: 9% !important;
@@ -677,17 +677,17 @@ button, a, input, select {
   }
   .poker-table-seat-anchor[data-screen-position='4'] {
     top: 20% !important;
-    left: 87% !important;
+    left: 86% !important;
   }
   .poker-table-seat-anchor[data-screen-position='5'] {
     top: 64% !important;
-    left: 87% !important;
+    left: 86% !important;
   }
 
   .poker-player-seat,
   .poker-player-seat-empty {
-    width: 56px;
-    height: 56px;
+    width: 68px;
+    height: 68px;
   }
 
   .poker-player-seat-self .poker-player-cards {
@@ -778,9 +778,9 @@ button, a, input, select {
   }
 
   .poker-action-button {
-    min-height: 52px !important;
-    padding: 5px 4px !important;
-    border-radius: 12px;
+    min-height: 58px !important;
+    padding: 6px 4px !important;
+    border-radius: 14px;
   }
 
   .poker-action-button > span:last-child,
@@ -790,21 +790,21 @@ button, a, input, select {
 
   .poker-action-button span.text-sm,
   .poker-action-button span.text-base {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 900;
   }
 
   .poker-sizing-row {
-    padding: 4px 8px;
-    min-height: 44px;
-    border-radius: 12px;
-    gap: 6px;
+    padding: 5px 8px;
+    min-height: 48px;
+    border-radius: 14px;
+    gap: 8px;
   }
 
   .poker-sizing-row > button {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
   }
 
   .poker-sizing-row > button svg {
@@ -828,26 +828,28 @@ button, a, input, select {
   }
 
   .poker-presets-grid {
-    gap: 4px;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 5px;
   }
 
   .poker-presets-grid button,
   .poker-preset-btn {
-    min-height: 38px;
-    padding: 3px 2px;
-    border-radius: 8px;
+    min-height: 46px;
+    padding: 4px 2px;
+    border-radius: 11px;
     line-height: 1.15;
   }
 
   .poker-presets-grid button span:first-child,
   .poker-preset-btn span:first-child {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 800;
   }
 
   .poker-presets-grid button span:last-child,
   .poker-preset-btn span:last-child {
-    font-size: 10.5px;
+    font-size: 11.5px;
     font-weight: 900;
   }
 
@@ -965,7 +967,7 @@ button, a, input, select {
   }
 
   .poker-table-actions {
-    padding-bottom: calc(44px + env(safe-area-inset-bottom));
+    padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .poker-mobile-game-summary {
@@ -978,7 +980,12 @@ button, a, input, select {
   }
 
   .poker-action-button {
-    min-height: 36px !important;
+    min-height: 50px !important;
+  }
+
+  .poker-presets-grid button,
+  .poker-preset-btn {
+    min-height: 40px;
   }
 
   .poker-action-slider-container {
@@ -995,8 +1002,8 @@ button, a, input, select {
 
   .poker-player-seat,
   .poker-player-seat-empty {
-    width: 52px;
-    height: 52px;
+    width: 62px;
+    height: 62px;
   }
 }
 

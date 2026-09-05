@@ -63,13 +63,13 @@ export default function PlayerSeat({
   // Empty seat
   if (!seatData) {
     return (
-      <div className="poker-player-seat-empty relative flex flex-col items-center justify-center w-14 h-14 md:w-16 md:h-16 select-none">
+      <div className="poker-player-seat-empty relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 select-none">
         <button
           type="button"
           onClick={() => onSitDown && onSitDown(seatIndex)}
           className="group relative flex flex-col items-center justify-center w-full h-full rounded-xl md:rounded-2xl border border-dashed border-slate-700/60 bg-black/45 hover:border-amber-500/40 hover:bg-amber-950/20 transition-all duration-300 backdrop-blur-sm shadow-inner cursor-pointer"
         >
-          <UserPlus className="w-4 h-4 md:w-5 md:h-5 text-slate-400 group-hover:text-amber-400 transition-colors" />
+          <UserPlus className="w-5 h-5 text-slate-400 group-hover:text-amber-400 transition-colors" />
           <span className="text-[10px] md:text-[11px] font-bold text-slate-400 group-hover:text-amber-300 mt-0.5">
             空座 {seatIndex + 1}
           </span>
@@ -135,7 +135,7 @@ export default function PlayerSeat({
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {effectiveIsCurrentTurn ? (
           isUsingTimeBank ? (
-            <div className={`absolute -top-7 md:-top-9 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-3 py-0.5 rounded-full ${
+            <div className={`absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-3 py-0.5 rounded-full ${
               timeLeft <= 5
                 ? 'bg-red-950/95 border border-red-500 text-red-200 shadow-glow-red animate-bounce'
                 : 'bg-gradient-to-r from-purple-950 to-indigo-950 border border-purple-400 text-purple-200 shadow-glow-cyan animate-pulse'
@@ -144,7 +144,7 @@ export default function PlayerSeat({
               <span>+{Math.ceil(timeLeft)}s</span>
             </div>
           ) : (
-            <div className={`absolute -top-7 md:-top-9 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-2.5 py-0.5 rounded-full ${
+            <div className={`absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-2.5 py-0.5 rounded-full ${
               timeLeft <= 5
                 ? 'bg-red-950/95 border border-red-500 text-red-200 shadow-glow-red animate-bounce scale-105'
                 : 'bg-slate-950 border border-amber-400 text-amber-300 shadow-glow-gold animate-pulse'
@@ -154,20 +154,20 @@ export default function PlayerSeat({
             </div>
           )
         ) : payoutInfo ? (
-          <div className="absolute -top-7 md:-top-9 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border border-emerald-400 px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
+          <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border border-emerald-400 px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
             +${payoutInfo.amount}
           </div>
         ) : isWaitingNextHand ? (
-          <div className="absolute -top-7 md:-top-9 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-bold shadow-md z-30 whitespace-nowrap border border-slate-700 bg-slate-900/95 text-slate-400">
+          <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-bold shadow-md z-30 whitespace-nowrap border border-slate-700 bg-slate-900/95 text-slate-400">
             等下局
           </div>
         ) : seatData.current_round_bet > 0 && !seatData.last_action ? (
-          <div className="absolute -top-7 md:-top-9 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 whitespace-nowrap border border-amber-500/50 bg-slate-950/95 text-amber-300">
+          <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 whitespace-nowrap border border-amber-500/50 bg-slate-950/95 text-amber-300">
             ${seatData.current_round_bet}
           </div>
         ) : seatData.last_action ? (
           <div
-            className={`absolute -top-7 md:-top-9 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 max-w-[85px] md:max-w-[110px] truncate transition-all ${
+            className={`absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 max-w-[85px] md:max-w-[110px] truncate transition-all ${
               seatData.last_action.startsWith('Raise') || seatData.last_action.startsWith('加注')
                 ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 border-amber-200 shadow-glow-gold'
                 : seatData.last_action.startsWith('Bet') || seatData.last_action.startsWith('下注')
@@ -189,7 +189,7 @@ export default function PlayerSeat({
 
         {/* Winner Crown */}
         {isWinner && (
-          <div className="absolute -top-11 md:-top-14 left-1/2 -translate-x-1/2 text-amber-400 z-30 animate-bounce">
+          <div className="absolute -top-12 md:-top-14 left-1/2 -translate-x-1/2 text-amber-400 z-30 animate-bounce">
             <Crown className="w-4 h-4 md:w-5 md:h-5 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
           </div>
         )}
@@ -207,7 +207,7 @@ export default function PlayerSeat({
           return (
             <>
               {positionBadge && (
-                <div className="absolute -top-1.5 -right-1.5 z-20 flex items-center">
+                <div className="absolute -top-2 -right-2 z-20 flex items-center">
                   <span
                     className={`w-4 h-4 md:w-5 md:h-5 rounded-full font-black text-[8px] md:text-[10px] flex items-center justify-center shadow-md ring-1 md:ring-2 ring-slate-900 ${positionBadge.className}`}
                   >
@@ -223,8 +223,8 @@ export default function PlayerSeat({
                     event.stopPropagation();
                     onKick?.(seatData.player_id, seatData.name);
                   }}
-                  className={`absolute -top-2 ${
-                    positionBadge ? '-right-6 md:-right-7' : '-right-2'
+                  className={`absolute -top-2.5 ${
+                    positionBadge ? '-right-7 md:-right-8' : '-right-2'
                   } z-40 flex h-5 w-5 items-center justify-center rounded-full border border-red-400/80 bg-red-950/95 text-red-300 shadow-lg transition hover:bg-red-800 hover:text-white active:scale-90`}
                   aria-label={`将 ${seatData.name} 移出房间`}
                 >
@@ -236,7 +236,7 @@ export default function PlayerSeat({
         })()}
 
         {/* === TOP-LEFT CORNER: Buy-in Count Badge & Bot Indicator (买入次数与机器人标识) === */}
-        <div className="absolute -top-1.5 -left-1.5 z-20 flex items-center gap-0.5">
+        <div className="absolute -top-2 -left-2 z-20 flex items-center gap-0.5">
           {/* Buy-in Count Badge (买入次数: 超过 1 次时展示) */}
           {seatData.rebuy_count > 1 && (
             <div
@@ -263,7 +263,7 @@ export default function PlayerSeat({
             type="button"
             onClick={(!isUsingTimeBank && (seatData.time_bank_cards ?? 0) > 0 && onUseTimeCard) ? onUseTimeCard : undefined}
             title={`时间卡: ${seatData.time_bank_cards ?? 3}张 (已玩 ${seatData.hands_played ?? 0} 手，每15手送1张)`}
-            className={`absolute -bottom-1.5 -right-1.5 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap ${
+            className={`absolute -bottom-2 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap ${
               !isUsingTimeBank && (seatData.time_bank_cards ?? 0) > 0 && effectiveIsCurrentTurn
                 ? 'cursor-pointer hover:bg-purple-900 hover:text-purple-200 border-purple-400 animate-pulse'
                 : 'cursor-default'
@@ -276,7 +276,7 @@ export default function PlayerSeat({
         {/* === BOTTOM-LEFT CORNER: Equity Assistant Badge (胜率辅助标识) === */}
         {seatData.using_assistant && (
           <div
-            className="absolute -bottom-1.5 -left-1.5 z-20 flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 text-[8px] md:text-[9px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
+            className="absolute -bottom-2 -left-2 z-20 flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 text-[8px] md:text-[9px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
           >
             <BarChart2 className="w-2.5 h-2.5 text-amber-300 stroke-[3]" />
             <span>辅助</span>
@@ -300,17 +300,17 @@ export default function PlayerSeat({
           }`}
         >
           {/* Avatar Emoji Icon */}
-          <div className="text-lg md:text-2xl leading-none select-none mt-0.5">
+          <div className="text-xl md:text-2xl leading-none select-none mt-0.5">
             {seatData.avatar || '👤'}
           </div>
 
           {/* Nickname */}
-          <div className="text-[9px] md:text-[10px] font-bold text-slate-100 truncate max-w-[48px] md:max-w-[64px] text-center leading-tight">
+          <div className="text-[10px] md:text-[11px] font-bold text-slate-100 truncate max-w-[58px] md:max-w-[72px] text-center leading-tight">
             {seatData.name}
           </div>
 
           {/* Chips in Bold Font */}
-          <div className="flex items-center gap-0.5 text-amber-300 font-black text-[10px] md:text-xs leading-none mb-0.5">
+          <div className="flex items-center gap-0.5 text-amber-300 font-black text-[11px] md:text-xs leading-none mb-0.5">
             <span className="text-[9px] text-amber-400 font-bold">$</span>
             <span>{seatData.chips.toLocaleString()}</span>
           </div>
