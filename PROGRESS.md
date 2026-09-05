@@ -84,7 +84,8 @@
 | **阶段 73** | 加注按键预选状态文案精简与视觉一致性优化 | 2 | 2 | 已完成 |
 | **阶段 74** | PC端右侧栏各区块高度固化与防布局抖动优化 | 6 | 6 | 已完成 |
 | **阶段 75** | 手机端 PWA 桌面安装与全屏沉浸式游玩支持 | 6 | 6 | 已完成 |
-| **总计** | **全部功能模块** | **354** | **354** | 已完成 |
+| **阶段 76** | 手机端全屏满屏自适应与消除底部空白灰条优化 | 4 | 4 | 已完成 |
+| **总计** | **全部功能模块** | **358** | **358** | 已完成 |
 
 ---
 
@@ -780,6 +781,15 @@
 - [x] 75.4 PWA 安装响应式 Hook 与指引弹窗：封装 `usePWA` 自定义 Hook（监听 `beforeinstallprompt` 与 `appinstalled`、跨平台检测独立模式、iOS Safari 与全屏状态），实现沉浸式 `PWAInstallModal`，支持 Android/Chrome 一键安装及 iOS Safari 3 步添加到主屏幕直观指引
 - [x] 75.5 大厅与牌桌全屏交互闭环：大厅顶栏与牌桌移动端抽屉/顶栏快捷挂载「安装到主屏幕 / 全屏游玩」与「网页全屏」切换入口，在已安装独立模式下优雅收起引导
 - [x] 75.6 全量测试与静态资源服务验证：新增 5 项前端 PWA 核心方法单元测试（覆盖独立模式判定、iOS/iPadOS检测、移动端屏幕识别、全屏API兼容），扩展后端静态托管测试验证 manifest/sw/icon 正确响应；全部 193 项后端单元测试与 37 项前端单元测试全部通过并完成 Vite 生产构建打包
+
+---
+
+### 阶段 76：手机端全屏满屏自适应与消除底部空白灰条优化 (Mobile Fullscreen Viewport & Flush Action Console)
+- [x] 76.1 动态视口高度精确同步与消除 100dvh 截断：在 `pwa.js` 中新增 `initAppHeightSync` 动态监听 `window.innerHeight` 并实时同步 `--app-height` CSS 变量；在 `index.css` 中重构 `.poker-table-root`、`html`、`body`、`#root` 与 `App.jsx` 容器为 `height: var(--app-height, 100%)`，彻底根除移动端 PWA 与全屏模式下 `max-height: 100dvh` 因浏览器计算偏差造成的底部空白截断
+- [x] 76.2 牌桌椭圆与毛呢主区域满屏扩容：将 `.poker-table-main` 内边距压缩并设 `flex: 1 1 0`，将 `.poker-table-shell` 尺寸自 94% 释放至 100%，充分利用手机纵向大屏高纵横比优势，消除牌桌与底栏之间的冗余间隙
+- [x] 76.3 移动端操作台沉底无缝贴合与样式精简：重构移动端 `.poker-table-actions` 为全宽贴底渐变底栏（`border-t border-amber-500/35`），内部 `.poker-action-controls-mobile` 去除重复边框与背景，底边距调整为精确适配物理手势安全区 `padding-bottom: max(6px, env(safe-area-inset-bottom, 0px))`，消除浮动卡片式双层边框造成的无内容灰条
+- [x] 76.4 视口高度同步单元测试与全量回归验证：新增 `initAppHeightSync` 单元测试，38 项前端单元测试 100% 通过，193 项后端单元测试 100% 通过，完成 Vite 生产构建与静态托管验证
+
 
 
 

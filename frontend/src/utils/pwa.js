@@ -145,3 +145,38 @@ export function getInstallGuideType(nav, win, hasNativePrompt) {
   }
   return 'manual';
 }
+
+/**
+ * Synchronize actual viewport height to CSS variable --app-height
+ * Solves mobile browser & PWA viewport discrepancies where 100vh or 100dvh
+ * leaves blank/gray bars at the bottom of the screen.
+ */
+export function initAppHeightSync(
+  win = typeof window !== 'undefined' ? window : null,
+  doc = typeof document !== 'undefined' ? document : null
+) {
+  if (!win || !doc || !doc.documentElement) {
+    return () => {};
+  }
+
+  const update = () => {
+    const vh = win.innerHeight;
+    if (typeof vh === 'number' && vh > 0) {
+      doc.documentElement.style.setProperty('--app-height', `${vh}px`);
+    }
+  };
+
+  update();
+  win.addEventListener('resize', update, { passive: true });
+  win.addEventListener('orientationchange', update, { passive: true });
+  doc.addEventListener('fullscreenchange', update, { passive: true });
+  doc.addEventListener('webkitfullscreenchange', update, { passive: true });
+
+  return () => {
+    win.removeEventListener('resize', update);
+    win.removeEventListener('orientationchange', update);
+    doc.removeEventListener('fullscreenchange', update);
+    doc.removeEventListener('webkitfullscreenchange', update);
+  };
+}
+
