@@ -52,6 +52,15 @@ export default function App() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [balanceOpen, setBalanceOpen] = useState(false);
 
+  // User explicitly continued past the PWA gate (remembered on this device).
+  // Needed because several Android system browsers (Huawei/Xiaomi etc.) launch
+  // their "add to home screen" web apps in a standalone window that exposes no
+  // reliable display-mode signal, so installed-mode detection alone cannot pass.
+  const [pwaGateDismissed, setPwaGateDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('hpoker_pwa_dismissed') === 'true';
+  });
+
   const pwa = usePWA();
 
   const wsRef = useRef(null);
@@ -467,11 +476,23 @@ export default function App() {
   };
 
   // Mobile device mandatory PWA enforcement
-  const isBypassed = typeof window !== 'undefined' && (
-    window.location.search.includes('bypass_pwa=1') ||
-    localStorage.getItem('hpoker_bypass_pwa') === 'true'
-  );
-  const requiresMobilePWAGate = Boolean(pwa.isMobileDevice && !pwa.isStandalone && !isBypassed);
+  // - Already installed / standalone window: always pass through.
+  // - In-app webviews (WeChat/QQ): always gated (cannot install from there).
+  // - Other mobile browsers whose installed-mode cannot be detected reliably:
+  //   gated until the user explicitly chooses to continue once on this device.
+  const isQueryBypass = typeof window !== 'undefined' && window.location.search.includes('bypass_pwa=1');
+  const isUserBypassed = pwaGateDismissed || isQueryBypass;
+  const canBypassGate = isUserBypassed && !pwa.isInAppBrowser;
+  const requiresMobilePWAGate = Boolean(pwa.isMobileDevice && !pwa.isStandalone && !canBypassGate);
+
+  const handlePwaContinue = () => {
+    try {
+      localStorage.setItem('hpoker_pwa_dismissed', 'true');
+    } catch (err) {
+      console.warn('[PWA] Failed to persist dismissal:', err);
+    }
+    setPwaGateDismissed(true);
+  };
 
   if (requiresMobilePWAGate) {
     return (
@@ -482,6 +503,7 @@ export default function App() {
           hasNativePrompt={pwa.hasNativePrompt}
           onInstallNative={pwa.promptInstall}
           onOpenInstallModal={pwa.openInstallModal}
+          onContinue={pwa.isInAppBrowser ? null : handlePwaContinue}
         />
         <PWAInstallModal
           isOpen={pwa.isModalOpen}

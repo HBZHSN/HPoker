@@ -37,6 +37,8 @@ export function registerServiceWorker() {
   });
 }
 
+const STANDALONE_DISPLAY_MODES = ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'];
+
 /**
  * Check whether the web app is running in standalone (installed / PWA) mode
  */
@@ -44,11 +46,15 @@ export function isStandaloneMode(win = typeof window !== 'undefined' ? window : 
   if (!win) return false;
   const nav = win.navigator;
   const isIosStandalone = Boolean(nav && nav.standalone);
-  const isMediaStandalone = Boolean(
-    win.matchMedia &&
-      (win.matchMedia('(display-mode: standalone)').matches ||
-        win.matchMedia('(display-mode: fullscreen)').matches)
-  );
+  let isMediaStandalone = false;
+  if (win.matchMedia) {
+    for (const mode of STANDALONE_DISPLAY_MODES) {
+      if (win.matchMedia(`(display-mode: ${mode})`).matches) {
+        isMediaStandalone = true;
+        break;
+      }
+    }
+  }
   return isIosStandalone || isMediaStandalone;
 }
 

@@ -3,7 +3,7 @@
   "name": "HPoker 德州扑克在线现金局",
   "short_name": "HPoker",
   "description": "HPoker 在线德州扑克现金局，沉浸式竞技对局与实时结算",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": [

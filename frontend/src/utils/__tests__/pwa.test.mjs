@@ -36,6 +36,24 @@ test('isStandaloneMode: correctly identifies standalone mode across platforms', 
   assert.equal(isStandaloneMode(mockBrowserWin), false);
 });
 
+test('isStandaloneMode: recognizes fullscreen / minimal-ui / window-controls-overlay display modes', () => {
+  for (const mode of ['fullscreen', 'minimal-ui', 'window-controls-overlay']) {
+    const win = {
+      navigator: { standalone: false },
+      matchMedia: (query) => ({ matches: query === `(display-mode: ${mode})` }),
+    };
+    assert.equal(isStandaloneMode(win), true, `${mode} should be treated as standalone`);
+  }
+
+  // Undetectable vendor standalone windows (Huawei/Xiaomi home-screen web apps)
+  // report plain browser mode and must NOT be considered standalone.
+  const vendorWebviewWin = {
+    navigator: { standalone: false },
+    matchMedia: (query) => ({ matches: query === '(display-mode: browser)' }),
+  };
+  assert.equal(isStandaloneMode(vendorWebviewWin), false);
+});
+
 test('isIOS: correctly detects iPhone, iPad, and modern iPadOS', () => {
   assert.equal(isIOS(null), false);
 

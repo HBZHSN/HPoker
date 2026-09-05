@@ -19,6 +19,7 @@ export default function MobilePWAGate({
   hasNativePrompt = false,
   onInstallNative,
   onOpenInstallModal,
+  onContinue,
 }) {
   const [activeTab, setActiveTab] = useState(isIOS ? 'ios' : 'android');
   const [copied, setCopied] = useState(false);
@@ -142,6 +143,24 @@ export default function MobilePWAGate({
             </button>
           )}
         </div>
+
+        {/* Direct entry for home-screen standalone windows whose mode is undetectable
+            (e.g. Huawei/Xiaomi system browsers). Remembered on this device. */}
+        {onContinue && (
+          <div className="flex flex-col gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={onContinue}
+              className="w-full py-3.5 px-4 rounded-2xl bg-slate-900/90 border-2 border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/40 hover:border-emerald-400 text-sm font-black flex items-center justify-center gap-2 transition active:scale-98 cursor-pointer"
+            >
+              <span className="text-lg">🎮</span>
+              <span>已从桌面图标打开，直接进入游戏</span>
+            </button>
+            <span className="text-[10px] text-center text-slate-500">
+              适用于已添加到主屏幕并以独立窗口运行的设备；本机确认一次后不再显示本页
+            </span>
+          </div>
+        )}
 
         {/* OS Platform Selector Tabs */}
         <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950/80 rounded-2xl border border-slate-800">
