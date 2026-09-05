@@ -1169,7 +1169,6 @@ export default function PokerTable({
         emojiOpen={isEmojiOpen}
         onToggleEmoji={setIsEmojiOpen}
         onUnreadChange={setHasSocialUnread}
-        hideFloatingButtons={true}
       />
 
     </div>

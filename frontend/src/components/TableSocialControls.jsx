@@ -170,16 +170,16 @@ export default function TableSocialControls({
   };
 
   return (
-    <div className={`poker-social-controls ${hideFloatingButtons ? '' : 'fixed bottom-4 left-4 z-[60] flex items-end gap-2'}`}>
+    <div className="poker-social-controls fixed bottom-4 left-4 z-[60] flex items-end gap-2 pointer-events-none">
       {chatOpen && (
         <>
           <div
-            className="poker-chat-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] md:hidden"
+            className="poker-chat-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] md:hidden pointer-events-auto"
             onClick={closeChat}
             aria-hidden="true"
           />
           <section
-            className="poker-chat-window fixed md:absolute top-14 md:top-auto md:bottom-14 left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 w-[min(360px,calc(100vw-24px))] z-[80] overflow-hidden rounded-2xl border border-amber-500/35 bg-slate-950/98 shadow-2xl backdrop-blur-xl animate-fade-in"
+            className="poker-chat-window pointer-events-auto fixed md:absolute top-14 md:top-auto md:bottom-14 left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 w-[min(360px,calc(100vw-24px))] z-[80] overflow-hidden rounded-2xl border border-amber-500/35 bg-slate-950/98 shadow-2xl backdrop-blur-xl animate-fade-in"
             aria-label="牌桌聊天"
           >
             <header className="flex items-center justify-between border-b border-slate-800 px-3 py-2.5">
@@ -267,12 +267,12 @@ export default function TableSocialControls({
       {emojiOpen && (
         <>
           <div
-            className="poker-emoji-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] md:hidden"
+            className="poker-emoji-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-[70] md:hidden pointer-events-auto"
             onClick={closeEmoji}
             aria-hidden="true"
           />
           <div
-            className="poker-emoji-window fixed md:absolute top-14 md:top-auto md:bottom-14 left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 w-[min(340px,calc(100vw-24px))] z-[80] rounded-2xl border border-amber-500/35 bg-slate-950/98 p-2.5 shadow-2xl backdrop-blur-xl animate-fade-in"
+            className="poker-emoji-window pointer-events-auto fixed md:absolute top-14 md:top-auto md:bottom-14 left-1/2 -translate-x-1/2 md:left-0 md:translate-x-0 w-[min(340px,calc(100vw-24px))] z-[80] rounded-2xl border border-amber-500/35 bg-slate-950/98 p-2.5 shadow-2xl backdrop-blur-xl animate-fade-in"
             aria-label="选择表情"
           >
             <div className="mb-2 flex items-center justify-between px-1 text-[10px] font-bold text-slate-400">
@@ -339,12 +339,12 @@ export default function TableSocialControls({
       )}
 
       {!hideFloatingButtons && (
-        <>
+        <div className="hidden md:flex items-center gap-2 pointer-events-auto">
           <button
             type="button"
             disabled={!canReact}
             onClick={toggleEmoji}
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-amber-500/50 bg-slate-950/95 text-amber-300 shadow-xl backdrop-blur-md transition hover:border-amber-400 hover:bg-amber-950 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-amber-500/50 bg-slate-950/95 text-amber-300 shadow-xl backdrop-blur-md transition hover:border-amber-400 hover:bg-amber-950 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
             aria-label="发表情"
           >
             <SmilePlus className="h-5 w-5" />
@@ -353,7 +353,7 @@ export default function TableSocialControls({
           <button
             type="button"
             onClick={toggleChat}
-            className="relative flex h-11 w-11 items-center justify-center rounded-full border border-amber-500/50 bg-slate-950/95 text-amber-300 shadow-xl backdrop-blur-md transition hover:border-amber-400 hover:bg-amber-950 active:scale-95"
+            className="relative flex h-11 w-11 items-center justify-center rounded-full border border-amber-500/50 bg-slate-950/95 text-amber-300 shadow-xl backdrop-blur-md transition hover:border-amber-400 hover:bg-amber-950 active:scale-95 cursor-pointer"
             aria-label="打开聊天"
           >
             <MessageCircle className="h-5 w-5" />
@@ -361,7 +361,7 @@ export default function TableSocialControls({
               <span className="absolute right-0 top-0 h-2.5 w-2.5 rounded-full border-2 border-slate-950 bg-red-500" />
             )}
           </button>
-        </>
+        </div>
       )}
     </div>
   );
