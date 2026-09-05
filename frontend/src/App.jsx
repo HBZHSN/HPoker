@@ -5,7 +5,9 @@ import LoginModal from './components/LoginModal';
 import ProfileModal from './components/ProfileModal';
 import AdminUserModal from './components/AdminUserModal';
 import BalanceCenterModal from './components/BalanceCenterModal';
+import PWAInstallModal from './components/PWAInstallModal';
 import { soundEngine } from './sound/SoundEngine';
+import { usePWA } from './utils/usePWA';
 
 const lastRoomStorageKey = (userId) => `hpoker_active_room_${userId}`;
 
@@ -48,6 +50,8 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [balanceOpen, setBalanceOpen] = useState(false);
+
+  const pwa = usePWA();
 
   const wsRef = useRef(null);
   const socialBubbleTimersRef = useRef(new Map());
@@ -482,6 +486,11 @@ export default function App() {
           onSendWsEvent={sendWsEvent}
           onLeaveRoom={handleLeaveRoom}
           onStandUpToSpectate={handleStandUpToSpectate}
+          onInstallApp={pwa.promptInstall}
+          onToggleFullscreen={pwa.toggleFullscreen}
+          isFullscreen={pwa.isFullscreen}
+          isStandalone={pwa.isStandalone}
+          isInstallable={pwa.isInstallable}
         />
       ) : activeRoomId ? (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-center p-6">
@@ -513,6 +522,11 @@ export default function App() {
           onCreateRoom={handleCreateRoom}
           onDeleteRoom={handleDeleteRoom}
           onJoinRoom={handleJoinRoom}
+          onInstallApp={pwa.promptInstall}
+          onToggleFullscreen={pwa.toggleFullscreen}
+          isFullscreen={pwa.isFullscreen}
+          isStandalone={pwa.isStandalone}
+          isInstallable={pwa.isInstallable}
         />
       )}
 
@@ -546,6 +560,17 @@ export default function App() {
           onClose={() => setBalanceOpen(false)}
         />
       )}
+
+      {/* PWA Installation Guidance Modal */}
+      <PWAInstallModal
+        isOpen={pwa.isModalOpen}
+        onClose={pwa.closeInstallModal}
+        onInstallNative={pwa.promptInstall}
+        hasNativePrompt={pwa.hasNativePrompt}
+        guideType={pwa.guideType}
+        onToggleFullscreen={pwa.toggleFullscreen}
+        isFullscreen={pwa.isFullscreen}
+      />
     </div>
   );
 }
