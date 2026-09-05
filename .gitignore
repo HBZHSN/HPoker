@@ -30,6 +30,8 @@ backend/data/*.sqlite-wal
 backend/data/*.sqlite3
 backend/data/*.sqlite3-shm
 backend/data/*.sqlite3-wal
+backend/data/*.sqlite3*
+backend/data/*.bak*
 
 # Logs and OS files
 *.log
