@@ -5,6 +5,7 @@ import { Bot, Crown, RefreshCw, UserPlus, Clock, UserX, BarChart2 } from 'lucide
 
 export default function PlayerSeat({
   seatIndex,
+  screenPosition = 0,
   seatData,
   isCurrentTurn,
   isDealer,
@@ -24,12 +25,14 @@ export default function PlayerSeat({
   actionHistoryLength = 0,
   socialBubble = null,
   bubblePlacement = 'right',
+  blindUnit = 10,
 }) {
   const isFolded = Boolean(seatData?.is_folded);
   const isAllIn = Boolean(seatData?.is_all_in);
   const hasCards = Boolean(seatData?.has_cards || (seatData?.hole_cards && seatData.hole_cards.length > 0));
   const effectiveIsCurrentTurn = Boolean(isCurrentTurn && hasCards && !isFolded);
   const isWaitingNextHand = !hasCards && !isFolded && !['IDLE', 'HAND_END'].includes(street);
+  const bigBlind = blindUnit * 2;
 
   const baseTimeout = (effectiveIsCurrentTurn && isUsingTimeBank)
     ? (currentTurnDuration || 30)
@@ -59,13 +62,14 @@ export default function PlayerSeat({
   // Empty seat
   if (!seatData) {
     return (
-      <div className="relative flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 select-none">
+      <div className="poker-player-seat-empty relative flex flex-col items-center justify-center w-14 h-14 md:w-16 md:h-16 select-none">
         <button
+          type="button"
           onClick={() => onSitDown && onSitDown(seatIndex)}
-          className="group relative flex flex-col items-center justify-center w-full h-full rounded-2xl border-2 border-dashed border-slate-700/60 bg-black/40 hover:border-amber-500/40 hover:bg-amber-950/20 transition-all duration-300 backdrop-blur-sm shadow-inner cursor-pointer"
+          className="group relative flex flex-col items-center justify-center w-full h-full rounded-full border border-slate-700/60 bg-black/45 hover:border-amber-500/40 hover:bg-amber-950/20 transition-all duration-300 backdrop-blur-sm shadow-inner cursor-pointer"
         >
-          <UserPlus className="w-5 h-5 text-slate-500 group-hover:text-amber-400 transition-colors" />
-          <span className="text-[11px] font-bold text-slate-400 group-hover:text-amber-300 mt-1">
+          <UserPlus className="w-4 h-4 md:w-5 md:h-5 text-slate-400 group-hover:text-amber-400 transition-colors" />
+          <span className="text-[10px] md:text-[11px] font-bold text-slate-400 group-hover:text-amber-300 mt-0.5">
             空座 {seatIndex + 1}
           </span>
         </button>
@@ -130,41 +134,53 @@ export default function PlayerSeat({
         {/* === CENTER TOP STATUS / ACTION / PAYOUT BADGE === */}
         {effectiveIsCurrentTurn ? (
           isUsingTimeBank ? (
-            <div className={`absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-3 py-0.5 md:py-1 rounded-full ${
+            <div className={`absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-3 py-0.5 rounded-full ${
               timeLeft <= 5
-                ? 'bg-red-950/95 border-2 border-red-500 text-red-200 shadow-glow-red animate-bounce'
-                : 'bg-gradient-to-r from-purple-950 to-indigo-950 border-2 border-purple-400 text-purple-200 shadow-glow-cyan animate-pulse'
-            } text-[10px] md:text-sm font-black whitespace-nowrap transition-all`}>
-              <Clock className={`w-3 h-3 md:w-3.5 md:h-3.5 ${timeLeft <= 5 ? 'text-red-400 animate-spin' : 'text-purple-300 animate-spin'}`} />
-              <span>时间卡 +{Math.ceil(timeLeft)}s</span>
+                ? 'bg-red-950/95 border border-red-500 text-red-200 shadow-glow-red animate-bounce'
+                : 'bg-gradient-to-r from-purple-950 to-indigo-950 border border-purple-400 text-purple-200 shadow-glow-cyan animate-pulse'
+            } text-[10px] md:text-xs font-black whitespace-nowrap transition-all shadow-md`}>
+              <Clock className={`w-2.5 h-2.5 md:w-3 md:h-3 ${timeLeft <= 5 ? 'text-red-400 animate-spin' : 'text-purple-300 animate-spin'}`} />
+              <span>+{Math.ceil(timeLeft)}s</span>
             </div>
           ) : (
-            <div className={`absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-3 py-0.5 md:py-1 rounded-full ${
+            <div className={`absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 px-2 md:px-2.5 py-0.5 rounded-full ${
               timeLeft <= 5
-                ? 'bg-red-950/95 border-2 border-red-500 text-red-200 shadow-glow-red animate-bounce scale-105'
-                : 'bg-slate-950 border-2 border-amber-400 text-amber-300 shadow-glow-gold animate-pulse'
-            } text-[10px] md:text-sm font-black whitespace-nowrap transition-all`}>
-              <Clock className={`w-3 h-3 md:w-3.5 md:h-3.5 ${timeLeft <= 5 ? 'text-red-400 animate-spin' : 'text-amber-400 animate-spin'}`} />
+                ? 'bg-red-950/95 border border-red-500 text-red-200 shadow-glow-red animate-bounce scale-105'
+                : 'bg-slate-950 border border-amber-400 text-amber-300 shadow-glow-gold animate-pulse'
+            } text-[10px] md:text-xs font-black whitespace-nowrap transition-all shadow-md`}>
+              <Clock className={`w-2.5 h-2.5 md:w-3 md:h-3 ${timeLeft <= 5 ? 'text-red-400 animate-spin' : 'text-amber-400 animate-spin'}`} />
               <span>{Math.ceil(timeLeft)}s</span>
             </div>
           )
         ) : payoutInfo ? (
-          <div className="absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border border-emerald-400 md:border-2 px-2 md:px-3.5 py-0.5 md:py-1 rounded-lg md:rounded-xl text-[10px] md:text-sm font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
-            +${payoutInfo.amount} ({payoutInfo.pot_name})
+          <div className="absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border border-emerald-400 px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
+            +${payoutInfo.amount}
           </div>
         ) : isWaitingNextHand ? (
-          <div className="absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-bold shadow-md z-30 whitespace-nowrap border border-slate-700 bg-slate-900/95 text-slate-400">
+          <div className="absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-bold shadow-md z-30 whitespace-nowrap border border-slate-700 bg-slate-900/95 text-slate-400">
             等下局
+          </div>
+        ) : isBB && (seatData.current_round_bet > 0 || !seatData.last_action) ? (
+          <div className="absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 whitespace-nowrap border border-indigo-400/70 bg-indigo-950/95 text-indigo-200">
+            BB {seatData.current_round_bet || bigBlind}
+          </div>
+        ) : isSB && (seatData.current_round_bet > 0 || !seatData.last_action) ? (
+          <div className="absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 whitespace-nowrap border border-indigo-400/70 bg-indigo-950/95 text-indigo-200">
+            SB {seatData.current_round_bet || blindUnit}
+          </div>
+        ) : seatData.current_round_bet > 0 && !seatData.last_action ? (
+          <div className="absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 whitespace-nowrap border border-amber-500/50 bg-slate-950/95 text-amber-300">
+            ${seatData.current_round_bet}
           </div>
         ) : seatData.last_action ? (
           <div
-            className={`absolute -top-8 md:-top-10 left-1/2 -translate-x-1/2 px-2 md:px-3.5 py-0.5 md:py-1 rounded-full text-[10px] md:text-sm font-black shadow-2xl z-30 whitespace-nowrap border transition-all md:border-2 ${
+            className={`absolute -top-6 md:-top-8 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 whitespace-nowrap border transition-all ${
               seatData.last_action.startsWith('Raise') || seatData.last_action.startsWith('加注')
-                ? 'bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 text-slate-950 border-amber-200 shadow-glow-gold scale-105'
+                ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 border-amber-200 shadow-glow-gold'
                 : seatData.last_action.startsWith('Bet') || seatData.last_action.startsWith('下注')
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 border-amber-300 shadow-glow-gold scale-105'
+                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 border-amber-300 shadow-glow-gold'
                 : seatData.last_action.startsWith('All-In') || seatData.last_action.startsWith('全下')
-                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white border-red-300 shadow-glow-red scale-105 animate-pulse'
+                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white border-red-300 shadow-glow-red animate-pulse'
                 : seatData.last_action.startsWith('Call') || seatData.last_action.startsWith('跟注')
                 ? 'bg-gradient-to-r from-emerald-600 to-teal-700 text-white border-emerald-300 shadow-md'
                 : seatData.last_action.startsWith('Check') || seatData.last_action.startsWith('过牌')
@@ -224,7 +240,7 @@ export default function PlayerSeat({
         {/* === BOTTOM-RIGHT CORNER: Time Bank Cards Badge (时间卡数量) === */}
         <div
           title={`时间卡: ${seatData.time_bank_cards ?? 3}张 (已玩 ${seatData.hands_played ?? 0} 手，每15手送1张)`}
-          className="absolute -bottom-2 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1 py-0.5 rounded-full border border-amber-500/60 text-[9px] md:text-[10px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
+          className="absolute -bottom-1.5 -right-1.5 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1 py-0.5 rounded-full border border-amber-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
         >
           <span>x{seatData.time_bank_cards ?? 3}</span>
         </div>
@@ -240,7 +256,7 @@ export default function PlayerSeat({
         )}
 
         {/* === TOP-RIGHT CORNER: Dealer / SB / BB Position Badges === */}
-        <div className="absolute -top-2 -right-2 z-20 flex gap-0.5 md:gap-1 items-center">
+        <div className="absolute -top-1.5 -right-1.5 z-20 flex gap-0.5 md:gap-1 items-center">
           {isDealer && (
             <span
               className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-slate-950 font-black text-[8px] md:text-[10px] flex items-center justify-center shadow-md ring-1 md:ring-2 ring-slate-900"
@@ -266,7 +282,9 @@ export default function PlayerSeat({
 
         {/* === MAIN AVATAR CARD === */}
         <div
-          className={`poker-player-avatar-card relative flex flex-col items-center justify-between w-full h-full rounded-xl md:rounded-2xl border-2 bg-gradient-to-b from-slate-850 via-slate-900 to-slate-950 shadow-2xl p-1 md:p-1.5 transition-all duration-300 overflow-hidden ${
+          className={`poker-player-avatar-card relative flex flex-col items-center justify-between w-full h-full ${
+            isSelf ? 'rounded-2xl border-2' : 'rounded-full border'
+          } bg-gradient-to-b from-slate-850 via-slate-900 to-slate-950 shadow-2xl p-1 transition-all duration-300 overflow-hidden ${
             effectiveIsCurrentTurn && isUsingTimeBank
               ? 'border-purple-400 shadow-glow-cyan scale-105 ring-2 ring-purple-400/80'
               : effectiveIsCurrentTurn
@@ -274,31 +292,31 @@ export default function PlayerSeat({
               : isWinner
               ? 'border-emerald-400 shadow-glow-cyan'
               : isSelf
-              ? (seatData.using_assistant ? 'border-purple-400 shadow-glow-cyan ring-2 ring-purple-500/60' : 'border-sky-400 shadow-lg ring-2 ring-sky-500/50')
+              ? (seatData.using_assistant ? 'border-purple-400 shadow-glow-cyan ring-2 ring-purple-500/60' : 'border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.35)] ring-2 ring-amber-400/50')
               : seatData.using_assistant
               ? 'border-purple-400 shadow-glow-cyan ring-1 ring-purple-500/50'
               : 'border-slate-700/80'
           }`}
         >
           {/* Avatar Emoji Icon */}
-          <div className="text-xl md:text-2xl lg:text-3xl leading-none select-none mt-0.5">
+          <div className="text-lg md:text-2xl leading-none select-none mt-0.5">
             {seatData.avatar || '👤'}
           </div>
 
           {/* Nickname */}
-          <div className="text-[10px] md:text-[11px] lg:text-xs font-bold text-slate-100 truncate max-w-[56px] md:max-w-[72px] lg:max-w-[84px] text-center leading-tight">
+          <div className="text-[9px] md:text-[10px] font-bold text-slate-100 truncate max-w-[48px] md:max-w-[64px] text-center leading-tight">
             {seatData.name}
           </div>
 
           {/* Chips in Bold Font */}
-          <div className="flex items-center gap-0.5 text-amber-300 font-black text-[11px] md:text-xs lg:text-sm leading-none mb-1">
-            <span className="text-[10px] md:text-[11px] text-amber-400 font-bold">$</span>
+          <div className="flex items-center gap-0.5 text-amber-300 font-black text-[10px] md:text-xs leading-none mb-0.5">
+            <span className="text-[9px] text-amber-400 font-bold">$</span>
             <span>{seatData.chips.toLocaleString()}</span>
           </div>
 
           {/* Integrated Turn Progress Bar (Bottom Rim of Avatar Card) */}
           {effectiveIsCurrentTurn && (
-            <div className="absolute inset-x-0 bottom-0 h-1 bg-slate-950/80 overflow-hidden border-t border-slate-800 md:h-1.5">
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-slate-950/80 overflow-hidden border-t border-slate-800">
               <div
                 className={`h-full transition-all duration-100 ${
                   isUsingTimeBank
@@ -316,29 +334,40 @@ export default function PlayerSeat({
 
           {/* All In Overlay */}
           {isAllIn && !isFolded && (
-            <div className="absolute inset-0 bg-red-950/90 rounded-xl md:rounded-2xl flex items-center justify-center font-black text-red-400 text-[10px] md:text-sm tracking-wider animate-pulse z-10">
+            <div className={`absolute inset-0 bg-red-950/90 ${isSelf ? 'rounded-2xl' : 'rounded-full'} flex items-center justify-center font-black text-red-400 text-[10px] md:text-xs tracking-wider animate-pulse z-10`}>
               ALL IN
             </div>
           )}
 
           {/* Folded Overlay */}
           {isFolded && (
-            <div className="absolute inset-0 bg-black/75 rounded-xl md:rounded-2xl flex items-center justify-center font-bold text-slate-400 text-[10px] md:text-xs z-10">
+            <div className={`absolute inset-0 bg-black/75 ${isSelf ? 'rounded-2xl' : 'rounded-full'} flex items-center justify-center font-bold text-slate-400 text-[10px] md:text-xs z-10`}>
               FOLD
             </div>
           )}
         </div>
 
-        {/* Cards Display - displayed directly below the avatar */}
+        {/* Cards Display */}
         {(() => {
           const shownCards = sortCardsLowToHigh(seatData.shown_cards || []);
           const holeCards = sortCardsLowToHigh(seatData.hole_cards || []);
 
+          const isLeftSide = screenPosition === 1 || screenPosition === 2;
+          const isRightSide = screenPosition === 4 || screenPosition === 5;
+          const isTop = screenPosition === 3;
+
+          const cardContainerClass = isSelf
+            ? 'poker-player-cards absolute top-[calc(100%-8px)] left-1/2 -translate-x-1/2 flex -space-x-1.5 z-10'
+            : isLeftSide
+            ? 'poker-player-cards absolute top-1/2 -translate-y-1/2 left-[calc(100%-8px)] flex -space-x-2.5 z-10'
+            : isRightSide
+            ? 'poker-player-cards absolute top-1/2 -translate-y-1/2 right-[calc(100%-8px)] flex -space-x-2.5 z-10'
+            : 'poker-player-cards absolute top-[calc(100%+2px)] left-1/2 -translate-x-1/2 flex -space-x-2 z-10';
+
           if (shownCards.length > 0) {
             if (isSelf && holeCards.length > 0) {
-              // For self: show all hole cards, with revealed cards highlighted
               return (
-                <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3.5 z-10">
+                <div className={cardContainerClass}>
                   {holeCards.map((c, i) => {
                     const isShown = shownCards.some(
                       (sc) =>
@@ -349,13 +378,13 @@ export default function PlayerSeat({
                       <div key={i} className="relative">
                         <CardView
                           card={c}
-                          size="md"
+                          size="sm"
                           className={`shadow-lg transition-all ${
                             isShown ? 'ring-2 ring-amber-400 shadow-glow-gold' : 'opacity-50'
                           }`}
                         />
                         <div
-                          className={`absolute -bottom-1.5 inset-x-0 py-0.2 text-[8px] font-black text-center rounded ${
+                          className={`absolute -bottom-1 inset-x-0 py-0.2 text-[7px] font-black text-center rounded ${
                             isShown ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-400'
                           }`}
                         >
@@ -367,14 +396,13 @@ export default function PlayerSeat({
                 </div>
               );
             } else {
-              // For opponents: show ONLY revealed cards (+ 1 card back if only 1 of 2 was revealed)
               return (
-                <div className="poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex -space-x-3 z-10">
+                <div className={cardContainerClass}>
                   {shownCards.map((c, i) => (
-                    <CardView key={i} card={c} size="sm" className="shadow-xl ring-2 ring-amber-400" />
+                    <CardView key={i} card={c} size="xs" className="shadow-xl ring-1 ring-amber-400" />
                   ))}
                   {shownCards.length === 1 && seatData.has_cards && (
-                    <CardView isBack size="sm" className="shadow-md rotate-6" />
+                    <CardView isBack size="xs" className="shadow-md rotate-6" />
                   )}
                 </div>
               );
@@ -383,12 +411,12 @@ export default function PlayerSeat({
 
           if (holeCards.length > 0) {
             return (
-              <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
+              <div className={cardContainerClass}>
                 {holeCards.map((c, i) => (
                   <CardView
                     key={i}
                     card={c}
-                    size={isSelf ? 'md' : 'sm'}
+                    size={isSelf ? 'sm' : 'xs'}
                     className="shadow-lg"
                   />
                 ))}
@@ -398,9 +426,9 @@ export default function PlayerSeat({
 
           if (seatData.has_cards && !isFolded) {
             return (
-              <div className={`poker-player-cards absolute top-[calc(100%+4px)] left-1/2 -translate-x-1/2 flex ${isSelf ? '-space-x-3.5' : '-space-x-3'} z-10`}>
-                <CardView isBack size={isSelf ? 'md' : 'sm'} className="-rotate-6 shadow-md" />
-                <CardView isBack size={isSelf ? 'md' : 'sm'} className="rotate-6 shadow-md" />
+              <div className={cardContainerClass}>
+                <CardView isBack size={isSelf ? 'sm' : 'xs'} className="-rotate-6 shadow-md" />
+                <CardView isBack size={isSelf ? 'sm' : 'xs'} className="rotate-6 shadow-md" />
               </div>
             );
           }

@@ -21,6 +21,10 @@ import {
   Bot,
   Eye,
   UserPlus,
+  Menu,
+  X,
+  MessageCircle,
+  SmilePlus,
 } from 'lucide-react';
 
 const STREET_LABELS = {
@@ -62,6 +66,10 @@ export default function PokerTable({
   const [leaveRequested, setLeaveRequested] = useState(false);
   const [isEquityOpen, setIsEquityOpen] = useState(false);
   const [showSpectatorList, setShowSpectatorList] = useState(false);
+  const [isRoomPanelOpen, setIsRoomPanelOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isEmojiOpen, setIsEmojiOpen] = useState(false);
+  const [hasSocialUnread, setHasSocialUnread] = useState(false);
 
   const table = room?.table;
   const isHost = room?.host_player_id === currentUser?.user_id;
@@ -85,6 +93,15 @@ export default function PokerTable({
     setIsMuted(next);
     soundEngine.setMuted(next);
   };
+
+  useEffect(() => {
+    if (!isRoomPanelOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setIsRoomPanelOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isRoomPanelOpen]);
 
   // Find user's own seat index in table.seats
   const selfSeatIndex = useMemo(() => {
@@ -325,6 +342,72 @@ export default function PokerTable({
     <div className="poker-table-root relative w-full h-screen max-h-screen overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
       {/* Top Navigation Bar */}
       <header className="poker-table-header flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
+        <div className="poker-table-mobile-header">
+          <button
+            type="button"
+            onClick={() => setIsRoomPanelOpen(true)}
+            className="poker-mobile-menu-button"
+            aria-label="打开房间信息与设置"
+            aria-expanded={isRoomPanelOpen}
+            aria-controls="poker-mobile-room-panel"
+          >
+            <Menu aria-hidden="true" />
+          </button>
+
+          <div className="poker-mobile-room-title">
+            <strong>{room?.config?.room_name || 'HPoker 现金桌'}</strong>
+            <span>
+              盲注 ${room?.config?.small_blind || 10}/${room?.config?.big_blind || 20} · 底池 ${table?.total_pot || 0}
+            </span>
+          </div>
+
+          <div className="poker-mobile-header-tools">
+            {selfSeat && (
+              <EquityTrigger
+                isOpen={isEquityOpen}
+                onToggle={handleToggleEquity}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsEmojiOpen((v) => !v);
+                setIsChatOpen(false);
+              }}
+              className={`poker-mobile-tool-button ${isEmojiOpen ? 'bg-amber-500/25 border-amber-400 text-amber-300' : ''}`}
+              aria-label="发表情"
+              title="发表情"
+            >
+              <SmilePlus className="w-4 h-4 text-amber-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsChatOpen((v) => !v);
+                setIsEmojiOpen(false);
+                setHasSocialUnread(false);
+              }}
+              className={`poker-mobile-tool-button relative ${isChatOpen ? 'bg-amber-500/25 border-amber-400 text-amber-300' : ''}`}
+              aria-label="牌桌聊天"
+              title="牌桌聊天"
+            >
+              <MessageCircle className="w-4 h-4 text-amber-400" />
+              {hasSocialUnread && (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-slate-950 animate-pulse" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={toggleMute}
+              className="poker-mobile-tool-button"
+              aria-label={isMuted ? '取消静音' : '静音'}
+            >
+              {isMuted ? <VolumeX className="text-red-400" /> : <Volume2 className="text-amber-400" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="poker-table-desktop-header">
         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
           <button
             onClick={handleLeaveTable}
@@ -457,6 +540,38 @@ export default function PokerTable({
             {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-amber-400" />}
           </button>
 
+          {/* Emoji Toggle */}
+          <button
+            onClick={() => {
+              setIsEmojiOpen((v) => !v);
+              setIsChatOpen(false);
+            }}
+            className={`p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer shadow ${
+              isEmojiOpen ? 'border-amber-400 bg-amber-950/40 text-amber-300' : ''
+            }`}
+            title="表情"
+          >
+            <SmilePlus className="w-4 h-4 text-amber-400" />
+          </button>
+
+          {/* Chat Toggle */}
+          <button
+            onClick={() => {
+              setIsChatOpen((v) => !v);
+              setIsEmojiOpen(false);
+              setHasSocialUnread(false);
+            }}
+            className={`relative p-2 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer shadow ${
+              isChatOpen ? 'border-amber-400 bg-amber-950/40 text-amber-300' : ''
+            }`}
+            title="聊天"
+          >
+            <MessageCircle className="w-4 h-4 text-amber-400" />
+            {hasSocialUnread && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full ring-2 ring-slate-950 animate-pulse" />
+            )}
+          </button>
+
           {/* Rebuy Button (only when in-seat and all chips are lost, chips === 0) */}
           {canRebuy && (
             <button
@@ -500,7 +615,120 @@ export default function PokerTable({
             </button>
           )}
         </div>
+        </div>
       </header>
+
+      {isRoomPanelOpen && (
+        <>
+          <button
+            type="button"
+            className="poker-mobile-room-backdrop"
+            onClick={() => setIsRoomPanelOpen(false)}
+            aria-label="关闭房间信息"
+          />
+          <aside
+            id="poker-mobile-room-panel"
+            className="poker-mobile-room-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label="房间信息与设置"
+          >
+            <div className="poker-mobile-room-panel__header">
+              <div>
+                <span>房间信息</span>
+                <strong>{room?.config?.room_name || 'HPoker 现金桌'}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRoomPanelOpen(false)}
+                aria-label="关闭房间信息"
+              >
+                <X aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="poker-mobile-room-panel__content">
+              <section className="poker-mobile-room-config" aria-label="房间配置">
+                <div><span>盲注</span><strong>${room?.config?.small_blind}/${room?.config?.big_blind}</strong></div>
+                <div><span>买入</span><strong>${room?.config?.buyin_chips}</strong></div>
+                <div><span>现金</span><strong>¥{room?.config?.cash_value}</strong></div>
+                <div><span>操作时间</span><strong>{room?.config?.action_timeout}s</strong></div>
+                <div><span>座位</span><strong>{(table?.seats || []).filter(Boolean).length}/{maxSeats}</strong></div>
+                <div>
+                  <span>辅助折算</span>
+                  <strong>{Math.round((room?.config?.assistant_win_ratio ?? 1) * 100)}%</strong>
+                </div>
+              </section>
+
+              <section className="poker-mobile-room-spectators" aria-label="观战玩家">
+                <div className="poker-mobile-room-section-title">
+                  <span><Eye aria-hidden="true" /> 观战玩家</span>
+                  <strong>{spectatorCount}</strong>
+                </div>
+                {spectators.length > 0 ? (
+                  <div className="poker-mobile-spectator-list">
+                    {spectators.map((spectator) => (
+                      <span key={spectator.user_id}>
+                        <i>{spectator.avatar || '👀'}</i>
+                        {spectator.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p>暂无观战者</p>
+                )}
+              </section>
+
+              <section className="poker-mobile-room-actions" aria-label="房间操作">
+                {canRebuy && (
+                  <button type="button" onClick={() => { setIsRoomPanelOpen(false); handleRebuy(); }}>
+                    <RefreshCw aria-hidden="true" /> 补码 ${room?.config?.buyin_chips}
+                  </button>
+                )}
+                {isHost && !room?.is_ended && (
+                  <button
+                    type="button"
+                    onClick={() => { setIsRoomPanelOpen(false); handleAddTestBot(); }}
+                    disabled={!canAddTestBot}
+                  >
+                    <Bot aria-hidden="true" /> 添加机器人{botCount > 0 ? ` · ${botCount}` : ''}
+                  </button>
+                )}
+                {selfSeat ? (
+                  <button type="button" onClick={() => { setIsRoomPanelOpen(false); handleStandUpClick(); }}>
+                    <Eye aria-hidden="true" /> 站起观战
+                  </button>
+                ) : hasEmptySeats ? (
+                  <button type="button" onClick={() => { setIsRoomPanelOpen(false); handleQuickSitDown(); }}>
+                    <UserPlus aria-hidden="true" /> 快速入座
+                  </button>
+                ) : null}
+                <button type="button" onClick={() => { setIsRoomPanelOpen(false); toggleMute(); }}>
+                  {isMuted ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
+                  {isMuted ? '打开声音' : '关闭声音'}
+                </button>
+                {(isHost || currentUser?.is_admin) && !room?.is_ended && (
+                  <button
+                    type="button"
+                    className="poker-mobile-room-action-danger"
+                    onClick={() => { setIsRoomPanelOpen(false); handleDeleteRoom(); }}
+                  >
+                    <Trash2 aria-hidden="true" /> 解散房间
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="poker-mobile-room-action-danger"
+                  onClick={() => { setIsRoomPanelOpen(false); handleLeaveTable(); }}
+                  disabled={leaveRequested}
+                >
+                  <LogOut aria-hidden="true" /> 离开房间
+                </button>
+              </section>
+            </div>
+          </aside>
+        </>
+      )}
 
       {/* Main Body: Left Equity Panel + Center Poker Table Felt + Right Action Console Sidebar */}
       <div className="poker-table-body flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
@@ -537,11 +765,16 @@ export default function PokerTable({
               {/* Felt Texture Pattern */}
               <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#2ecc71_1.5px,transparent_1.5px)] [background-size:14px_14px]" />
 
-              {/* HPoker Center Logo Watermark */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-20">
-                <span className="text-4xl md:text-6xl font-black tracking-widest text-amber-500 font-serif">
+              {/* Center Felt Watermark */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                <span className="text-3xl md:text-5xl font-black tracking-[0.25em] text-amber-500/15 font-serif">
                   HPOKER
                 </span>
+                <div className="mt-14 md:mt-20 flex items-center gap-2 opacity-25">
+                  <span className="text-[10px] md:text-xs tracking-[0.3em] font-black text-amber-400 uppercase font-mono">
+                    ♠ TEXAS HOLD'EM ♠
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -827,6 +1060,8 @@ export default function PokerTable({
                   >
                     <PlayerSeat
                       seatIndex={seatIdx}
+                      screenPosition={screenIdx}
+                      blindUnit={room?.config?.small_blind || 10}
                       seatData={seatData}
                       isCurrentTurn={isCurrentTurn}
                       isDealer={isDealer}
@@ -866,47 +1101,22 @@ export default function PokerTable({
         <aside className={`poker-table-actions w-full h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20 transition-all duration-300 ${
           isEquityOpen ? 'lg:w-80 xl:w-96 2xl:w-[410px]' : 'lg:w-96 xl:w-[410px]'
         }`}>
-          {/* On mobile this becomes the sticky summary while the action console scrolls. */}
-          <div className="poker-mobile-sticky-info" aria-label="牌局重要信息">
-            <div className="poker-mobile-sticky-info__header">
-              <span>{STREET_LABELS[table?.street] || '等待开局'}</span>
-              <span>底池 ${table?.total_pot || 0}</span>
+          <div className="poker-mobile-game-summary" aria-label="牌局重要信息">
+            <div className="poker-mobile-game-summary__hand">
+              <span>我的牌</span>
+              <div className="flex -space-x-2">
+                {orderedHoleCards.length > 0 ? (
+                  orderedHoleCards.map((card, index) => (
+                    <CardView key={index} card={card} size="xs" className="shadow-lg" />
+                  ))
+                ) : (
+                  <b>—</b>
+                )}
+              </div>
             </div>
-
-            <div className="poker-mobile-sticky-info__content">
-              <CommunityBoard
-                boardCards={table?.board_cards || []}
-                boardCards2={table?.board_cards_2 || []}
-                boardCardsFull={table?.board_cards_full || []}
-                boardCards2Full={table?.board_cards_2_full || []}
-                allInInitialBoardCount={table?.all_in_initial_board_count || 0}
-                ritEnabled={table?.rit_enabled || false}
-                street={table?.street || 'IDLE'}
-                boardCardsRevealed={table?.board_cards_revealed || false}
-                onReveal={handleRevealBoard}
-                isRevealing={isRevealingBoard}
-                size="xs"
-                compact
-              />
-
-              {selfSeat && (
-                <div className="poker-mobile-sticky-hand">
-                  <div className="poker-mobile-sticky-hand__label">
-                    <span>我的牌</span>
-                    <span>${selfSeat.chips}</span>
-                  </div>
-                  <div className="flex -space-x-2">
-                    {orderedHoleCards.length > 0 ? (
-                      orderedHoleCards.map((card, index) => (
-                        <CardView key={index} card={card} size="xs" className="shadow-lg" />
-                      ))
-                    ) : (
-                      <span className="text-[10px] text-slate-500">暂无手牌</span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <div><span>底池</span><strong>${table?.total_pot || 0}</strong></div>
+            <div><span>我的筹码</span><strong>{selfSeat ? `$${selfSeat.chips}` : '观战'}</strong></div>
+            <div><span>当前阶段</span><strong>{STREET_LABELS[table?.street] || '等待开局'}</strong></div>
           </div>
 
           <ActionBar
@@ -975,6 +1185,12 @@ export default function PokerTable({
         canReact={true}
         onSendChat={(message) => onSendWsEvent('CHAT_MESSAGE', { message })}
         onSendEmoji={(emoji) => onSendWsEvent('EMOJI_REACTION', { emoji })}
+        chatOpen={isChatOpen}
+        onToggleChat={setIsChatOpen}
+        emojiOpen={isEmojiOpen}
+        onToggleEmoji={setIsEmojiOpen}
+        onUnreadChange={setHasSocialUnread}
+        hideFloatingButtons={true}
       />
 
     </div>
