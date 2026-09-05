@@ -110,10 +110,6 @@ export default function PokerTable({
   }, [table?.seats, currentUser?.user_id]);
 
   const selfSeat = selfSeatIndex >= 0 ? table.seats[selfSeatIndex] : null;
-  const orderedHoleCards = useMemo(
-    () => sortCardsLowToHigh(selfSeat?.hole_cards || []),
-    [selfSeat?.hole_cards]
-  );
 
   // Active opponents still in-hand (not folded, has cards, not self)
   const numOpponents = useMemo(() => {
@@ -1102,24 +1098,6 @@ export default function PokerTable({
         <aside className={`poker-table-actions w-full h-auto lg:h-full flex-shrink-0 bg-slate-950/95 border-t lg:border-t-0 lg:border-l border-slate-800/90 shadow-2xl overflow-y-auto p-3 lg:p-4 z-20 transition-all duration-300 ${
           isEquityOpen ? 'lg:w-80 xl:w-96 2xl:w-[410px]' : 'lg:w-96 xl:w-[410px]'
         }`}>
-          <div className="poker-mobile-game-summary" aria-label="牌局重要信息">
-            <div className="poker-mobile-game-summary__hand">
-              <span>我的牌</span>
-              <div className="flex -space-x-2">
-                {orderedHoleCards.length > 0 ? (
-                  orderedHoleCards.map((card, index) => (
-                    <CardView key={index} card={card} size="xs" className="shadow-lg" />
-                  ))
-                ) : (
-                  <b>—</b>
-                )}
-              </div>
-            </div>
-            <div><span>底池</span><strong>${table?.total_pot || 0}</strong></div>
-            <div><span>我的筹码</span><strong>{selfSeat ? `$${selfSeat.chips}` : '观战'}</strong></div>
-            <div><span>当前阶段</span><strong>{STREET_LABELS[table?.street] || '等待开局'}</strong></div>
-          </div>
-
           <ActionBar
             legalActions={table?.legal_actions}
             totalPot={table?.total_pot || 0}
