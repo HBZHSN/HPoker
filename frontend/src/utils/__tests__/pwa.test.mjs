@@ -195,3 +195,43 @@ test('initAppHeightSync: compensates iOS standalone underreported innerHeight us
   cleanup();
 });
 
+test('initAppHeightSync: uses visualViewport height when available in standard browser mode', () => {
+  const customProps = {};
+  const mockClasses = new Set();
+  const mockDoc = {
+    documentElement: {
+      classList: {
+        add: (cls) => mockClasses.add(cls),
+        remove: (cls) => mockClasses.delete(cls),
+      },
+      style: {
+        setProperty: (key, val) => {
+          customProps[key] = val;
+        },
+      },
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  const mockWin = {
+    innerHeight: 800,
+    navigator: {
+      standalone: false,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+    },
+    visualViewport: {
+      height: 664.4,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+
+  const cleanup = initAppHeightSync(mockWin, mockDoc);
+  assert.equal(customProps['--app-height'], '664px');
+  assert.equal(mockClasses.has('pwa-standalone'), false);
+  assert.equal(mockClasses.has('ios-device'), true);
+  cleanup();
+});
+

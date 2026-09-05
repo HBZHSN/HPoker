@@ -11,8 +11,9 @@ body,
 #root {
   width: 100%;
   height: 100%;
-  height: -webkit-fill-available;
+  height: 100dvh;
   min-height: 100%;
+  min-height: 100dvh;
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -64,17 +65,16 @@ button, a, input, select {
 @media (max-width: 1023px) {
   html,
   body {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
     width: 100%;
     height: 100%;
-    height: -webkit-fill-available;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
+    min-height: 100%;
+    min-height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
     background-color: #080b11;
+    background: #080b11;
   }
 
   #root {
@@ -85,7 +85,10 @@ button, a, input, select {
     bottom: 0;
     width: 100%;
     height: 100%;
-    height: -webkit-fill-available;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
+    min-height: 100%;
+    min-height: 100dvh;
     overflow: hidden;
     background-color: #080b11;
   }
@@ -98,8 +101,10 @@ button, a, input, select {
     bottom: 0;
     width: 100%;
     height: 100%;
-    height: -webkit-fill-available;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
     min-height: 100%;
+    min-height: 100dvh;
     max-height: none;
     margin: 0;
     padding: 0;
@@ -141,13 +146,14 @@ button, a, input, select {
 
   .poker-table-actions {
     flex: 0 0 auto;
+    margin-top: auto;
     width: 100%;
     height: auto;
     max-height: none;
     overflow: hidden;
     border-top: 1px solid rgba(245, 158, 11, 0.35);
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(8, 11, 17, 1) 100%);
-    padding: 6px 8px max(6px, env(safe-area-inset-bottom, 0px)) !important;
+    padding: 6px 8px max(10px, calc(env(safe-area-inset-bottom, 0px) - 10px)) !important;
   }
 
   .poker-table-actions > .poker-action-bar {
@@ -183,14 +189,12 @@ button, a, input, select {
 @media (max-width: 767px), (max-width: 1023px) and (orientation: landscape) and (max-height: 560px) {
   html,
   body {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
     width: 100%;
     height: 100%;
-    height: -webkit-fill-available;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
+    min-height: 100%;
+    min-height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
     background-color: #080b11;
@@ -205,7 +209,10 @@ button, a, input, select {
     bottom: 0;
     width: 100%;
     height: 100%;
-    height: -webkit-fill-available;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
+    min-height: 100%;
+    min-height: 100dvh;
     overflow: hidden;
     background-color: #080b11;
   }
@@ -218,8 +225,10 @@ button, a, input, select {
     bottom: 0;
     width: 100%;
     height: 100%;
-    height: -webkit-fill-available;
+    height: 100dvh;
+    height: var(--app-height, 100dvh);
     min-height: 100%;
+    min-height: 100dvh;
     max-height: none;
     margin: 0;
     padding: 0;
@@ -731,14 +740,27 @@ button, a, input, select {
   }
 
   .poker-table-actions {
+    position: relative;
     flex: 0 0 auto;
+    margin-top: auto;
     width: 100%;
     height: auto;
     max-height: none;
-    overflow: hidden;
+    overflow: visible;
     border-top: 1px solid rgba(245, 158, 11, 0.35);
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(8, 11, 17, 1) 100%);
-    padding: 6px 8px max(6px, env(safe-area-inset-bottom, 0px)) !important;
+    padding: 6px 8px max(10px, calc(env(safe-area-inset-bottom, 0px) - 10px)) !important;
+  }
+
+  .poker-table-actions::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -60px;
+    height: 60px;
+    background: #080b11;
+    pointer-events: none;
   }
 
   .poker-action-controls-mobile {
@@ -778,7 +800,7 @@ button, a, input, select {
   }
 
   .poker-action-button {
-    min-height: 58px !important;
+    min-height: 60px !important;
     padding: 6px 4px !important;
     border-radius: 14px;
   }
@@ -796,7 +818,7 @@ button, a, input, select {
 
   .poker-sizing-row {
     padding: 5px 8px;
-    min-height: 48px;
+    min-height: 50px;
     border-radius: 14px;
     gap: 8px;
   }
@@ -830,12 +852,12 @@ button, a, input, select {
   .poker-presets-grid {
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 5px;
+    gap: 6px;
   }
 
   .poker-presets-grid button,
   .poker-preset-btn {
-    min-height: 46px;
+    min-height: 48px;
     padding: 4px 2px;
     border-radius: 11px;
     line-height: 1.15;
@@ -849,7 +871,7 @@ button, a, input, select {
 
   .poker-presets-grid button span:last-child,
   .poker-preset-btn span:last-child {
-    font-size: 11.5px;
+    font-size: 12px;
     font-weight: 900;
   }
 
@@ -1010,7 +1032,22 @@ button, a, input, select {
 /* PWA Standalone & iOS Full-bleed Rules */
 @media (display-mode: standalone), (display-mode: fullscreen) {
   html,
-  body,
+  body {
+    width: 100% !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    height: var(--app-height, 100dvh) !important;
+    min-height: 100% !important;
+    min-height: 100dvh !important;
+    min-height: var(--app-height, 100dvh) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    background-color: #080b11 !important;
+    background: #080b11 !important;
+  }
+
   #root,
   .poker-table-root {
     position: fixed !important;
@@ -1020,19 +1057,42 @@ button, a, input, select {
     bottom: 0 !important;
     width: 100% !important;
     height: 100% !important;
-    height: -webkit-fill-available !important;
+    height: 100dvh !important;
+    height: var(--app-height, 100dvh) !important;
     min-height: 100% !important;
+    min-height: 100dvh !important;
+    min-height: var(--app-height, 100dvh) !important;
     max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     background-color: #080b11 !important;
+    background: #080b11 !important;
   }
 }
 
 html.pwa-standalone,
 html.pwa-standalone body,
+html.ios-device,
+html.ios-device body {
+  width: 100% !important;
+  height: 100% !important;
+  height: 100dvh !important;
+  height: var(--app-height, 100dvh) !important;
+  min-height: 100% !important;
+  min-height: 100dvh !important;
+  min-height: var(--app-height, 100dvh) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  background-color: #080b11 !important;
+  background: #080b11 !important;
+}
+
 html.pwa-standalone #root,
-html.pwa-standalone .poker-table-root {
+html.pwa-standalone .poker-table-root,
+html.ios-device #root,
+html.ios-device .poker-table-root {
   position: fixed !important;
   top: 0 !important;
   left: 0 !important;
@@ -1040,12 +1100,16 @@ html.pwa-standalone .poker-table-root {
   bottom: 0 !important;
   width: 100% !important;
   height: 100% !important;
-  height: -webkit-fill-available !important;
+  height: 100dvh !important;
+  height: var(--app-height, 100dvh) !important;
   min-height: 100% !important;
+  min-height: 100dvh !important;
+  min-height: var(--app-height, 100dvh) !important;
   max-height: none !important;
   margin: 0 !important;
   padding: 0 !important;
   background-color: #080b11 !important;
+  background: #080b11 !important;
 }
 
 /* Custom scrollbar */

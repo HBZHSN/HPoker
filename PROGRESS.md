@@ -810,6 +810,17 @@
 - [x] 78.4 移动端六人桌锚点边距微调与牌桌视觉协调 (`index.css`)：微调左右两侧座次锚点水平安全间距，保持与牌桌边缘和公共牌区完美比例，并确保桌面端布局绝对隔离不受影响
 - [x] 78.5 全量测试验证与生产构建：运行全量 193 项后端单元测试、39 项前端单元测试与 Vite 生产打包验证
 
+---
+
+### 阶段 79：iOS 底部空白截断彻底根除与移动端自适应贴底沉浸布局 (iOS True Full-Bleed Zero Bottom Gap & Flush Mobile Console)
+- [x] 79.1 根治 WebKit 视口被 `-webkit-fill-available` 异常截断顽疾 (`index.css`)：全面废除并清除所有容器上的 `height: -webkit-fill-available`，改用现代标准 `100dvh` 与真实设备尺寸变量 `var(--app-height, 100dvh)`，消除 WebKit 在 fixed 定位下优先采纳缺损高度而弃用 `bottom: 0` 导致的底部 60px~100px 巨大留白断层
+- [x] 79.2 移动端根容器与全屏/iOS 规则解耦强化 (`index.css`)：移除 `html, body` 上的 `position: fixed` 防止 WebKit 视口坐标系偏移错位，采用 `100% / 100dvh` 结合 `overflow: hidden; overscroll-behavior: none;`；将 `#root` 与 `.poker-table-root` 在全屏、独立模式及 iOS 专属选择器下精准锚定至 `inset: 0` 与 `height: var(--app-height, 100dvh)`，彻底拉通整个屏幕
+- [x] 79.3 移动端底栏 `.poker-table-actions` 物理贴底与防漏层构建 (`index.css`)：为移动端底栏增加 `margin-top: auto;` 确保永远紧贴屏幕最底部；调整安全区内边距为 `max(10px, calc(env(safe-area-inset-bottom, 0px) - 10px))`，既安全避让 Home Indicator 横条又消解空虚大下巴；挂载 `::after` 60px 下向延伸防漏遮罩，杜绝任何透底缝隙
+- [x] 79.4 移动端按键与预设矩阵尺寸进阶微调 (`index.css`)：主操作按键高度稳固在 60px，滑块行稳固在 50px，12 档快捷预设按钮稳固在 48px，字号调谐更饱满清晰
+- [x] 79.5 视口同步与离线缓存升级 (`pwa.js`, `pwa.test.mjs`, `sw.js`)：在 `initAppHeightSync` 中补全 iOS 浏览器模式 `visualViewport.height` 监听，新增单元测试；升级 Service Worker 缓存至 `hpoker-shell-v3`
+- [x] 79.6 全量测试与生产构建：全部 193 项 Python 后端单元测试与 40 项前端单元测试 100% 通过，Vite 生产构建成功
+
+
 
 
 
