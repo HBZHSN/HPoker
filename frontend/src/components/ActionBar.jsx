@@ -27,6 +27,13 @@ import {
   amountToNonlinearProgress,
   nonlinearProgressToAmount,
 } from '../utils/betSizing';
+import {
+  POT_PRESETS,
+  BB_PRESETS,
+  ALL_QUICK_PRESETS,
+  parseFKey,
+  isIgnoredInputTarget,
+} from '../utils/tableShortcuts';
 
 export default function ActionBar({
   legalActions,
@@ -267,53 +274,6 @@ export default function ActionBar({
     }
   }, [effectiveIsMyTurn, legalActions]);
 
-  // Keyboard shortcuts (PC)
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (disabled) return;
-      if (['input', 'textarea'].includes(e.target.tagName.toLowerCase())) return;
-
-      if (effectiveIsMyTurn && legalActionsRef.current) {
-        const legal = legalActionsRef.current;
-        if (e.code === 'KeyF' && legal.can_fold) {
-          onAction('FOLD');
-        } else if (e.code === 'Space') {
-          e.preventDefault();
-          if (legal.can_check) {
-            onAction('CHECK');
-          } else if (legal.can_call) {
-            onAction('CALL', legal.call_amount);
-          }
-        } else if (e.code === 'KeyR' && (legal.can_bet || legal.can_raise)) {
-          if (currentAmountRef.current >= maxVal && legal.can_all_in) {
-            onAction('ALL_IN', legal.all_in_amount || maxVal);
-          } else {
-            const act = legal.can_bet ? 'BET' : 'RAISE';
-            onAction(act, currentAmountRef.current);
-          }
-        } else if (e.code === 'KeyA' && (legal.can_all_in || legal.can_bet || legal.can_raise)) {
-          if (legal.can_all_in) {
-            onAction('ALL_IN', legal.all_in_amount || maxVal);
-          }
-        }
-      } else if (canPreActionRef.current) {
-        if (e.code === 'KeyF') {
-          e.preventDefault();
-          togglePreActionRef.current(PRE_ACTIONS.CHECK_FOLD);
-        } else if (e.code === 'Space') {
-          e.preventDefault();
-          togglePreActionRef.current(PRE_ACTIONS.CHECK_CALL);
-        } else if (e.code === 'KeyR') {
-          e.preventDefault();
-          togglePreActionRef.current(PRE_ACTIONS.RAISE);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [disabled, onAction, effectiveIsMyTurn, maxVal]);
-
   // Preset Bet Sizing helpers
   const calcPresetAmount = (ratio) => {
     const isRaise = effectiveIsMyTurn ? legalActions?.can_raise : (effectiveHighestBet > 0);
@@ -371,38 +331,9 @@ export default function ActionBar({
     }
   };
 
-  const potPresets = [
-    { label: '1/3 底池', ratio: 1 / 3 },
-    { label: '1/2 底池', ratio: 1 / 2 },
-    { label: '2/3 底池', ratio: 2 / 3 },
-    { label: '底池', ratio: 1.0 },
-    { label: '1.5底池', ratio: 1.5 },
-    { label: '2底池', ratio: 2.0 },
-    { label: '3底池', ratio: 3.0 },
-    { label: '全下', isMax: true },
-  ];
-
-  const bbPresets = [
-    { label: '2.5 BB', mult: 2.5 },
-    { label: '3 BB', mult: 3 },
-    { label: '4 BB', mult: 4 },
-    { label: '5 BB', mult: 5 },
-  ];
-
-  const quickPresets = [
-    { label: '1/3 底池', type: 'pot', ratio: 1 / 3 },
-    { label: '1/2 底池', type: 'pot', ratio: 1 / 2 },
-    { label: '2/3 底池', type: 'pot', ratio: 2 / 3 },
-    { label: '底池', type: 'pot', ratio: 1.0 },
-    { label: '1.5 底池', type: 'pot', ratio: 1.5 },
-    { label: '2 底池', type: 'pot', ratio: 2.0 },
-    { label: '3 底池', type: 'pot', ratio: 3.0 },
-    { label: '全下', type: 'allin', isMax: true },
-    { label: '2.5 BB', type: 'bb', mult: 2.5 },
-    { label: '3 BB', type: 'bb', mult: 3 },
-    { label: '4 BB', type: 'bb', mult: 4 },
-    { label: '5 BB', type: 'bb', mult: 5 },
-  ];
+  const potPresets = POT_PRESETS;
+  const bbPresets = BB_PRESETS;
+  const quickPresets = ALL_QUICK_PRESETS;
 
   const handlePresetClick = (amount, isMax) => {
     if (effectiveIsMyTurn) {
@@ -414,9 +345,12 @@ export default function ActionBar({
     } else if (canPreAction) {
       const target = isMax ? maxVal : amount;
       setRaiseAmount(target);
-      if (preAction === PRE_ACTIONS.RAISE) {
-        setPreActionData((prev) => (prev ? { ...prev, targetAmount: target } : prev));
-      }
+      setPreAction(PRE_ACTIONS.RAISE);
+      setPreActionData({
+        street,
+        highestBet: effectiveHighestBet,
+        targetAmount: target,
+      });
     }
   };
 
@@ -429,6 +363,155 @@ export default function ActionBar({
     const act = legalActions.can_bet ? 'BET' : 'RAISE';
     onAction(act, currentAmount);
   };
+
+  const triggerFKeyPreset = (fNum) => {
+    const targetIdx = fNum - 1;
+    if (targetIdx < 0 || targetIdx >= 12) return;
+
+    if (targetIdx < 8) {
+      const preset = potPresets[targetIdx];
+      const amount = preset.isMax ? maxVal : calcPresetAmount(preset.ratio);
+      const isTooSmall = !preset.isMax && amount < sizingMin;
+      const isPresetDisabled = effectiveIsMyTurn
+        ? (!legalActions?.can_bet && !legalActions?.can_raise && !(preset.isMax && legalActions?.can_all_in)) || isTooSmall
+        : (!canPreAction || maxVal <= 0 || isTooSmall);
+
+      if (!isPresetDisabled) {
+        handlePresetClick(amount, preset.isMax);
+      }
+    } else {
+      const preset = bbPresets[targetIdx - 8];
+      const rawAmount = calcBBAmount(preset.mult);
+      const amount = alignAmount(rawAmount);
+      const isTooSmall = rawAmount < sizingMin;
+      const isBbDisabled = effectiveIsMyTurn
+        ? (!legalActions?.can_bet && !legalActions?.can_raise) || isTooSmall
+        : (!canPreAction || maxVal <= 0 || isTooSmall);
+
+      if (!isBbDisabled) {
+        handlePresetClick(amount, false);
+      }
+    }
+  };
+
+  const triggerFKeyPresetRef = useRef(triggerFKeyPreset);
+  triggerFKeyPresetRef.current = triggerFKeyPreset;
+  const adjustBBRef = useRef(adjustBB);
+  adjustBBRef.current = adjustBB;
+  const handleRaiseSubmitRef = useRef(handleRaiseSubmit);
+  handleRaiseSubmitRef.current = handleRaiseSubmit;
+
+  // Keyboard shortcuts (PC)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (disabled) return;
+      if (isIgnoredInputTarget(e)) return;
+
+      // 1. F1 to F12 Quick Bet Presets (1-to-1 mapped)
+      const fNum = parseFKey(e);
+      if (fNum !== null) {
+        e.preventDefault();
+        triggerFKeyPresetRef.current?.(fNum);
+        return;
+      }
+
+      // 2. Adjust bet sizing with Arrow keys (+1BB / -1BB)
+      if (e.code === 'ArrowUp' || e.code === 'ArrowRight') {
+        if (
+          (effectiveIsMyTurn && (legalActionsRef.current?.can_bet || legalActionsRef.current?.can_raise)) ||
+          (canPreActionRef.current && maxVal > 0)
+        ) {
+          e.preventDefault();
+          adjustBBRef.current?.(1);
+          return;
+        }
+      } else if (e.code === 'ArrowDown' || e.code === 'ArrowLeft') {
+        if (
+          (effectiveIsMyTurn && (legalActionsRef.current?.can_bet || legalActionsRef.current?.can_raise)) ||
+          (canPreActionRef.current && maxVal > 0)
+        ) {
+          e.preventDefault();
+          adjustBBRef.current?.(-1);
+          return;
+        }
+      }
+
+      // 3. Time Card shortcut [T]
+      if (e.code === 'KeyT') {
+        if (effectiveIsMyTurn && !isUsingTimeBank && (selfSeat?.time_bank_cards ?? 0) > 0 && onUseTimeCard) {
+          e.preventDefault();
+          onUseTimeCard();
+          return;
+        }
+      }
+
+      // 4. Enter / NumpadEnter to submit bet / raise
+      if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+        if (effectiveIsMyTurn && legalActionsRef.current) {
+          const legal = legalActionsRef.current;
+          if (legal.can_bet || legal.can_raise) {
+            e.preventDefault();
+            handleRaiseSubmitRef.current?.();
+            return;
+          }
+        }
+      }
+
+      // 5. Action / Pre-action shortcuts
+      if (effectiveIsMyTurn && legalActionsRef.current) {
+        const legal = legalActionsRef.current;
+        if (e.code === 'KeyF' && legal.can_fold) {
+          e.preventDefault();
+          onAction('FOLD');
+        } else if (e.code === 'Space') {
+          e.preventDefault();
+          if (legal.can_check) {
+            onAction('CHECK');
+          } else if (legal.can_call) {
+            onAction('CALL', legal.call_amount);
+          }
+        } else if (e.code === 'KeyR' && (legal.can_bet || legal.can_raise)) {
+          e.preventDefault();
+          if (currentAmountRef.current >= maxVal && legal.can_all_in) {
+            onAction('ALL_IN', legal.all_in_amount || maxVal);
+          } else {
+            const act = legal.can_bet ? 'BET' : 'RAISE';
+            onAction(act, currentAmountRef.current);
+          }
+        } else if (e.code === 'KeyA' && (legal.can_all_in || legal.can_bet || legal.can_raise)) {
+          e.preventDefault();
+          if (legal.can_all_in) {
+            onAction('ALL_IN', legal.all_in_amount || maxVal);
+          } else {
+            executeBetOrRaise(maxVal);
+          }
+        }
+      } else if (canPreActionRef.current) {
+        if (e.code === 'KeyF') {
+          e.preventDefault();
+          togglePreActionRef.current(PRE_ACTIONS.CHECK_FOLD);
+        } else if (e.code === 'Space') {
+          e.preventDefault();
+          togglePreActionRef.current(PRE_ACTIONS.CHECK_CALL);
+        } else if (e.code === 'KeyR') {
+          e.preventDefault();
+          togglePreActionRef.current(PRE_ACTIONS.RAISE);
+        } else if (e.code === 'KeyA' && maxVal > 0) {
+          e.preventDefault();
+          setRaiseAmount(maxVal);
+          setPreAction(PRE_ACTIONS.RAISE);
+          setPreActionData({
+            street,
+            highestBet: effectiveHighestBet,
+            targetAmount: maxVal,
+          });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [disabled, onAction, effectiveIsMyTurn, maxVal, isUsingTimeBank, selfSeat?.time_bank_cards, onUseTimeCard]);
 
   // Helper to lookup player name by ID
   const getPlayerName = (pid) => {
@@ -1393,6 +1476,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => handlePresetClick(amount, preset.isMax)}
                   disabled={isPresetDisabled}
+                  title={`快捷键: F${idx + 1} (${preset.label})`}
                   className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border h-[42px] lg:h-[46px] flex-shrink-0 ${
                     isSelected
                       ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -1401,13 +1485,18 @@ export default function ActionBar({
                       : 'bg-slate-800/90 hover:bg-slate-700/90 border-slate-700/80'
                   } disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
-                  <span
-                    className={`text-[10px] lg:text-[11px] font-bold tracking-tight ${
-                      preset.isMax ? 'text-red-300' : isSelected ? 'text-amber-200' : 'text-slate-300'
-                    }`}
-                  >
-                    {preset.label}
-                  </span>
+                  <div className="flex items-center gap-0.5 max-w-full truncate px-0.5 leading-tight">
+                    <span className="text-[9px] lg:text-[10px] text-amber-400/90 font-mono font-bold flex-shrink-0">
+                      [F{idx + 1}]
+                    </span>
+                    <span
+                      className={`text-[10px] lg:text-[11px] font-bold tracking-tight truncate ${
+                        preset.isMax ? 'text-red-300' : isSelected ? 'text-amber-200' : 'text-slate-300'
+                      }`}
+                    >
+                      {preset.label}
+                    </span>
+                  </div>
                   <span
                     className={`text-[11px] lg:text-xs font-black ${
                       preset.isMax ? 'text-amber-400' : isSelected ? 'text-amber-300' : 'text-amber-400/90'
@@ -1439,15 +1528,21 @@ export default function ActionBar({
                   type="button"
                   onClick={() => handlePresetClick(amount, false)}
                   disabled={isBbDisabled}
+                  title={`快捷键: F${idx + 9} (${preset.label})`}
                   className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border h-[34px] lg:h-[38px] flex-shrink-0 ${
                     isSelected
                       ? 'bg-amber-950/60 border-amber-400/80 shadow-[0_0_8px_rgba(251,191,36,0.2)]'
                       : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/70'
                   } disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
-                  <span className={`text-[9px] lg:text-[10px] font-bold ${isSelected ? 'text-amber-200' : 'text-slate-300'}`}>
-                    {preset.label}
-                  </span>
+                  <div className="flex items-center gap-0.5 max-w-full truncate px-0.5 leading-tight">
+                    <span className="text-[9px] lg:text-[10px] text-amber-400/90 font-mono font-bold flex-shrink-0">
+                      [F{idx + 9}]
+                    </span>
+                    <span className={`text-[9px] lg:text-[10px] font-bold truncate ${isSelected ? 'text-amber-200' : 'text-slate-300'}`}>
+                      {preset.label}
+                    </span>
+                  </div>
                   <span className={`text-[10px] lg:text-[11px] font-black ${isSelected ? 'text-amber-300' : 'text-slate-400'}`}>
                     ${rawAmount}
                   </span>
