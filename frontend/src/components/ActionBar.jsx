@@ -34,6 +34,13 @@ import {
   parsePresetShortcut,
   isIgnoredInputTarget,
 } from '../utils/tableShortcuts';
+import AllInConfirmModal from './AllInConfirmModal';
+import { isMobile } from '../utils/pwa';
+import {
+  isPresetAllIn,
+  shouldRequireAllInConfirmation,
+  resolveAllInAmount,
+} from '../utils/allInConfirmation';
 
 export default function ActionBar({
   legalActions,
@@ -59,6 +66,7 @@ export default function ActionBar({
   currentRoundHighestBet = 0,
   handNumber = 0,
   boardCards = [],
+  isMobileMode,
 }) {
   const blindUnit = Math.max(1, Number(smallBlind) || 1);
   const bigBlind = blindUnit * 2;
@@ -142,6 +150,22 @@ export default function ActionBar({
     ? (currentTurnDuration || 30)
     : (currentTurnDuration || actionTimeout || 15);
   const [turnTimeLeft, setTurnTimeLeft] = useState(effectiveTimeout);
+
+  // Mobile All-In Secondary Confirmation State
+  const isMobileView = isMobileMode !== undefined ? Boolean(isMobileMode) : isMobile();
+  const [showAllInConfirm, setShowAllInConfirm] = useState(false);
+  const [pendingAllInAmount, setPendingAllInAmount] = useState(0);
+
+  // Dismiss All-In confirmation modal when turn ends, street changes, or action is disabled
+  useEffect(() => {
+    if (!effectiveIsMyTurn || disabled) {
+      setShowAllInConfirm(false);
+    }
+  }, [effectiveIsMyTurn, disabled]);
+
+  useEffect(() => {
+    setShowAllInConfirm(false);
+  }, [street, handNumber]);
 
   // Pre-action selection state
   const [preAction, setPreAction] = useState(null); // 'CHECK_FOLD' | 'CHECK_CALL' | 'RAISE' | null
@@ -404,6 +428,70 @@ export default function ActionBar({
     }
     const act = legalActions.can_bet ? 'BET' : 'RAISE';
     onAction(act, currentAmount);
+  };
+
+  const triggerMobileAllInConfirmation = (amount) => {
+    setPendingAllInAmount(
+      resolveAllInAmount({
+        legalActions,
+        maxVal,
+        currentAmount,
+        presetAmount: amount,
+      })
+    );
+    setShowAllInConfirm(true);
+  };
+
+  const handleConfirmAllIn = () => {
+    setShowAllInConfirm(false);
+    executeAllIn();
+  };
+
+  const handleCancelAllIn = () => {
+    setShowAllInConfirm(false);
+  };
+
+  const handleMobileRaiseSubmit = () => {
+    if (!legalActions) return;
+    if (
+      isAllIn &&
+      shouldRequireAllInConfirmation({
+        isMobile: isMobileView,
+        isAllInAction: true,
+        canAllIn: Boolean(legalActions?.can_all_in),
+      })
+    ) {
+      triggerMobileAllInConfirmation(legalActions?.all_in_amount || maxVal || currentAmount);
+      return;
+    }
+    handleRaiseSubmit();
+  };
+
+  const handleMobilePresetClick = (amount, isMax) => {
+    if (effectiveIsMyTurn) {
+      const targetIsAllIn = isPresetAllIn({
+        isMax,
+        amount,
+        maxVal,
+        sizingMax,
+      });
+
+      if (
+        targetIsAllIn &&
+        shouldRequireAllInConfirmation({
+          isMobile: isMobileView,
+          isAllInAction: true,
+          canAllIn: Boolean(legalActions?.can_all_in),
+        })
+      ) {
+        setRaiseAmount(maxVal);
+        triggerMobileAllInConfirmation(legalActions?.all_in_amount || maxVal || amount);
+        return;
+      }
+      handlePresetClick(amount, isMax);
+    } else {
+      handlePresetClick(amount, isMax);
+    }
   };
 
   const triggerPresetByIndex = (targetIdx) => {
@@ -980,7 +1068,7 @@ export default function ActionBar({
           {effectiveIsMyTurn ? (
             <button
               type="button"
-              onClick={handleRaiseSubmit}
+              onClick={handleMobileRaiseSubmit}
               disabled={disabled || (!legalActions?.can_bet && !legalActions?.can_raise && !(isAllIn && legalActions?.can_all_in))}
               className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 font-black rounded-xl border transition active:scale-95 cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed shadow-lg ${
                 isAllIn
@@ -1142,7 +1230,7 @@ export default function ActionBar({
               <button
                 key={idx}
                 type="button"
-                onClick={() => handlePresetClick(amount, preset.isMax)}
+                onClick={() => handleMobilePresetClick(amount, preset.isMax)}
                 disabled={isPresetDisabled}
                 className={`poker-preset-btn flex flex-col items-center justify-center py-1.5 sm:py-2 px-1 rounded-xl border transition active:scale-95 cursor-pointer leading-tight min-h-[44px] sm:min-h-[48px] ${
                   isSelected
@@ -1638,6 +1726,15 @@ export default function ActionBar({
           </div>
         </div>
       )}
+
+      {/* Mobile All-In Secondary Confirmation Modal */}
+      <AllInConfirmModal
+        isOpen={showAllInConfirm}
+        amount={pendingAllInAmount || legalActions?.all_in_amount || maxVal}
+        turnTimeLeft={turnTimeLeft}
+        onConfirm={handleConfirmAllIn}
+        onClose={handleCancelAllIn}
+      />
     </div>
   );
 }
