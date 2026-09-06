@@ -31,7 +31,7 @@ import {
   POT_PRESETS,
   BB_PRESETS,
   ALL_QUICK_PRESETS,
-  parseFKey,
+  parsePresetShortcut,
   isIgnoredInputTarget,
 } from '../utils/tableShortcuts';
 
@@ -364,8 +364,7 @@ export default function ActionBar({
     onAction(act, currentAmount);
   };
 
-  const triggerFKeyPreset = (fNum) => {
-    const targetIdx = fNum - 1;
+  const triggerPresetByIndex = (targetIdx) => {
     if (targetIdx < 0 || targetIdx >= 12) return;
 
     if (targetIdx < 8) {
@@ -394,8 +393,8 @@ export default function ActionBar({
     }
   };
 
-  const triggerFKeyPresetRef = useRef(triggerFKeyPreset);
-  triggerFKeyPresetRef.current = triggerFKeyPreset;
+  const triggerPresetByIndexRef = useRef(triggerPresetByIndex);
+  triggerPresetByIndexRef.current = triggerPresetByIndex;
   const adjustBBRef = useRef(adjustBB);
   adjustBBRef.current = adjustBB;
   const handleRaiseSubmitRef = useRef(handleRaiseSubmit);
@@ -407,11 +406,11 @@ export default function ActionBar({
       if (disabled) return;
       if (isIgnoredInputTarget(e)) return;
 
-      // 1. F1 to F12 Quick Bet Presets (1-to-1 mapped)
-      const fNum = parseFKey(e);
-      if (fNum !== null) {
+      // 1. Quick Bet Presets (1-8 for rows 1-2, F1-F4 for row 3)
+      const presetMatch = parsePresetShortcut(e);
+      if (presetMatch !== null) {
         e.preventDefault();
-        triggerFKeyPresetRef.current?.(fNum);
+        triggerPresetByIndexRef.current?.(presetMatch.index);
         return;
       }
 
@@ -1476,7 +1475,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => handlePresetClick(amount, preset.isMax)}
                   disabled={isPresetDisabled}
-                  title={`快捷键: F${idx + 1} (${preset.label})`}
+                  title={`快捷键: ${idx + 1} (${preset.label})`}
                   className={`flex flex-col items-center justify-center py-1 px-0.5 lg:py-1.5 lg:px-1 rounded-lg lg:rounded-xl transition active:scale-95 cursor-pointer border h-[42px] lg:h-[46px] flex-shrink-0 ${
                     isSelected
                       ? 'bg-amber-950/70 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -1487,7 +1486,7 @@ export default function ActionBar({
                 >
                   <div className="flex items-center gap-0.5 max-w-full truncate px-0.5 leading-tight">
                     <span className="text-[9px] lg:text-[10px] text-amber-400/90 font-mono font-bold flex-shrink-0">
-                      [F{idx + 1}]
+                      [{idx + 1}]
                     </span>
                     <span
                       className={`text-[10px] lg:text-[11px] font-bold tracking-tight truncate ${
@@ -1528,7 +1527,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => handlePresetClick(amount, false)}
                   disabled={isBbDisabled}
-                  title={`快捷键: F${idx + 9} (${preset.label})`}
+                  title={`快捷键: F${idx + 1} (${preset.label})`}
                   className={`flex flex-col items-center justify-center py-0.5 px-0.5 lg:py-1 lg:px-1 rounded-md lg:rounded-lg transition active:scale-95 cursor-pointer border h-[34px] lg:h-[38px] flex-shrink-0 ${
                     isSelected
                       ? 'bg-amber-950/60 border-amber-400/80 shadow-[0_0_8px_rgba(251,191,36,0.2)]'
@@ -1537,7 +1536,7 @@ export default function ActionBar({
                 >
                   <div className="flex items-center gap-0.5 max-w-full truncate px-0.5 leading-tight">
                     <span className="text-[9px] lg:text-[10px] text-amber-400/90 font-mono font-bold flex-shrink-0">
-                      [F{idx + 9}]
+                      [F{idx + 1}]
                     </span>
                     <span className={`text-[9px] lg:text-[10px] font-bold truncate ${isSelected ? 'text-amber-200' : 'text-slate-300'}`}>
                       {preset.label}

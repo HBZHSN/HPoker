@@ -99,7 +99,7 @@
 | **阶段 88** | 生产数据库历史测试账单污染清理与待结清单恢复 | 3 | 3 | 已完成 |
 | **阶段 89** | 手机端切后台声音消失与生命周期恢复修复 | 3 | 3 | 已完成 |
 | **阶段 90** | PC端右侧栏个人手牌实时牌型提示 | 2 | 2 | 已完成 |
-| **阶段 91** | PC端牌桌全套快捷键支持与快捷下注F1-F12映射及局末空格快速准备 | 4 | 4 | 已完成 |
+| **阶段 91** | PC端牌桌全套快捷键支持与快捷下注(前两行1-8/末行F1-F4)及局末空格快速准备 | 4 | 4 | 已完成 |
 | **总计** | **全部功能模块** | **415** | **415** | 已完成 |
 
 ---
@@ -923,9 +923,9 @@
 
 ---
 
-### 阶段 91：PC端牌桌全套快捷键支持与快捷下注F1-F12映射及局末空格快速准备 (PC Table Comprehensive Hotkeys, F1-F12 Quick Sizing Presets & Space Quick Ready)
-- [x] 91.1 牌桌快捷键与功能键解析映射核心工具模块 (`tableShortcuts.js`, `tableShortcuts.test.mjs`)：统一规范 12 档快捷下注预设（8档底池比例/All-in 与 4档大盲倍数）与 `F1`~`F12` 键位一一对应，实现 `parseFKey`、`calculatePresetAmount`、`resolveTableHotkey` 与输入框输入过滤防护，编写 7 项单元测试覆盖键位解析、越界防御与额度计算并 100% 通过。
-- [x] 91.2 PC端下注控制台快捷键矩阵与快捷下注 F1-F12 联动 (`ActionBar.jsx`)：下注控制台 12 档预设按钮显示 `[F1]`~`[F12]` 醒目徽章与提示；按键监听完整支持 `F1`~`F12` 瞬时下注/加注/预选、`ArrowUp`/`ArrowRight` 与 `ArrowDown`/`ArrowLeft` 微调 ±1BB、`Enter` 提交加注、`KeyT` 快速激活时间卡、`Space`/`KeyF`/`KeyR`/`KeyA` 行动与预选互斥切换，全局调用 `preventDefault` 拦截浏览器 F1/F3/F5 等原生事件防意外刷新断连。
+### 阶段 91：PC端牌桌全套快捷键支持与快捷下注（前两行1-8/末行F1-F4）及局末空格快速准备 (PC Table Comprehensive Hotkeys, 1-8 & F1-F4 Quick Sizing Presets & Space Quick Ready)
+- [x] 91.1 牌桌快捷键与功能键解析映射核心工具模块 (`tableShortcuts.js`, `tableShortcuts.test.mjs`)：统一规范 12 档快捷下注预设，前两行底池比例与全下与数字键 `1`~`8` 一一对应，最后一行大盲倍数与功能键 `F1`~`F4` 一一对应，实现 `parsePresetShortcut`、`calculatePresetAmount`、`resolveTableHotkey` 与输入框输入过滤防护，编写 7 项单元测试覆盖键位解析、越界防御与额度计算并 100% 通过。
+- [x] 91.2 PC端下注控制台快捷键矩阵与快捷下注联动 (`ActionBar.jsx`)：下注控制台前两行预设按钮显示 `[1]`~`[8]` 徽章，末行预设显示 `[F1]`~`[F4]` 徽章与提示；按键监听完整支持数字键 `1`~`8` 与 `F1`~`F4` 瞬时下注/加注/预选、`ArrowUp`/`ArrowRight` 与 `ArrowDown`/`ArrowLeft` 微调 ±1BB、`Enter` 提交加注、`KeyT` 快速激活时间卡、`Space`/`KeyF`/`KeyR`/`KeyA` 行动与预选互斥切换，全局调用 `preventDefault` 拦截浏览器原生热键。
 - [x] 91.3 牌局结束区与单手结算弹窗空格一键准备交互 (`HandResultModal.jsx`, `PokerTable.jsx`)：
   - `HandResultModal.jsx` 增加键盘监听：牌局结束结算弹窗展示时，玩家敲击 `Space` 空格键直接切换准备（`handleManualToggleReady`），爆牌短码状态敲击空格触发补码，房主敲击 `Enter` 开始下一局，`Escape` 快速收起弹窗；准备按钮与房主开始按钮自适应显示 `[Space]` 与 `[Enter]` 快捷键徽章；
   - `PokerTable.jsx` 增加全局结算与空闲态快捷键：当结算弹窗收起或牌局处于 `HAND_END` / `IDLE` 状态时，牌桌中央监听 `Space` 允许在座玩家直接快速准备，房主按 `Enter` 快速开始下一局，按钮呈现对应快捷键徽章。
