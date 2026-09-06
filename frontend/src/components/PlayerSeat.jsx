@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import CardView from './CardView';
 import { sortCardsLowToHigh } from '../utils/cards';
+import { formatVpip, formatTimeCards, getVpipTooltip, getTimeCardsTooltip } from '../utils/playerStats';
 import { Bot, Crown, RefreshCw, UserPlus, Clock, UserX, BarChart2 } from 'lucide-react';
 
 export default function PlayerSeat({
@@ -247,31 +248,45 @@ export default function PlayerSeat({
           )}
         </div>
 
-        {/* === BOTTOM-RIGHT CORNER: Time Bank Cards Badge (Self only) === */}
-        {isSelf && (
-          <button
-            type="button"
-            onClick={(!isUsingTimeBank && (seatData.time_bank_cards ?? 0) > 0 && onUseTimeCard) ? onUseTimeCard : undefined}
-            title={`时间卡: ${seatData.time_bank_cards ?? 3}张 (已玩 ${seatData.hands_played ?? 0} 手，每15手送1张)`}
-            className={`poker-seat-badge-br absolute -bottom-2 -right-2 z-20 flex items-center gap-0.5 bg-slate-950/95 text-amber-300 px-1.5 py-0.5 rounded-full border border-amber-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap ${
-              !isUsingTimeBank && (seatData.time_bank_cards ?? 0) > 0 && effectiveIsCurrentTurn
-                ? 'cursor-pointer hover:bg-purple-900 hover:text-purple-200 border-purple-400 animate-pulse'
-                : 'cursor-default'
-            }`}
-          >
-            <span>x{seatData.time_bank_cards ?? 3}</span>
-          </button>
-        )}
+        {/* === BOTTOM-RIGHT CORNER: Time Bank Cards Badge (All players) === */}
+        {(() => {
+          const cardCount = formatTimeCards(seatData);
+          const canUse = isSelf && !isUsingTimeBank && cardCount > 0 && effectiveIsCurrentTurn;
+          const Tag = canUse ? 'button' : 'div';
+          return (
+            <Tag
+              type={canUse ? 'button' : undefined}
+              onClick={canUse && onUseTimeCard ? onUseTimeCard : undefined}
+              title={getTimeCardsTooltip(seatData, isSelf)}
+              className={`poker-seat-badge-br absolute -bottom-2 -right-2 z-20 flex items-center justify-center min-w-[17px] md:min-w-[20px] h-[15px] md:h-[17px] px-1 bg-slate-950/95 text-amber-300 rounded-full border border-amber-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap ${
+                canUse
+                  ? 'cursor-pointer hover:bg-purple-900 hover:text-purple-200 border-purple-400 animate-pulse'
+                  : 'cursor-default'
+              }`}
+            >
+              <span>{cardCount}</span>
+            </Tag>
+          );
+        })()}
 
-        {/* === BOTTOM-LEFT CORNER: Equity Assistant Badge (胜率辅助标识) === */}
-        {seatData.using_assistant && (
+        {/* === BOTTOM-LEFT CORNER: VPIP Badge & Equity Assistant Badge (All players) === */}
+        <div className="poker-seat-badge-bl absolute -bottom-2 -left-2 z-20 flex items-center gap-0.5">
           <div
-            className="poker-seat-badge-bl absolute -bottom-2 -left-2 z-20 flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 text-[8px] md:text-[9px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
+            title={getVpipTooltip(seatData)}
+            className="flex items-center justify-center min-w-[17px] md:min-w-[20px] h-[15px] md:h-[17px] px-1 bg-slate-950/95 text-cyan-300 rounded-full border border-cyan-500/60 text-[8px] md:text-[9px] font-black shadow-lg ring-1 ring-slate-900 whitespace-nowrap"
           >
-            <BarChart2 className="w-2.5 h-2.5 text-amber-300 stroke-[3]" />
-            <span>辅助</span>
+            <span>{formatVpip(seatData)}</span>
           </div>
-        )}
+
+          {seatData.using_assistant && (
+            <div
+              className="flex items-center gap-0.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white px-1.5 py-0.5 rounded-full border border-purple-300 text-[8px] md:text-[9px] font-black shadow-glow-cyan ring-1 md:ring-2 ring-slate-900 whitespace-nowrap animate-pulse"
+            >
+              <BarChart2 className="w-2.5 h-2.5 text-amber-300 stroke-[3]" />
+              <span>辅助</span>
+            </div>
+          )}
+        </div>
 
         {/* === MAIN AVATAR CARD === */}
         <div

@@ -115,6 +115,7 @@ class Room:
             if seat.player_id in self.historical_players:
                 self.historical_players[seat.player_id]["hands_played"] = seat.hands_played
                 self.historical_players[seat.player_id]["time_bank_cards"] = seat.time_bank_cards
+                self.historical_players[seat.player_id]["vpip_hands"] = seat.vpip_hands
 
         player_snapshots = [
             {
@@ -131,6 +132,8 @@ class Room:
                 "total_buyin_chips": seat.total_buyin_chips,
                 "time_bank_cards": seat.time_bank_cards,
                 "hands_played": seat.hands_played,
+                "vpip_hands": seat.vpip_hands,
+                "vpip": seat.vpip,
             }
             for seat in self.table.active_seated_players
             if seat.hole_cards
@@ -236,6 +239,8 @@ class Room:
                 "total_buyin_chips": seat.total_buyin_chips,
                 "time_bank_cards": seat.time_bank_cards,
                 "hands_played": seat.hands_played,
+                "vpip_hands": seat.vpip_hands,
+                "vpip": seat.vpip,
             })
 
         # The active hand cannot be reconstructed after a restart. Active
@@ -359,6 +364,7 @@ class Room:
                     seat_data.get("time_bank_cards", config.initial_time_cards)
                 ),
                 hands_played=int(seat_data.get("hands_played", 0)),
+                vpip_hands=int(seat_data.get("vpip_hands", 0)),
             ):
                 continue
             seat = room.table.seats[seat_index]
@@ -372,6 +378,7 @@ class Room:
                     seat_data.get("time_bank_cards", config.initial_time_cards)
                 )
                 seat.hands_played = int(seat_data.get("hands_played", 0))
+                seat.vpip_hands = int(seat_data.get("vpip_hands", 0))
 
         room.table.street = Street.IDLE
         room.table.current_turn_seat = None
@@ -410,6 +417,7 @@ class Room:
                 "wallet_cashout_count": 0,
                 "hands_played": 0,
                 "time_bank_cards": self.config.initial_time_cards,
+                "vpip_hands": 0,
             }
         else:
             self.historical_players[player_id]["player_name"] = name
@@ -520,9 +528,11 @@ class Room:
         test_identity = self._is_test_player(player_id, is_bot=is_bot, is_test=is_test)
         prev_hands = 0
         prev_cards = self.config.initial_time_cards
+        prev_vpip_hands = 0
         if player_id in self.historical_players:
             prev_hands = int(self.historical_players[player_id].get("hands_played", 0))
             prev_cards = int(self.historical_players[player_id].get("time_bank_cards", self.config.initial_time_cards))
+            prev_vpip_hands = int(self.historical_players[player_id].get("vpip_hands", 0))
 
         success = self.table.sit_down(
             player_id=player_id,
@@ -535,6 +545,7 @@ class Room:
             is_test=test_identity,
             time_bank_cards=prev_cards,
             hands_played=prev_hands,
+            vpip_hands=prev_vpip_hands,
         )
         if success:
             self.track_player(
@@ -670,6 +681,7 @@ class Room:
         history["is_seated"] = False
         history["hands_played"] = player.hands_played
         history["time_bank_cards"] = player.time_bank_cards
+        history["vpip_hands"] = player.vpip_hands
 
         if hand_number is not None and player.hole_cards:
             self._departed_hand_players.setdefault(hand_number, []).append({
@@ -684,6 +696,10 @@ class Room:
                 "is_folded": True,
                 "rebuy_count": player.rebuy_count,
                 "total_buyin_chips": player.total_buyin_chips,
+                "time_bank_cards": player.time_bank_cards,
+                "hands_played": player.hands_played,
+                "vpip_hands": player.vpip_hands,
+                "vpip": player.vpip,
             })
 
         self.pending_settlements.append({
