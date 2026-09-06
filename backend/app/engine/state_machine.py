@@ -64,6 +64,15 @@ class PlayerSeat:
     time_bank_cards: int = 3
     hands_played: int = 0
     using_assistant: bool = False
+    vpip_hands: int = 0
+    vpip_this_hand: bool = False
+
+    @property
+    def vpip(self) -> int:
+        """Percentage of played hands in which player voluntarily put money into pot preflop."""
+        if self.hands_played <= 0:
+            return 0
+        return int(round((self.vpip_hands / self.hands_played) * 100))
 
     def add_time_bank_card(self, amount: int = 1, max_cards: int = 5) -> bool:
         """Add time bank cards up to max_cards (default 5). Returns True if added."""
@@ -87,6 +96,7 @@ class PlayerSeat:
         self.shown_cards.clear()
         self.last_action = None
         self.using_assistant = False
+        self.vpip_this_hand = False
 
     def to_dict(self, include_private_cards: bool = False) -> dict:
         return {
@@ -110,6 +120,8 @@ class PlayerSeat:
             "time_bank_cards": self.time_bank_cards,
             "hands_played": self.hands_played,
             "using_assistant": self.using_assistant,
+            "vpip_hands": self.vpip_hands,
+            "vpip": self.vpip,
         }
 
 
@@ -228,6 +240,7 @@ class TableStateMachine:
         is_test: bool = False,
         time_bank_cards: int = 3,
         hands_played: int = 0,
+        vpip_hands: int = 0,
     ) -> bool:
         if not (0 <= seat_index < self.max_seats):
             return False
@@ -249,6 +262,7 @@ class TableStateMachine:
             rebuy_count=1,
             time_bank_cards=time_bank_cards,
             hands_played=hands_played,
+            vpip_hands=vpip_hands,
             avatar=avatar or "👤",
             is_bot=is_bot,
             is_test=is_test,
@@ -296,6 +310,8 @@ class TableStateMachine:
             if not p.hole_cards:
                 continue
             p.hands_played += 1
+            if p.vpip_this_hand:
+                p.vpip_hands += 1
             if self.hands_per_time_card > 0 and p.hands_played % self.hands_per_time_card == 0:
                 if p.add_time_bank_card(1, max_cards=self.max_time_cards):
                     self.time_card_rewarded_players.append(p.player_id)
@@ -655,6 +671,8 @@ class TableStateMachine:
             actual_call = min(call_cost, current_player.chips)
             current_player.chips -= actual_call
             self.pot_manager.record_bet(player_id, actual_call)
+            if self.street == Street.PREFLOP and actual_call > 0:
+                current_player.vpip_this_hand = True
             if current_player.chips == 0:
                 current_player.is_all_in = True
             current_player.has_acted_this_round = True
@@ -708,6 +726,8 @@ class TableStateMachine:
             current_player.chips -= added_chips
             self.pot_manager.record_bet(player_id, added_chips)
             self.current_round_highest_bet = target_bet
+            if self.street == Street.PREFLOP and added_chips > 0:
+                current_player.vpip_this_hand = True
 
             if current_player.chips == 0:
                 current_player.is_all_in = True
@@ -730,6 +750,8 @@ class TableStateMachine:
             current_player.chips = 0
             current_player.is_all_in = True
             self.pot_manager.record_bet(player_id, allin_chips)
+            if self.street == Street.PREFLOP and allin_chips > 0:
+                current_player.vpip_this_hand = True
 
             if target_bet > highest_bet:
                 self.min_raise_increment = max(self.big_blind, target_bet)
@@ -1331,6 +1353,8 @@ class TableStateMachine:
                     "using_assistant": p.using_assistant,
                     "hands_played": p.hands_played,
                     "time_bank_cards": p.time_bank_cards,
+                    "vpip_hands": p.vpip_hands,
+                    "vpip": p.vpip,
                 })
 
         return {
