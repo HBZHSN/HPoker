@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import CardView from './CardView';
 import { sortCardsLowToHigh } from '../utils/cards';
+import { getHoleCardsHandType, getHandCategoryStyle } from '../utils/pokerEvaluator';
 import {
   Flame,
   Clock,
@@ -50,6 +51,7 @@ export default function ActionBar({
   turnCount = 0,
   currentRoundHighestBet = 0,
   handNumber = 0,
+  boardCards = [],
 }) {
   const blindUnit = Math.max(1, Number(smallBlind) || 1);
   const bigBlind = blindUnit * 2;
@@ -204,6 +206,10 @@ export default function ActionBar({
     (currentAmount >= maxVal || (sizingMax > 0 && currentAmount >= sizingMax))
   );
   const orderedHoleCards = sortCardsLowToHigh(selfSeat?.hole_cards || []);
+  const currentHandType = useMemo(
+    () => getHoleCardsHandType(selfSeat?.hole_cards, boardCards),
+    [selfSeat?.hole_cards, boardCards]
+  );
 
   const currentAmountRef = useRef(currentAmount);
   currentAmountRef.current = currentAmount;
@@ -662,17 +668,39 @@ export default function ActionBar({
             </div>
           </div>
 
-          {/* My Hole Cards Preview */}
-          <div className="flex items-center justify-end -space-x-2 lg:-space-x-3 h-[58px] lg:h-[68px] min-w-[70px] lg:min-w-[84px] flex-shrink-0">
-            {orderedHoleCards.length === 2 ? (
-              orderedHoleCards.map((c, i) => (
-                <CardView key={i} card={c} size="sm" className="shadow-xl" />
-              ))
-            ) : (
-              <div className="h-[52px] lg:h-[68px] w-[70px] lg:w-[84px] border border-dashed border-slate-700/80 rounded-lg flex items-center justify-center text-[11px] text-slate-500 font-bold bg-slate-950/40">
-                暂无手牌
+          {/* My Hole Cards Preview & Current Hand Type */}
+          <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
+            {orderedHoleCards.length === 2 && (
+              <div className="flex flex-col items-end justify-center">
+                <span className="text-[10px] text-slate-400 font-semibold tracking-wider mb-1">
+                  当前牌型
+                </span>
+                {selfSeat.is_folded ? (
+                  <span className="text-[11px] font-bold text-slate-400 bg-slate-950/70 border border-slate-800 px-2 py-0.5 rounded-full">
+                    已弃牌
+                  </span>
+                ) : currentHandType ? (
+                  <span
+                    className={`text-xs font-black px-2.5 py-0.5 rounded-full border shadow-sm whitespace-nowrap ${getHandCategoryStyle(currentHandType.category)}`}
+                    title={currentHandType.description}
+                  >
+                    {currentHandType.description}
+                  </span>
+                ) : null}
               </div>
             )}
+
+            <div className="flex items-center justify-end -space-x-2 lg:-space-x-3 h-[58px] lg:h-[68px] min-w-[70px] lg:min-w-[84px] flex-shrink-0">
+              {orderedHoleCards.length === 2 ? (
+                orderedHoleCards.map((c, i) => (
+                  <CardView key={i} card={c} size="sm" className="shadow-xl" />
+                ))
+              ) : (
+                <div className="h-[52px] lg:h-[68px] w-[70px] lg:w-[84px] border border-dashed border-slate-700/80 rounded-lg flex items-center justify-center text-[11px] text-slate-500 font-bold bg-slate-950/40">
+                  暂无手牌
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

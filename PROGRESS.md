@@ -98,7 +98,8 @@
 | **阶段 87** | PWA 启动后隐藏大厅「安装到手机主屏幕」横幅 | 1 | 1 | 已完成 |
 | **阶段 88** | 生产数据库历史测试账单污染清理与待结清单恢复 | 3 | 3 | 已完成 |
 | **阶段 89** | 手机端切后台声音消失与生命周期恢复修复 | 3 | 3 | 已完成 |
-| **总计** | **全部功能模块** | **409** | **409** | 已完成 |
+| **阶段 90** | PC端右侧栏个人手牌实时牌型提示 | 2 | 2 | 已完成 |
+| **总计** | **全部功能模块** | **411** | **411** | 已完成 |
 
 ---
 
@@ -912,6 +913,13 @@
 - [x] 89.1 后台生命周期监听与主动挂起恢复 (`SoundEngine.js`)：监听 `visibilitychange`、`pageshow`、`focus`、`pagehide`、`blur` 事件，切后台与锁屏时主动挂起 `ctx.suspend()` 防止 WebKit/Chromium 底层音频输出单元硬中断损坏，返回前台时发起安全自动恢复，并配置 iOS 17+ `navigator.audioSession.type = 'playback'` 避免物理静音模式误关声音。
 - [x] 89.2 全局手势唤醒与死锁重建机制 (`SoundEngine.js`, `PokerTable.jsx`)：捕获移动端全局触控与点击手势（`touchstart`、`touchend`、`click` 等），在前台首次交互时立即 `unlock` 并播放 1 采样静音缓冲激活硬件声道；当检测到 WebKit `interrupted` 状态死锁或 `InvalidStateError` 时自动销毁并全新实例化 `AudioContext`，彻底根治切后台后必须清理后台才能恢复声音的顽疾；牌桌扬声器静音切换联动唤醒。
 - [x] 89.3 音频方法上下文防御、全量回归测试与生产构建 (`SoundEngine.js`, `soundEngine.test.mjs`)：为全部 procedural 合成方法增加上下文存在性与状态防御（`playDealCard`, `playCheckKnock`, `playChipsClink`, `playRaise`, `playFold`, `playAllIn`, `playWinPot`, `playCountdownTick`, `playChime`, `playTimeCard`, `playTimeCardGain`），异步定时回调增设状态守卫；编写覆盖前后台切换、手势解锁、WebKit interrupted 恢复与重建、静音联动的单元测试（56/56 前端测试全量通过，193 后端测试全量通过），Vite 生产打包验证成功。
+
+---
+
+### 阶段 90：PC端右侧栏个人手牌实时牌型提示 (PC Sidebar My Cards Real-Time Hand Rank Display)
+- [x] 90.1 手牌与公共牌实时牌型评估与样式映射 (`pokerEvaluator.js`)：实现 `getHoleCardsHandType`，支持翻前（Preflop 2张手牌 Pocket Pair / High Card 判定）与翻后（Flop/Turn/River 5~7 张全量 10 级牌型判定），导出 `getHandCategoryStyle` 依据牌力等级映射高奢拟真流光与微彩色阶，统一牌面点数 10 显示。
+- [x] 90.2 PC端右侧栏牌型徽章展示与链路联动 (`ActionBar.jsx`, `PokerTable.jsx`, `holeCardsHandType.test.mjs`)：`PokerTable` 向 `ActionBar` 透传当前 `boardCards`，在 PC 端个人概览卡片手牌预览左侧优雅嵌入「当前牌型」徽章与弃牌识别状态，补齐 5 项单元测试（61/61 前端测试通过，193 后端测试全量通过），生产编译成功。
+
 
 
 
