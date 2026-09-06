@@ -1,6 +1,7 @@
 import React from 'react';
 import CardView from './CardView';
 import { hasSecondCommunityBoard } from '../utils/communityBoard';
+import { Eye } from 'lucide-react';
 
 const BOARD_SIZE = 5;
 
@@ -39,10 +40,15 @@ function BoardRow({
               type="button"
               onClick={isClickable ? onReveal : undefined}
               disabled={!isClickable}
+              title={
+                isHidden && canReveal
+                  ? '点击或按 [B] 翻开公共牌'
+                  : undefined
+              }
               aria-label={
                 isHidden
                   ? canReveal
-                    ? '翻开公共牌'
+                    ? '翻开公共牌 (快捷键 B)'
                     : `公共牌第 ${index + 1} 张 (待发)`
                   : isPostHandRevealed
                   ? `公共牌第 ${index + 1} 张 (摊牌揭晓)`
@@ -68,6 +74,13 @@ function BoardRow({
                 }`}
                 style={card ? undefined : { animationDelay: `${index * 70}ms` }}
               />
+              {isClickable && index === normalCardCount && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="bg-black/80 text-amber-300 border border-amber-400/60 font-mono font-black text-[9px] md:text-[10px] px-1 py-0.5 rounded shadow">
+                    B
+                  </span>
+                </div>
+              )}
             </button>
           );
         })}
@@ -119,6 +132,21 @@ export default function CommunityBoard({
 
   return (
     <div className={`poker-community-board ${rootClassName}`}>
+      {canReveal && !compact && (
+        <button
+          type="button"
+          onClick={onReveal}
+          disabled={isRevealing}
+          className="mb-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 text-xs font-black border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1.5 animate-pulse"
+          title="查看未翻开公共牌 (快捷键 B)"
+        >
+          <Eye className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+          <span>查看未翻开公共牌</span>
+          <span className="font-mono text-[10px] font-bold bg-amber-400/20 px-1 py-0.2 rounded border border-amber-400/40">
+            B
+          </span>
+        </button>
+      )}
       {hasSecondBoard ? (
         <div className="flex flex-col gap-1.5">
           <BoardRow

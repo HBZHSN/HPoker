@@ -132,7 +132,7 @@ export function calculatePresetAmount({
 }
 
 /**
- * Categorize a KeyboardEvent into an action identifier.
+ * Categorize a KeyboardEvent into an action identifier for turn/pre-action.
  */
 export function resolveTableHotkey(event) {
   if (!event || isIgnoredInputTarget(event)) return null;
@@ -152,6 +152,78 @@ export function resolveTableHotkey(event) {
   if (code === 'Escape') return { type: 'ESCAPE' };
   if (code === 'ArrowUp' || code === 'ArrowRight') return { type: 'ADJUST_UP' };
   if (code === 'ArrowDown' || code === 'ArrowLeft') return { type: 'ADJUST_DOWN' };
+  if (code === 'KeyB' || code === 'KeyV') return { type: 'REVEAL_BOARD' };
 
   return null;
 }
+
+export const HAND_END_HOTKEYS = {
+  READY: { key: 'Space', label: '准备' },
+  START_NEXT: { key: 'Enter', label: '开始下一局' },
+  CLOSE: { key: 'Esc', label: '关闭' },
+  REOPEN_MODAL: { key: 'O', label: '查看本局结算' },
+  CARD_1: { key: '1', altKey: 'Z', label: '亮左牌' },
+  CARD_2: { key: '2', altKey: 'X', label: '亮右牌' },
+  SHOW_ALL: { key: 'A', altKey: 'S', label: '全部亮出' },
+  HIDE_ALL: { key: 'H', altKey: 'M', label: '不亮牌' },
+  REVEAL_BOARD: { key: 'B', altKey: 'V', label: '查看未翻开公共牌' },
+};
+
+/**
+ * Resolves keyboard events in the hand-end / showdown phase:
+ * - Space: Toggle ready / rebuy
+ * - Enter: Host starts next hand
+ * - Escape: Close modal / return to table
+ * - KeyO: Reopen hand result modal (when dismissed)
+ * - Digit1 / Numpad1 / KeyZ: Toggle card 1
+ * - Digit2 / Numpad2 / KeyX: Toggle card 2
+ * - KeyA / KeyS: Show all cards
+ * - KeyH / KeyM: Hide all cards (Muck)
+ * - KeyB / KeyV / KeyC: Reveal unrevealed board cards
+ */
+export function resolveHandEndHotkey(event) {
+  if (!event || isIgnoredInputTarget(event)) return null;
+
+  const code = event.code;
+  const key = typeof event.key === 'string' ? event.key.toLowerCase() : '';
+
+  if (code === 'Space') return { type: 'READY' };
+  if (code === 'Enter' || code === 'NumpadEnter') return { type: 'START_NEXT' };
+  if (code === 'Escape') return { type: 'CLOSE' };
+  if (code === 'KeyO' || key === 'o') return { type: 'REOPEN_MODAL' };
+
+  // Reveal unrevealed board cards: B, V, C
+  if (
+    code === 'KeyB' ||
+    code === 'KeyV' ||
+    code === 'KeyC' ||
+    key === 'b' ||
+    key === 'v' ||
+    key === 'c'
+  ) {
+    return { type: 'REVEAL_BOARD' };
+  }
+
+  // Toggle Card 1: 1 or Z
+  if (code === 'Digit1' || code === 'Numpad1' || code === 'KeyZ' || key === '1' || key === 'z') {
+    return { type: 'TOGGLE_CARD', cardIndex: 0 };
+  }
+
+  // Toggle Card 2: 2 or X
+  if (code === 'Digit2' || code === 'Numpad2' || code === 'KeyX' || key === '2' || key === 'x') {
+    return { type: 'TOGGLE_CARD', cardIndex: 1 };
+  }
+
+  // Show all cards: A or S
+  if (code === 'KeyA' || code === 'KeyS' || key === 'a' || key === 's') {
+    return { type: 'SHOW_ALL' };
+  }
+
+  // Hide all cards / Muck: H or M
+  if (code === 'KeyH' || code === 'KeyM' || key === 'h' || key === 'm') {
+    return { type: 'HIDE_ALL' };
+  }
+
+  return null;
+}
+
