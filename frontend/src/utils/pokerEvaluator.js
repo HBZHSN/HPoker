@@ -38,7 +38,7 @@ const SUIT_SYMBOL_MAP = { s: '♠', h: '♥', c: '♣', d: '♦' };
 
 function getRankSymbol(value) {
   if (value <= 9) return String(value);
-  const map = { 10: 'T', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
+  const map = { 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
   return map[value] || '?';
 }
 
@@ -262,3 +262,128 @@ export function shuffle(arr) {
   }
   return arr;
 }
+
+/**
+ * Evaluate the current best hand type given 2 hole cards and 0~5 board cards.
+ * Returns { category: number, name: string, description: string } or null.
+ */
+export function getHoleCardsHandType(holeCards, boardCards = []) {
+  if (!holeCards || holeCards.length !== 2) return null;
+
+  // Filter and normalize cards
+  const normalizeCard = (c) => {
+    if (!c) return null;
+    let rank = c.rank;
+    if (typeof rank === 'string') {
+      const map = { '10': 10, 'T': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+      rank = map[rank.toUpperCase()] || Number(rank);
+    }
+    const suit = c.suit ? String(c.suit).toLowerCase() : 's';
+    return { rank, suit };
+  };
+
+  const validHole = holeCards.map(normalizeCard).filter((c) => c && c.rank >= 2 && c.rank <= 14);
+  if (validHole.length !== 2) return null;
+
+  const validBoard = (boardCards || []).map(normalizeCard).filter((c) => c && c.rank >= 2 && c.rank <= 14);
+  const allCards = [...validHole, ...validBoard];
+
+  const rankText = (r) => {
+    if (r === 14) return 'A';
+    if (r === 13) return 'K';
+    if (r === 12) return 'Q';
+    if (r === 11) return 'J';
+    if (r === 10) return '10';
+    return String(r);
+  };
+
+  // If 5 or more cards, use full Texas Hold'em 5~7 card evaluator
+  if (allCards.length >= 5) {
+    try {
+      const ev = evaluateHand(allCards);
+      const name = HandCategoryNames[ev.category] || '高牌';
+      return {
+        category: ev.category,
+        name,
+        description: ev.description || name,
+      };
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // Preflop or under 5 cards (e.g. 2 hole cards + 0~2 board cards)
+  const ranks = allCards.map((c) => c.rank);
+  const freq = new Map();
+  for (const r of ranks) freq.set(r, (freq.get(r) || 0) + 1);
+  const freqSorted = [...freq.entries()].sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return b[0] - a[0];
+  });
+
+  if (freqSorted[0][1] === 4) {
+    return {
+      category: HandCategory.FOUR_OF_A_KIND,
+      name: '四条',
+      description: `四条 (${rankText(freqSorted[0][0])})`,
+    };
+  }
+  if (freqSorted[0][1] === 3) {
+    return {
+      category: HandCategory.THREE_OF_A_KIND,
+      name: '三条',
+      description: `三条 (${rankText(freqSorted[0][0])})`,
+    };
+  }
+  if (freqSorted[0][1] === 2 && freqSorted.length >= 2 && freqSorted[1][1] === 2) {
+    const high = Math.max(freqSorted[0][0], freqSorted[1][0]);
+    const low = Math.min(freqSorted[0][0], freqSorted[1][0]);
+    return {
+      category: HandCategory.TWO_PAIR,
+      name: '两对',
+      description: `两对 (${rankText(high)}与${rankText(low)})`,
+    };
+  }
+  if (freqSorted[0][1] === 2) {
+    return {
+      category: HandCategory.ONE_PAIR,
+      name: '一对',
+      description: `一对 (${rankText(freqSorted[0][0])})`,
+    };
+  }
+
+  const highest = Math.max(...ranks);
+  return {
+    category: HandCategory.HIGH_CARD,
+    name: '高牌',
+    description: `高牌 (${rankText(highest)}高)`,
+  };
+}
+
+/** Get Tailwind badge styling based on hand category */
+export function getHandCategoryStyle(category) {
+  switch (category) {
+    case HandCategory.ROYAL_FLUSH:
+      return 'bg-gradient-to-r from-amber-600/90 to-yellow-500/90 text-slate-950 border-amber-300 font-black shadow-amber-500/30';
+    case HandCategory.STRAIGHT_FLUSH:
+      return 'bg-gradient-to-r from-red-600/90 to-amber-600/90 text-white border-amber-400 font-black shadow-red-500/30';
+    case HandCategory.FOUR_OF_A_KIND:
+      return 'bg-rose-950/80 text-rose-200 border-rose-500/60 shadow-rose-900/40';
+    case HandCategory.FULL_HOUSE:
+      return 'bg-purple-950/80 text-purple-200 border-purple-500/60 shadow-purple-900/40';
+    case HandCategory.FLUSH:
+      return 'bg-indigo-950/80 text-indigo-200 border-indigo-500/60 shadow-indigo-900/40';
+    case HandCategory.STRAIGHT:
+      return 'bg-cyan-950/80 text-cyan-200 border-cyan-500/60 shadow-cyan-900/40';
+    case HandCategory.THREE_OF_A_KIND:
+      return 'bg-emerald-950/80 text-emerald-200 border-emerald-500/60 shadow-emerald-900/40';
+    case HandCategory.TWO_PAIR:
+      return 'bg-amber-950/80 text-amber-200 border-amber-500/60 shadow-amber-900/40';
+    case HandCategory.ONE_PAIR:
+      return 'bg-amber-950/60 text-amber-300/90 border-amber-500/40';
+    case HandCategory.HIGH_CARD:
+    default:
+      return 'bg-slate-800/80 text-slate-300 border-slate-700/60';
+  }
+}
+
