@@ -241,17 +241,6 @@ export default function HandResultModal({
                 size="xs"
                 compact
               />
-              {!boardCardsRevealed && onRevealBoard && (
-                <button
-                  type="button"
-                  onClick={onRevealBoard}
-                  disabled={isRevealingBoard}
-                  className="w-8 h-8 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center flex-shrink-0 animate-pulse"
-                  title="查看 (快捷键 B)"
-                >
-                  <Eye className="w-4 h-4 text-amber-400" />
-                </button>
-              )}
             </div>
 
             <div className="flex items-center gap-2">
