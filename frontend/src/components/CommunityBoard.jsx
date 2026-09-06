@@ -1,7 +1,6 @@
 import React from 'react';
 import CardView from './CardView';
 import { hasSecondCommunityBoard } from '../utils/communityBoard';
-import { Eye } from 'lucide-react';
 
 const BOARD_SIZE = 5;
 
@@ -132,17 +131,6 @@ export default function CommunityBoard({
 
   return (
     <div className={`poker-community-board ${rootClassName}`}>
-      {canReveal && !compact && (
-        <button
-          type="button"
-          onClick={onReveal}
-          disabled={isRevealing}
-          className="mb-1 w-7 h-7 rounded-full bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center animate-pulse"
-          title="查看 (快捷键 B)"
-        >
-          <Eye className="w-3.5 h-3.5 text-amber-400" />
-        </button>
-      )}
       {hasSecondBoard ? (
         <div className="flex flex-col gap-1.5">
           <BoardRow
