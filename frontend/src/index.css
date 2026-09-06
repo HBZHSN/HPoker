@@ -688,6 +688,9 @@ button, a, input, select {
   .poker-table-seat-anchor {
     z-index: 30;
   }
+  .poker-table-seat-anchor.has-social-bubble {
+    z-index: 50 !important;
+  }
   .poker-table-seat-anchor[data-screen-position='0'] {
     top: 80% !important;
     left: 50% !important;
@@ -711,6 +714,57 @@ button, a, input, select {
   .poker-table-seat-anchor[data-screen-position='5'] {
     top: 65% !important;
     left: 88% !important;
+  }
+
+  /* Chat bubble placement enforcement on mobile:
+     Seats on table left (screen positions 1, 2) MUST float to the RIGHT into table interior.
+     Seats on table right (screen positions 4, 5) MUST float to the LEFT into table interior. */
+  .poker-table-seat-anchor[data-screen-position='1'] .poker-seat-bubble-anchor,
+  .poker-table-seat-anchor[data-screen-position='2'] .poker-seat-bubble-anchor {
+    left: calc(100% + 8px) !important;
+    right: auto !important;
+    justify-content: flex-start !important;
+  }
+
+  .poker-table-seat-anchor[data-screen-position='1'] .poker-seat-side-chat,
+  .poker-table-seat-anchor[data-screen-position='2'] .poker-seat-side-chat {
+    border-top-left-radius: 2px !important;
+    border-top-right-radius: 1rem !important;
+  }
+
+  .poker-table-seat-anchor[data-screen-position='1'] .poker-seat-bubble-arrow,
+  .poker-table-seat-anchor[data-screen-position='2'] .poker-seat-bubble-arrow {
+    left: -5px !important;
+    right: auto !important;
+    border-right: 5px solid rgba(251, 191, 36, 0.85) !important;
+    border-left: none !important;
+  }
+
+  .poker-table-seat-anchor[data-screen-position='4'] .poker-seat-bubble-anchor,
+  .poker-table-seat-anchor[data-screen-position='5'] .poker-seat-bubble-anchor {
+    right: calc(100% + 8px) !important;
+    left: auto !important;
+    justify-content: flex-end !important;
+  }
+
+  .poker-table-seat-anchor[data-screen-position='4'] .poker-seat-side-chat,
+  .poker-table-seat-anchor[data-screen-position='5'] .poker-seat-side-chat {
+    border-top-right-radius: 2px !important;
+    border-top-left-radius: 1rem !important;
+  }
+
+  .poker-table-seat-anchor[data-screen-position='4'] .poker-seat-bubble-arrow,
+  .poker-table-seat-anchor[data-screen-position='5'] .poker-seat-bubble-arrow {
+    right: -5px !important;
+    left: auto !important;
+    border-left: 5px solid rgba(251, 191, 36, 0.85) !important;
+    border-right: none !important;
+  }
+
+  .poker-seat-side-chat {
+    max-width: min(150px, 38vw) !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
   }
 
   /* Tightly dock corner badges on mobile to prevent any felt/board overlap */
@@ -1291,6 +1345,70 @@ html.ios-device .poker-table-root {
 .poker-seat-side-chat {
   animation: seat-side-chat-pop 5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   pointer-events: none;
+}
+
+.poker-seat-bubble-anchor {
+  z-index: 40;
+}
+
+.poker-seat-bubble-anchor.placement-left {
+  right: calc(100% + 8px);
+  left: auto;
+  justify-content: flex-end;
+}
+
+.poker-seat-bubble-anchor.placement-right {
+  left: calc(100% + 8px);
+  right: auto;
+  justify-content: flex-start;
+}
+
+@media (min-width: 768px) {
+  .poker-seat-bubble-anchor.placement-left {
+    right: calc(100% + 14px);
+  }
+  .poker-seat-bubble-anchor.placement-right {
+    left: calc(100% + 14px);
+  }
+}
+
+.poker-seat-bubble-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+.placement-left .poker-seat-bubble-arrow {
+  right: -5px;
+  left: auto;
+  border-left: 5px solid rgba(251, 191, 36, 0.85);
+  border-right: none;
+}
+
+.placement-right .poker-seat-bubble-arrow {
+  left: -5px;
+  right: auto;
+  border-right: 5px solid rgba(251, 191, 36, 0.85);
+  border-left: none;
+}
+
+@media (min-width: 768px) {
+  .poker-seat-bubble-arrow {
+    border-top-width: 7px;
+    border-bottom-width: 7px;
+  }
+  .placement-left .poker-seat-bubble-arrow {
+    right: -7px;
+    border-left-width: 7px;
+  }
+  .placement-right .poker-seat-bubble-arrow {
+    left: -7px;
+    border-right-width: 7px;
+  }
 }
 
 .poker-chat-messages {

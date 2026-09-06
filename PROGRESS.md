@@ -972,6 +972,14 @@
 - [x] 96.2 牌局界面移除全部结果与最近牌局下拉框并接入表头正序/倒序/不排序交互 (`BalanceCenterModal.jsx`)：彻底移除「全部结果」与「最近牌局」两个下拉筛选框，将最大赢牌与最大输牌统计卡片重构为通栏网格布局；「净结果」表头升级为可点击排序组件，配备正序 (`ArrowUp`)、倒序 (`ArrowDown`) 与未排序 (`ArrowUpDown`) 动态图标与高亮状态，点击依次触发正序、倒序与不排序，列表空态文案同步优化为「暂无牌局记录」。
 - [x] 96.3 全链路回归与生产构建验证：77 项前端单元测试 100% 通过，193 项后端单元测试 100% 通过，Vite 生产构建打包成功。
 
+---
+
+### 阶段 97：手机端前端聊天气泡朝向优化与牌局结束快捷键隐藏 (Mobile Chat Bubble Placement & Hand-End Shortcut Hiding)
+- [x] 97.1 手机端玩家座位聊天气泡朝向自适应与层级加固 (`socialNotifications.js`, `PokerTable.jsx`, `PlayerSeat.jsx`, `index.css`)：牌桌左侧席位（屏幕位置 1, 2）气泡严格向右展开至牌桌内部，右侧席位（屏幕位置 4, 5）气泡严格向左展开至牌桌内部；在 `index.css` 移动端媒体查询中通过样式加固左右气泡锚点、圆角和指向尾巴；增加 `.has-social-bubble` 样式并在有气泡时提升层级至 `z-index: 50 !important`，彻底防止被相邻席位遮挡；限制移动端气泡最大宽度为 `min(150px, 38vw)` 并开启 `overflow-wrap: anywhere; word-break: break-word;` 杜绝溢出屏幕；编写 `resolveSeatBubblePlacement` 单元测试并通过验证（78/78 项通过）。
+- [x] 97.2 手机端牌局结束界面与公共牌隐藏物理快捷键徽章 (`CommunityBoard.jsx`, `HandResultModal.jsx`, `ShowCardsModal.jsx`, `PokerTable.jsx`)：公共牌卡背上的 `[B]` 快捷键徽章在移动端使用 `hidden sm:flex` 隐藏；单手结算弹窗内的亮牌 `[1]` / `[2]` 快捷键徽章使用 `hidden sm:inline` 隐藏；亮牌弹窗（`ShowCardsModal`）中的 `[1]`、`[2]`、`[A]`、`[H]` 快捷键徽章使用 `hidden sm:inline` 隐藏；牌桌「查看本局结算」按钮中的 `[O]` 快捷键徽章使用 `hidden sm:inline` 隐藏；PC 端桌面环境完整保留并支持所有物理键盘快捷键。
+- [x] 97.3 全链路回归与生产构建验证：78 项前端单元测试 100% 通过，193 项后端单元测试 100% 通过，Vite 生产构建打包成功。
+
+
 
 
 

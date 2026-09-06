@@ -74,7 +74,7 @@ function BoardRow({
                 style={card ? undefined : { animationDelay: `${index * 70}ms` }}
               />
               {isClickable && index === normalCardCount && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="hidden sm:flex absolute inset-0 items-center justify-center pointer-events-none">
                   <span className="bg-black/80 text-amber-300 border border-amber-400/60 font-mono font-black text-[9px] md:text-[10px] px-1 py-0.5 rounded shadow">
                     B
                   </span>

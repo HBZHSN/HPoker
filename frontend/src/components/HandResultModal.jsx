@@ -523,7 +523,7 @@ export default function HandResultModal({
                         }`}
                       >
                         <span>{isCardShown ? '已亮出' : '亮牌'}</span>
-                        <span className="font-mono text-[9px] opacity-80">[{shortcutKey}]</span>
+                        <span className="hidden sm:inline font-mono text-[9px] opacity-80">[{shortcutKey}]</span>
                       </div>
                     </button>
                   );
