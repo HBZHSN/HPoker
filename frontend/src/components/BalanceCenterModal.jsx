@@ -15,7 +15,15 @@ import {
   Trash2,
   Calendar,
   Layers,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
+import {
+  getNextNetSortOrder,
+  getNetSortQueryParams,
+  getNetSortTooltip,
+} from '../utils/handSort';
 
 export default function BalanceCenterModal({
   isOpen,
@@ -37,8 +45,7 @@ export default function BalanceCenterModal({
   const [settleConfirmOpen, setSettleConfirmOpen] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [handHistory, setHandHistory] = useState({ hands: [], total: 0, summary: {} });
-  const [handOutcome, setHandOutcome] = useState('all');
-  const [handSort, setHandSort] = useState('recent');
+  const [netSortOrder, setNetSortOrder] = useState('none'); // 'none' | 'asc' | 'desc'
 
   const fetchMyBalance = useCallback(async () => {
     if (!currentUser?.user_id) return;
@@ -87,14 +94,9 @@ export default function BalanceCenterModal({
   const fetchHandHistory = useCallback(async () => {
     if (!currentUser?.user_id) return;
     const params = new URLSearchParams();
-    if (handOutcome !== 'all') params.set('outcome', handOutcome);
-    if (handSort === 'biggest-win') {
-      params.set('sort_by', 'net_chips');
-      params.set('order', 'desc');
-    } else if (handSort === 'biggest-loss') {
-      params.set('sort_by', 'net_chips');
-      params.set('order', 'asc');
-    }
+    const queryParams = getNetSortQueryParams(netSortOrder);
+    if (queryParams.sort_by) params.set('sort_by', queryParams.sort_by);
+    if (queryParams.order) params.set('order', queryParams.order);
     try {
       const res = await fetch(`/api/hands/my?${params.toString()}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -105,7 +107,11 @@ export default function BalanceCenterModal({
     } catch (e) {
       console.error('Failed to fetch hand history', e);
     }
-  }, [currentUser?.user_id, handOutcome, handSort, token]);
+  }, [currentUser?.user_id, netSortOrder, token]);
+
+  const handleToggleNetSort = () => {
+    setNetSortOrder((prev) => getNextNetSortOrder(prev));
+  };
 
   const refreshAll = useCallback(() => {
     setLoading(true);
@@ -483,47 +489,24 @@ export default function BalanceCenterModal({
         {/* Personal per-hand history. Hole cards belong only to this user. */}
         {activeTab === 'hands' && (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-              <div className="grid grid-cols-2 gap-2 flex-1">
-                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
-                  <div className="text-[10px] text-emerald-300">最大赢牌</div>
-                  <div className="text-lg font-black text-emerald-400">
-                    +{handHistory.summary?.biggest_win?.net_chips || 0}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-3">
-                  <div className="text-[10px] text-red-300">最大输牌</div>
-                  <div className="text-lg font-black text-red-400">
-                    {handHistory.summary?.biggest_loss?.net_chips || 0}
-                  </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
+                <div className="text-[10px] text-emerald-300">最大赢牌</div>
+                <div className="text-lg font-black text-emerald-400">
+                  +{handHistory.summary?.biggest_win?.net_chips || 0}
                 </div>
               </div>
-              <div className="flex gap-2">
-                <select
-                  value={handOutcome}
-                  onChange={(event) => setHandOutcome(event.target.value)}
-                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200"
-                >
-                  <option value="all">全部结果</option>
-                  <option value="win">只看赢牌</option>
-                  <option value="loss">只看输牌</option>
-                  <option value="even">只看持平</option>
-                </select>
-                <select
-                  value={handSort}
-                  onChange={(event) => setHandSort(event.target.value)}
-                  className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-200"
-                >
-                  <option value="recent">最近牌局</option>
-                  <option value="biggest-win">赢得最多</option>
-                  <option value="biggest-loss">输得最多</option>
-                </select>
+              <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-3">
+                <div className="text-[10px] text-red-300">最大输牌</div>
+                <div className="text-lg font-black text-red-400">
+                  {handHistory.summary?.biggest_loss?.net_chips || 0}
+                </div>
               </div>
             </div>
 
             {handHistory.hands.length === 0 ? (
               <div className="p-8 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
-                暂无符合条件的牌局
+                暂无牌局记录
               </div>
             ) : (
               <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
@@ -534,7 +517,26 @@ export default function BalanceCenterModal({
                       <th className="p-3">我的手牌</th>
                       <th className="p-3">公共牌</th>
                       <th className="p-3 text-right">投入 / 收回</th>
-                      <th className="p-3 text-right">净结果</th>
+                      <th
+                        onClick={handleToggleNetSort}
+                        className={`p-3 text-right cursor-pointer select-none transition group hover:text-white ${
+                          netSortOrder !== 'none' ? 'text-amber-400 font-bold' : ''
+                        }`}
+                        title={getNetSortTooltip(netSortOrder)}
+                      >
+                        <div className="inline-flex items-center justify-end gap-1">
+                          <span>净结果</span>
+                          {netSortOrder === 'asc' && (
+                            <ArrowUp className="w-3.5 h-3.5 text-amber-400 stroke-[2.5]" />
+                          )}
+                          {netSortOrder === 'desc' && (
+                            <ArrowDown className="w-3.5 h-3.5 text-amber-400 stroke-[2.5]" />
+                          )}
+                          {netSortOrder === 'none' && (
+                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 opacity-40 group-hover:opacity-100 transition" />
+                          )}
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60">
