@@ -59,3 +59,29 @@ export function amountToNonlinearProgress(
   const ratio = clamp((Number(amount) - bounds.min) / (bounds.max - bounds.min), 0, 1);
   return Math.round((ratio ** (1 / curvePower)) * sliderSteps);
 }
+
+/**
+ * Calculate the default 1/2 pot bet/raise amount for slider initialization.
+ */
+export function calculateDefaultSliderAmount({
+  totalPot = 0,
+  callCost = 0,
+  isRaise = false,
+  selfRoundBet = 0,
+  blindUnit = 1,
+  minVal = 0,
+  maxVal = 0,
+}) {
+  const unit = Math.max(1, Number(blindUnit) || 1);
+  if (isRaise) {
+    const effectivePot = Number(totalPot || 0) + Number(callCost || 0);
+    const raiseAdd = Math.round((effectivePot * 0.5) / unit) * unit;
+    const target = Number(selfRoundBet || 0) + Number(callCost || 0) + raiseAdd;
+    const clamped = Math.max(Number(minVal || 0), target);
+    return maxVal > 0 ? Math.min(maxVal, clamped) : clamped;
+  }
+  const target = Math.round((Number(totalPot || 0) * 0.5) / unit) * unit;
+  const clamped = Math.max(Number(minVal || 0), target);
+  return maxVal > 0 ? Math.min(maxVal, clamped) : clamped;
+}
+

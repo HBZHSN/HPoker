@@ -112,7 +112,32 @@ export default function ActionBar({
     return Math.max(alignedMinVal, Math.min(alignedMaxVal, snapped));
   };
 
-  const [raiseAmount, setRaiseAmount] = useState(minVal || 0);
+  const calcPresetAmount = useCallback((ratio) => {
+    const isRaise = effectiveIsMyTurn ? legalActions?.can_raise : (effectiveHighestBet > 0);
+    if (isRaise) {
+      const callCost = effectiveIsMyTurn ? (legalActions?.call_amount || 0) : preCallCost;
+      const effectivePot = totalPot + callCost;
+      const raiseAdd = Math.round((effectivePot * ratio) / blindUnit) * blindUnit;
+      const target = (selfSeat?.current_bet || selfRoundBet || 0) + callCost + raiseAdd;
+      return alignAmount(Math.max(minVal, target));
+    }
+    const target = Math.round((totalPot * ratio) / blindUnit) * blindUnit;
+    return alignAmount(target);
+  }, [
+    effectiveIsMyTurn,
+    legalActions?.can_raise,
+    legalActions?.call_amount,
+    effectiveHighestBet,
+    preCallCost,
+    totalPot,
+    blindUnit,
+    selfSeat?.current_bet,
+    selfRoundBet,
+    minVal,
+    alignAmount,
+  ]);
+
+  const [raiseAmount, setRaiseAmount] = useState(() => (minVal > 0 ? calcPresetAmount(0.5) : 0));
   const effectiveTimeout = (isUsingTimeBank || (currentTurnPlayer && isUsingTimeBank))
     ? (currentTurnDuration || 30)
     : (currentTurnDuration || actionTimeout || 15);
@@ -129,35 +154,64 @@ export default function ActionBar({
   const canPreActionRef = useRef(canPreAction);
   canPreActionRef.current = canPreAction;
 
-  // Sync raiseAmount whenever minVal or maxVal changes
+  // Track previous turn, street, hand, and bet level to reset slider to 1/2 pot
+  const prevTurnRef = useRef(effectiveIsMyTurn);
+  const prevStreetRef = useRef(street);
+  const prevHandRef = useRef(handNumber);
+  const prevHighestBetRef = useRef(effectiveHighestBet);
+  const prevMinValRef = useRef(minVal);
+
+  // Automatically reset bet slider to 1/2 pot when turn starts, street changes, or new bet faced
   useEffect(() => {
+    const isNewTurn = !prevTurnRef.current && effectiveIsMyTurn;
+    const isNewStreet = prevStreetRef.current !== street;
+    const isNewHand = prevHandRef.current !== handNumber;
+    const isBetLevelChanged = prevHighestBetRef.current !== effectiveHighestBet;
+    const isMinValChanged = prevMinValRef.current !== minVal;
+
+    prevTurnRef.current = effectiveIsMyTurn;
+    prevStreetRef.current = street;
+    prevHandRef.current = handNumber;
+    prevHighestBetRef.current = effectiveHighestBet;
+    prevMinValRef.current = minVal;
+
+    // Reset pre-action when street or hand changes
+    if (isNewStreet || isNewHand) {
+      setPreAction(null);
+      setPreActionData(null);
+    }
+
+    // When entering a new turn, new street, new hand, or new bet level:
+    // Automatically set slider to 1/2 pot instead of keeping previous bet amount!
+    if (isNewTurn || isNewStreet || isNewHand || (!effectiveIsMyTurn && (isBetLevelChanged || isMinValChanged))) {
+      if (minVal > 0) {
+        setRaiseAmount(calcPresetAmount(0.5));
+      }
+      return;
+    }
+
+    // While already on my turn, if raiseAmount was somehow uninitialized or out of bounds, re-clamp to valid range
     if (minVal > 0) {
       setRaiseAmount((prev) => {
-        const next = !prev || prev < minVal || prev > maxVal ? minVal : prev;
-        return alignAmount(next);
+        if (!prev || prev < minVal || prev > maxVal) {
+          return calcPresetAmount(0.5);
+        }
+        return alignAmount(prev);
       });
     }
-  }, [minVal, maxVal, legalActions?.can_bet, legalActions?.can_raise, effectiveIsMyTurn, canPreAction]);
-
-  // Reset pre-action when street changes
-  const prevStreetRef = useRef(street);
-  useEffect(() => {
-    if (prevStreetRef.current !== street) {
-      prevStreetRef.current = street;
-      setPreAction(null);
-      setPreActionData(null);
-    }
-  }, [street]);
-
-  // Reset pre-action when hand changes
-  const prevHandRef = useRef(handNumber);
-  useEffect(() => {
-    if (prevHandRef.current !== handNumber) {
-      prevHandRef.current = handNumber;
-      setPreAction(null);
-      setPreActionData(null);
-    }
-  }, [handNumber]);
+  }, [
+    effectiveIsMyTurn,
+    street,
+    handNumber,
+    effectiveHighestBet,
+    minVal,
+    maxVal,
+    legalActions?.can_bet,
+    legalActions?.can_raise,
+    canPreAction,
+    calcPresetAmount,
+    alignAmount,
+  ]);
 
   // Reset pre-action if player folds, all-in, or leaves seat
   useEffect(() => {
@@ -275,18 +329,6 @@ export default function ActionBar({
   }, [effectiveIsMyTurn, legalActions]);
 
   // Preset Bet Sizing helpers
-  const calcPresetAmount = (ratio) => {
-    const isRaise = effectiveIsMyTurn ? legalActions?.can_raise : (effectiveHighestBet > 0);
-    if (isRaise) {
-      const callCost = effectiveIsMyTurn ? (legalActions?.call_amount || 0) : preCallCost;
-      const effectivePot = totalPot + callCost;
-      const raiseAdd = Math.round((effectivePot * ratio) / blindUnit) * blindUnit;
-      const target = (selfSeat?.current_bet || selfRoundBet || 0) + callCost + raiseAdd;
-      return alignAmount(Math.max(minVal, target));
-    }
-    const target = Math.round((totalPot * ratio) / blindUnit) * blindUnit;
-    return alignAmount(target);
-  };
 
   const calcBBAmount = (mult) => {
     return Math.round((mult * bigBlind) / blindUnit) * blindUnit;
