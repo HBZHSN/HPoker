@@ -2,7 +2,8 @@
  * Table Hotkeys & Shortcut Helpers for PC Poker Table Operations
  *
  * Maps keyboard events to game actions:
- * - F1 - F12: 1-to-1 mapping to 12 quick bet presets (8 pot presets + 4 BB presets)
+ * - Numbers 1 - 8: First two rows of quick bet presets (8 pot presets ending with All-in)
+ * - F1 - F4: Third row of quick bet presets (4 BB multiplier presets: 2.5BB, 3BB, 4BB, 5BB)
  * - Space: Check / Call during turn, Check/Call during pre-action, Ready during game-ended / idle
  * - F: Fold during turn, Check/Fold during pre-action
  * - R: Bet / Raise during turn, Raise during pre-action
@@ -14,21 +15,21 @@
  */
 
 export const POT_PRESETS = [
-  { label: '1/3 底池', ratio: 1 / 3, shortcut: 'F1', type: 'pot' },
-  { label: '1/2 底池', ratio: 1 / 2, shortcut: 'F2', type: 'pot' },
-  { label: '2/3 底池', ratio: 2 / 3, shortcut: 'F3', type: 'pot' },
-  { label: '底池', ratio: 1.0, shortcut: 'F4', type: 'pot' },
-  { label: '1.5底池', ratio: 1.5, shortcut: 'F5', type: 'pot' },
-  { label: '2底池', ratio: 2.0, shortcut: 'F6', type: 'pot' },
-  { label: '3底池', ratio: 3.0, shortcut: 'F7', type: 'pot' },
-  { label: '全下', isMax: true, shortcut: 'F8', type: 'allin' },
+  { label: '1/3 底池', ratio: 1 / 3, shortcut: '1', type: 'pot' },
+  { label: '1/2 底池', ratio: 1 / 2, shortcut: '2', type: 'pot' },
+  { label: '2/3 底池', ratio: 2 / 3, shortcut: '3', type: 'pot' },
+  { label: '底池', ratio: 1.0, shortcut: '4', type: 'pot' },
+  { label: '1.5底池', ratio: 1.5, shortcut: '5', type: 'pot' },
+  { label: '2底池', ratio: 2.0, shortcut: '6', type: 'pot' },
+  { label: '3底池', ratio: 3.0, shortcut: '7', type: 'pot' },
+  { label: '全下', isMax: true, shortcut: '8', type: 'allin' },
 ];
 
 export const BB_PRESETS = [
-  { label: '2.5 BB', mult: 2.5, shortcut: 'F9', type: 'bb' },
-  { label: '3 BB', mult: 3, shortcut: 'F10', type: 'bb' },
-  { label: '4 BB', mult: 4, shortcut: 'F11', type: 'bb' },
-  { label: '5 BB', mult: 5, shortcut: 'F12', type: 'bb' },
+  { label: '2.5 BB', mult: 2.5, shortcut: 'F1', type: 'bb' },
+  { label: '3 BB', mult: 3, shortcut: 'F2', type: 'bb' },
+  { label: '4 BB', mult: 4, shortcut: 'F3', type: 'bb' },
+  { label: '5 BB', mult: 5, shortcut: 'F4', type: 'bb' },
 ];
 
 export const ALL_QUICK_PRESETS = [...POT_PRESETS, ...BB_PRESETS];
@@ -43,25 +44,54 @@ export function isIgnoredInputTarget(event) {
 }
 
 /**
- * Parses function keys F1 to F12 from a KeyboardEvent.
- * Returns the 1-based number (1..12) or null if not an F1..F12 key.
+ * Parses quick bet shortcuts:
+ * - Numbers 1-8 (Digit1-8, Numpad1-8) map to presets 0..7 (first 2 rows)
+ * - Function keys F1-F4 map to presets 8..11 (last row)
+ * Returns { index: number (0..11), shortcut: string, type: 'pot' | 'allin' | 'bb' } or null.
  */
-export function parseFKey(event) {
+export function parsePresetShortcut(event) {
   if (!event) return null;
   const code = event.code;
   const key = event.key;
-  const match =
-    (typeof code === 'string' && code.match(/^F([1-9]|1[0-2])$/)) ||
-    (typeof key === 'string' && key.match(/^F([1-9]|1[0-2])$/));
-  return match ? parseInt(match[1], 10) : null;
+
+  // 1. Numbers 1-8 for rows 1 & 2
+  const digitMatch =
+    (typeof code === 'string' && code.match(/^(?:Digit|Numpad)([1-8])$/)) ||
+    (typeof key === 'string' && key.match(/^([1-8])$/));
+
+  if (digitMatch) {
+    const num = parseInt(digitMatch[1] || digitMatch[0], 10);
+    return {
+      index: num - 1, // 0..7
+      shortcut: String(num),
+      type: num === 8 ? 'allin' : 'pot',
+    };
+  }
+
+  // 2. Function keys F1-F4 for row 3
+  const fMatch =
+    (typeof code === 'string' && code.match(/^F([1-4])$/i)) ||
+    (typeof key === 'string' && key.match(/^F([1-4])$/i));
+
+  if (fMatch) {
+    const fNum = parseInt(fMatch[1], 10);
+    return {
+      index: 7 + fNum, // 8..11
+      shortcut: `F${fNum}`,
+      type: 'bb',
+    };
+  }
+
+  return null;
 }
 
 /**
- * Get preset definition by shortcut string (e.g. 'F1'..'F12').
+ * Get preset definition by shortcut string (e.g. '1'..'8', 'F1'..'F4').
  */
 export function getPresetByShortcut(shortcut) {
   if (!shortcut) return null;
-  return ALL_QUICK_PRESETS.find((p) => p.shortcut === shortcut.toUpperCase()) || null;
+  const norm = String(shortcut).toUpperCase();
+  return ALL_QUICK_PRESETS.find((p) => p.shortcut.toUpperCase() === norm) || null;
 }
 
 /**
@@ -107,9 +137,9 @@ export function calculatePresetAmount({
 export function resolveTableHotkey(event) {
   if (!event || isIgnoredInputTarget(event)) return null;
 
-  const fNum = parseFKey(event);
-  if (fNum !== null) {
-    return { type: 'F_KEY', fNum, presetIndex: fNum - 1, shortcut: `F${fNum}` };
+  const preset = parsePresetShortcut(event);
+  if (preset !== null) {
+    return { type: 'PRESET', index: preset.index, shortcut: preset.shortcut };
   }
 
   const code = event.code;
