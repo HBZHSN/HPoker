@@ -10,6 +10,7 @@ import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
 import { getRitStageDescription, buildBoardSlots } from '../utils/communityBoard';
 import { soundEngine } from '../sound/SoundEngine';
 import { isIgnoredInputTarget, resolveHandEndHotkey } from '../utils/tableShortcuts';
+import { resolveSeatBubblePlacement } from '../utils/socialNotifications';
 import {
   Volume2,
   VolumeX,
@@ -962,7 +963,7 @@ export default function PokerTable({
                         title="查看本局结算 (快捷键 O)"
                       >
                         <span>查看本局结算</span>
-                        <span className="font-mono text-[10px] opacity-75">[O]</span>
+                        <span className="hidden sm:inline font-mono text-[10px] opacity-75">[O]</span>
                       </button>
                     )}
                     {selfSeat && selfSeat.chips === 0 ? (
@@ -1155,13 +1156,13 @@ export default function PokerTable({
                 const payout = table?.payouts?.find((p) => p.player_id === seatData?.player_id);
                 const socialBubble = seatSocialBubbles[seatData?.player_id] || null;
                 const seatLeftPercent = parseFloat(pos.left);
-                const bubblePlacement = seatLeftPercent > 50 ? 'left' : 'right';
+                const bubblePlacement = resolveSeatBubblePlacement({ screenIdx, seatLeftPercent });
 
                 return (
                   <div
                     key={screenIdx}
                     className={`poker-table-seat-anchor absolute -translate-x-1/2 -translate-y-1/2 ${
-                      socialBubble ? 'z-40' : 'z-30'
+                      socialBubble ? 'z-40 has-social-bubble' : 'z-30'
                     }`}
                     data-screen-position={screenIdx}
                     style={{ top: pos.top, left: pos.left }}

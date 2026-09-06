@@ -57,7 +57,7 @@ export default function ShowCardsModal({
             className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg border border-slate-600 shadow transition active:scale-95 flex items-center gap-1 cursor-pointer"
           >
             <span>亮左牌</span>
-            <span className="font-mono text-[9px] opacity-75">[1]</span>
+            <span className="hidden sm:inline font-mono text-[9px] opacity-75">[1]</span>
           </button>
         </div>
 
@@ -70,7 +70,7 @@ export default function ShowCardsModal({
             className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg border border-slate-600 shadow transition active:scale-95 flex items-center gap-1 cursor-pointer"
           >
             <span>亮右牌</span>
-            <span className="font-mono text-[9px] opacity-75">[2]</span>
+            <span className="hidden sm:inline font-mono text-[9px] opacity-75">[2]</span>
           </button>
         </div>
       </div>
@@ -82,7 +82,7 @@ export default function ShowCardsModal({
           className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-lg shadow-md transition active:scale-95 flex items-center gap-1 cursor-pointer"
         >
           <span>全部亮出</span>
-          <span className="font-mono text-[9px] opacity-75">[A]</span>
+          <span className="hidden sm:inline font-mono text-[9px] opacity-75">[A]</span>
         </button>
         <button
           onClick={onClose}
@@ -91,7 +91,7 @@ export default function ShowCardsModal({
         >
           <EyeOff className="w-3.5 h-3.5" />
           <span>不亮牌</span>
-          <span className="font-mono text-[9px] opacity-75">[H]</span>
+          <span className="hidden sm:inline font-mono text-[9px] opacity-75">[H]</span>
         </button>
       </div>
     </div>
