@@ -9,6 +9,7 @@ import EquityDrawer, { EquityTrigger } from './EquityDrawer';
 import { sortCardsLowToHigh } from '../utils/cards';
 import { getRitStageDescription, buildBoardSlots } from '../utils/communityBoard';
 import { soundEngine } from '../sound/SoundEngine';
+import { isIgnoredInputTarget } from '../utils/tableShortcuts';
 import {
   Volume2,
   VolumeX,
@@ -223,6 +224,38 @@ export default function PokerTable({
   const handleStartGame = () => {
     onSendWsEvent('START_GAME', {});
   };
+
+  // Global PC keyboard shortcuts for table lobby & game-ended areas (Space to ready / rebuy, Enter to start next hand)
+  useEffect(() => {
+    const handleTableHotkeys = (e) => {
+      if (isIgnoredInputTarget(e)) return;
+
+      // If hand result modal is open, HandResultModal handles its own keys
+      const isHandResultModalOpen = table?.street === 'HAND_END' && !handResultDismissed;
+      if (isHandResultModalOpen) return;
+
+      if (['HAND_END', 'IDLE'].includes(table?.street)) {
+        if (e.code === 'Space') {
+          if (selfSeat && selfSeat.chips > 0) {
+            e.preventDefault();
+            const isReady = table?.ready_player_ids?.includes(selfSeat.player_id);
+            onSendWsEvent('PLAYER_READY', { ready: !isReady });
+          } else if (selfSeat && selfSeat.chips === 0) {
+            e.preventDefault();
+            handleRebuy();
+          }
+        } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+          if (isHost) {
+            e.preventDefault();
+            handleStartGame();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleTableHotkeys);
+    return () => window.removeEventListener('keydown', handleTableHotkeys);
+  }, [table?.street, handResultDismissed, selfSeat, table?.ready_player_ids, isHost, onSendWsEvent]);
 
   const handleAddTestBot = () => {
     if (canAddTestBot) {
@@ -888,7 +921,8 @@ export default function PokerTable({
                         className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs md:text-sm font-black rounded-xl shadow-glow-cyan transition active:scale-95 cursor-pointer animate-pulse"
                       >
                         <Play className="w-4 h-4 fill-white" />
-                        {table?.street === 'HAND_END' ? '下一局' : '开始'}
+                        <span>{table?.street === 'HAND_END' ? '下一局' : '开始'}</span>
+                        <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-80">[Enter]</span>
                       </button>
                     ) : selfSeat ? (
                       <button
@@ -903,9 +937,12 @@ export default function PokerTable({
                         }`}
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        {table?.ready_player_ids?.includes(selfSeat.player_id)
-                          ? '已准备'
-                          : '准备下一局'}
+                        <span>
+                          {table?.ready_player_ids?.includes(selfSeat.player_id)
+                            ? '已准备'
+                            : '准备下一局'}
+                        </span>
+                        <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-80">[Space]</span>
                       </button>
                     ) : (
                       <div className="px-4 py-2 bg-slate-900/80 border border-slate-700 text-slate-400 text-xs font-bold rounded-xl">

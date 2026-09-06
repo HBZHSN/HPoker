@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import CardView from './CardView';
 import CommunityBoard from './CommunityBoard';
 import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
@@ -9,6 +9,7 @@ import {
   formatAutoReadyCheckboxLabel,
   formatReadyButtonLabel,
 } from '../utils/autoReady';
+import { isIgnoredInputTarget } from '../utils/tableShortcuts';
 import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers, LogOut } from 'lucide-react';
 
 export default function HandResultModal({
@@ -93,12 +94,43 @@ export default function HandResultModal({
     }
   };
 
-  const handleManualToggleReady = () => {
+  const handleManualToggleReady = useCallback(() => {
     hasAutoReadiedRef.current = true;
     if (onToggleReady) {
       onToggleReady();
     }
-  };
+  }, [onToggleReady]);
+
+  // PC Keyboard shortcuts inside result modal (Space to ready / rebuy, Enter to start next hand, Escape to close)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (isIgnoredInputTarget(e)) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (selfSeat && !isBusted) {
+          handleManualToggleReady();
+        } else if (isBusted && onRebuy) {
+          onRebuy();
+        }
+      } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+        if (isHost && onStartNextHand) {
+          e.preventDefault();
+          onStartNextHand();
+        }
+      } else if (e.code === 'Escape') {
+        if (onClose) {
+          e.preventDefault();
+          onClose();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, selfSeat, isBusted, onRebuy, isHost, onStartNextHand, onClose, handleManualToggleReady]);
 
   const handleToggleCard = (idx) => {
     if (onShowCard) {
@@ -480,6 +512,7 @@ export default function HandResultModal({
             >
               <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-slate-950 flex-shrink-0" />
               <span>开始下一局</span>
+              <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-75">[Enter]</span>
             </button>
           )}
 
@@ -522,11 +555,13 @@ export default function HandResultModal({
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 flex-shrink-0" />
                     <span>已准备</span>
+                    <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-80">[Space]</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                     <span>{formatReadyButtonLabel({ isSelfReady, autoReady, countdown })}</span>
+                    <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-80">[Space]</span>
                   </>
                 )}
               </button>
