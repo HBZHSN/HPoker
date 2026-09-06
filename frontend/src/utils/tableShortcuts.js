@@ -166,7 +166,7 @@ export const HAND_END_HOTKEYS = {
   CARD_2: { key: '2', altKey: 'X', label: '亮右牌' },
   SHOW_ALL: { key: 'A', altKey: 'S', label: '全部亮出' },
   HIDE_ALL: { key: 'H', altKey: 'M', label: '不亮牌' },
-  REVEAL_BOARD: { key: 'B', altKey: 'V', label: '查看未翻开公共牌' },
+  REVEAL_BOARD: { key: 'B', altKey: 'V', label: '查看' },
 };
 
 /**
