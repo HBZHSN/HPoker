@@ -42,13 +42,13 @@ function BoardRow({
               disabled={!isClickable}
               title={
                 isHidden && canReveal
-                  ? '点击或按 [B] 翻开公共牌'
+                  ? '查看 (快捷键 B)'
                   : undefined
               }
               aria-label={
                 isHidden
                   ? canReveal
-                    ? '翻开公共牌 (快捷键 B)'
+                    ? '查看 (快捷键 B)'
                     : `公共牌第 ${index + 1} 张 (待发)`
                   : isPostHandRevealed
                   ? `公共牌第 ${index + 1} 张 (摊牌揭晓)`
@@ -137,14 +137,10 @@ export default function CommunityBoard({
           type="button"
           onClick={onReveal}
           disabled={isRevealing}
-          className="mb-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 text-xs font-black border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1.5 animate-pulse"
-          title="查看未翻开公共牌 (快捷键 B)"
+          className="mb-1 w-7 h-7 rounded-full bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center animate-pulse"
+          title="查看 (快捷键 B)"
         >
-          <Eye className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-          <span>查看未翻开公共牌</span>
-          <span className="font-mono text-[10px] font-bold bg-amber-400/20 px-1 py-0.2 rounded border border-amber-400/40">
-            B
-          </span>
+          <Eye className="w-3.5 h-3.5 text-amber-400" />
         </button>
       )}
       {hasSecondBoard ? (

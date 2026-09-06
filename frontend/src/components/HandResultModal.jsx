@@ -246,12 +246,10 @@ export default function HandResultModal({
                   type="button"
                   onClick={onRevealBoard}
                   disabled={isRevealingBoard}
-                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 text-xs font-black border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1.5 animate-pulse"
-                  title="查看未翻开公共牌 (快捷键 B)"
+                  className="w-8 h-8 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center flex-shrink-0 animate-pulse"
+                  title="查看 (快捷键 B)"
                 >
-                  <Eye className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                  <span className="hidden sm:inline">翻开公共牌</span>
-                  <span className="text-[10px] font-mono font-bold text-amber-200">[B]</span>
+                  <Eye className="w-4 h-4 text-amber-400" />
                 </button>
               )}
             </div>

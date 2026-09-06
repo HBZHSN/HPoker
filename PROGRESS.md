@@ -936,8 +936,8 @@
 
 ### 阶段 92：牌局结束区亮牌与未翻开公共牌快捷键支持 (Hand-End Card Reveal & Board Peek Hotkeys)
 - [x] 92.1 牌局结束区快捷键解析器与常量映射 (`tableShortcuts.js`, `tableShortcuts.test.mjs`)：实现 `resolveHandEndHotkey` 与 `HAND_END_HOTKEYS`，规范左牌/右牌（`1`/`2`，别名 `Z`/`X`）、全部亮出（`A`，别名 `S`）、不亮牌（`H`，别名 `M`）、查看未翻开公共牌（`B`，别名 `V`/`C`）、准备/补码（`Space`）、房主开局（`Enter`）、关闭/返回（`Esc`）、重开结算弹窗（`O`），编写全面单元测试并通过（70/70 项测试 100% 通过）。
-- [x] 92.2 单局结算弹窗亮牌与公共牌快捷键交互 (`HandResultModal.jsx`)：结算弹窗全面接入 `resolveHandEndHotkey`，手牌卡片支持按 `1`/`2` 独立翻转亮出，全部亮出与不亮牌按钮支持 `A`/`H` 快捷键并附带徽章提示；顶部公共牌旁在未全量揭示时新增醒目的「翻开公共牌 [B]」交互按钮，支持按 `B`/`V`/`C` 瞬时揭开剩余公共牌。
-- [x] 92.3 牌桌中央公共牌与弹窗收起全局结束态热键联动 (`CommunityBoard.jsx`, `PokerTable.jsx`, `ShowCardsModal.jsx`)：`CommunityBoard` 未揭示卡槽增加 `[B]` 快捷键标识与悬停提示，桌面中央自动展示「查看未翻开公共牌 [B]」操作按钮；`PokerTable.jsx` 在 `HAND_END` 弹窗收起态支持全局按 `B` 翻开剩余公共牌，按 `1`/`2`/`A`/`H` 亮暗手牌，按 `O` 重新呼出结算弹窗；`ShowCardsModal` 同步接入统一快捷键。
+- [x] 92.2 单局结算弹窗亮牌与公共牌快捷键交互 (`HandResultModal.jsx`)：结算弹窗全面接入 `resolveHandEndHotkey`，手牌卡片支持按 `1`/`2` 独立翻转亮出，全部亮出与不亮牌按钮支持 `A`/`H` 快捷键并附带徽章提示；顶部公共牌旁在未全量揭示时提供极简的眼睛图标按钮（移除冗余文字），支持点击或按 `B`/`V`/`C` 瞬时揭开剩余公共牌。
+- [x] 92.3 牌桌中央公共牌与弹窗收起全局结束态热键联动 (`CommunityBoard.jsx`, `PokerTable.jsx`, `ShowCardsModal.jsx`)：`CommunityBoard` 未揭示卡槽增加 `[B]` 快捷键标识与极简悬停提示，桌面中央自动展示纯眼睛图标按钮；`PokerTable.jsx` 在 `HAND_END` 弹窗收起态支持全局按 `B` 翻开剩余公共牌，按 `1`/`2`/`A`/`H` 亮暗手牌，按 `O` 重新呼出结算弹窗；`ShowCardsModal` 同步接入统一快捷键。
 - [x] 92.4 全链路验证与生产构建：70 项前端单元测试 100% 通过，193 项后端单元测试 100% 通过，Vite 生产构建打包成功，不重启服务。
 
 
