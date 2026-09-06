@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import CardView from './CardView';
 import CommunityBoard from './CommunityBoard';
 import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
@@ -9,7 +9,7 @@ import {
   formatAutoReadyCheckboxLabel,
   formatReadyButtonLabel,
 } from '../utils/autoReady';
-import { isIgnoredInputTarget } from '../utils/tableShortcuts';
+import { isIgnoredInputTarget, resolveHandEndHotkey } from '../utils/tableShortcuts';
 import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers, LogOut } from 'lucide-react';
 
 export default function HandResultModal({
@@ -101,57 +101,101 @@ export default function HandResultModal({
     }
   }, [onToggleReady]);
 
-  // PC Keyboard shortcuts inside result modal (Space to ready / rebuy, Enter to start next hand, Escape to close)
+  const orderedSelfHoleCards = useMemo(
+    () => sortCardsWithIndex(selfSeat?.hole_cards || []),
+    [selfSeat?.hole_cards]
+  );
+
+  const handleToggleCard = useCallback(
+    (idx) => {
+      if (onShowCard) {
+        onShowCard({ toggle_index: idx });
+      }
+    },
+    [onShowCard]
+  );
+
+  const handleShowAll = useCallback(() => {
+    if (onShowCard) {
+      onShowCard({ show_all: true });
+    }
+  }, [onShowCard]);
+
+  const handleHideAll = useCallback(() => {
+    if (onShowCard) {
+      onShowCard({ hide_all: true });
+    }
+  }, [onShowCard]);
+
+  // PC Keyboard shortcuts inside result modal (Space: ready, Enter: next hand, Esc: close, 1/2/Z/X: toggle card, A/S: show all, H/M: hide all, B/V/C: reveal board)
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e) => {
-      if (isIgnoredInputTarget(e)) return;
+      const action = resolveHandEndHotkey(e);
+      if (!action) return;
 
-      if (e.code === 'Space') {
+      if (action.type === 'READY') {
         e.preventDefault();
         if (selfSeat && !isBusted) {
           handleManualToggleReady();
         } else if (isBusted && onRebuy) {
           onRebuy();
         }
-      } else if (e.code === 'Enter' || e.code === 'NumpadEnter') {
+      } else if (action.type === 'START_NEXT') {
         if (isHost && onStartNextHand) {
           e.preventDefault();
           onStartNextHand();
         }
-      } else if (e.code === 'Escape') {
+      } else if (action.type === 'CLOSE') {
         if (onClose) {
           e.preventDefault();
           onClose();
+        }
+      } else if (action.type === 'REVEAL_BOARD') {
+        if (!boardCardsRevealed && onRevealBoard) {
+          e.preventDefault();
+          onRevealBoard();
+        }
+      } else if (action.type === 'TOGGLE_CARD') {
+        const target = orderedSelfHoleCards[action.cardIndex];
+        if (target !== undefined) {
+          e.preventDefault();
+          handleToggleCard(target.index);
+        }
+      } else if (action.type === 'SHOW_ALL') {
+        if (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0) {
+          e.preventDefault();
+          handleShowAll();
+        }
+      } else if (action.type === 'HIDE_ALL') {
+        if (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0) {
+          e.preventDefault();
+          handleHideAll();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, selfSeat, isBusted, onRebuy, isHost, onStartNextHand, onClose, handleManualToggleReady]);
-
-  const handleToggleCard = (idx) => {
-    if (onShowCard) {
-      onShowCard({ toggle_index: idx });
-    }
-  };
-
-  const handleShowAll = () => {
-    if (onShowCard) {
-      onShowCard({ show_all: true });
-    }
-  };
-
-  const handleHideAll = () => {
-    if (onShowCard) {
-      onShowCard({ hide_all: true });
-    }
-  };
+  }, [
+    isOpen,
+    selfSeat,
+    isBusted,
+    onRebuy,
+    isHost,
+    onStartNextHand,
+    onClose,
+    handleManualToggleReady,
+    boardCardsRevealed,
+    onRevealBoard,
+    orderedSelfHoleCards,
+    handleToggleCard,
+    handleShowAll,
+    handleHideAll,
+  ]);
 
   const hasTwoBoards = ritEnabled || boardCards2.length > 0 || boardCards2Full.length > 0;
-  const orderedSelfHoleCards = sortCardsWithIndex(selfSeat?.hole_cards || []);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
@@ -182,20 +226,35 @@ export default function HandResultModal({
 
           <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
             {/* Board Community Cards */}
-            <CommunityBoard
-              boardCards={boardCards}
-              boardCards2={boardCards2}
-              boardCardsFull={boardCardsFull}
-              boardCards2Full={boardCards2Full}
-              allInInitialBoardCount={allInInitialBoardCount}
-              ritEnabled={ritEnabled}
-              street="HAND_END"
-              boardCardsRevealed={boardCardsRevealed}
-              onReveal={onRevealBoard}
-              isRevealing={isRevealingBoard}
-              size="xs"
-              compact
-            />
+            <div className="flex items-center gap-2">
+              <CommunityBoard
+                boardCards={boardCards}
+                boardCards2={boardCards2}
+                boardCardsFull={boardCardsFull}
+                boardCards2Full={boardCards2Full}
+                allInInitialBoardCount={allInInitialBoardCount}
+                ritEnabled={ritEnabled}
+                street="HAND_END"
+                boardCardsRevealed={boardCardsRevealed}
+                onReveal={onRevealBoard}
+                isRevealing={isRevealingBoard}
+                size="xs"
+                compact
+              />
+              {!boardCardsRevealed && onRevealBoard && (
+                <button
+                  type="button"
+                  onClick={onRevealBoard}
+                  disabled={isRevealingBoard}
+                  className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-amber-400/30 to-amber-500/20 hover:from-amber-500/30 hover:to-amber-400/40 text-amber-300 text-xs font-black border border-amber-500/50 shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1.5 animate-pulse"
+                  title="查看未翻开公共牌 (快捷键 B)"
+                >
+                  <Eye className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                  <span className="hidden sm:inline">翻开公共牌</span>
+                  <span className="text-[10px] font-mono font-bold text-amber-200">[B]</span>
+                </button>
+              )}
+            </div>
 
             <div className="flex items-center gap-2">
               {/* Leave Room Button */}
@@ -453,28 +512,31 @@ export default function HandResultModal({
 
               {/* Two Clickable Cards */}
               <div className="flex items-center gap-3">
-                {orderedSelfHoleCards.map(({ card, index }) => {
+                {orderedSelfHoleCards.map(({ card, index }, displayIdx) => {
                   const isCardShown = selfSeat.shown_cards?.some(
                     (sc) =>
                       (sc.rank === card.rank && sc.suit === card.suit) ||
                       (sc.notation && sc.notation === card.notation)
                   );
+                  const shortcutKey = displayIdx === 0 ? '1' : '2';
 
                   return (
                     <button
                       key={index}
                       onClick={() => handleToggleCard(index)}
+                      title={`点击或按 [${shortcutKey}] 亮出/隐藏此牌`}
                       className={`relative group cursor-pointer transition-transform active:scale-95 ${
                         isCardShown ? 'ring-4 ring-amber-400 rounded-lg scale-105' : 'opacity-80 hover:opacity-100'
                       }`}
                     >
                       <CardView card={card} size="md" />
                       <div
-                        className={`absolute -bottom-2 inset-x-0 py-0.5 rounded text-[10px] font-black text-center shadow ${
+                        className={`absolute -bottom-2 inset-x-0 py-0.5 rounded text-[10px] font-black text-center shadow flex items-center justify-center gap-1 ${
                           isCardShown ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-300'
                         }`}
                       >
-                        {isCardShown ? '已亮出' : '亮牌'}
+                        <span>{isCardShown ? '已亮出' : '亮牌'}</span>
+                        <span className="font-mono text-[9px] opacity-80">[{shortcutKey}]</span>
                       </div>
                     </button>
                   );
@@ -485,17 +547,21 @@ export default function HandResultModal({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleShowAll}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer flex items-center gap-1"
+                  title="全部亮出 (快捷键 A)"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer flex items-center gap-1.5"
                 >
                   <Eye className="w-3.5 h-3.5" />
-                  全部亮出
+                  <span>全部亮出</span>
+                  <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-75">[A]</span>
                 </button>
                 <button
                   onClick={handleHideAll}
-                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer flex items-center gap-1"
+                  title="不亮牌 (快捷键 H)"
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl border border-slate-700 transition active:scale-95 cursor-pointer flex items-center gap-1.5"
                 >
                   <EyeOff className="w-3.5 h-3.5" />
-                  不亮牌
+                  <span>不亮牌</span>
+                  <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-75">[H]</span>
                 </button>
               </div>
             </div>

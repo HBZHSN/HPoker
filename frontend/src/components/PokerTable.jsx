@@ -6,10 +6,10 @@ import CardView from './CardView';
 import HandResultModal from './HandResultModal';
 import TableSocialControls from './TableSocialControls';
 import EquityDrawer, { EquityTrigger } from './EquityDrawer';
-import { sortCardsLowToHigh } from '../utils/cards';
+import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
 import { getRitStageDescription, buildBoardSlots } from '../utils/communityBoard';
 import { soundEngine } from '../sound/SoundEngine';
-import { isIgnoredInputTarget } from '../utils/tableShortcuts';
+import { isIgnoredInputTarget, resolveHandEndHotkey } from '../utils/tableShortcuts';
 import {
   Volume2,
   VolumeX,
@@ -217,15 +217,23 @@ export default function PokerTable({
     }
   }, [leaveRequested, selfSeat, onLeaveRoom]);
 
-  const handleRebuy = () => {
+  const handleRebuy = useCallback(() => {
     onSendWsEvent('REBUY', {});
-  };
+  }, [onSendWsEvent]);
 
-  const handleStartGame = () => {
+  const handleStartGame = useCallback(() => {
     onSendWsEvent('START_GAME', {});
-  };
+  }, [onSendWsEvent]);
 
-  // Global PC keyboard shortcuts for table lobby & game-ended areas (Space to ready / rebuy, Enter to start next hand)
+  const handleRevealBoard = useCallback(() => {
+    if (table?.street !== 'HAND_END' || table?.board_cards_revealed || isRevealingBoard) {
+      return;
+    }
+    setIsRevealingBoard(true);
+    onSendWsEvent('REVEAL_BOARD_CARDS', {});
+  }, [table?.street, table?.board_cards_revealed, isRevealingBoard, onSendWsEvent]);
+
+  // Global PC keyboard shortcuts for table lobby & game-ended areas (Space to ready / rebuy, Enter to start next hand, B to reveal board, 1/2/A/H to show cards)
   useEffect(() => {
     const handleTableHotkeys = (e) => {
       if (isIgnoredInputTarget(e)) return;
@@ -234,7 +242,53 @@ export default function PokerTable({
       const isHandResultModalOpen = table?.street === 'HAND_END' && !handResultDismissed;
       if (isHandResultModalOpen) return;
 
-      if (['HAND_END', 'IDLE'].includes(table?.street)) {
+      if (table?.street === 'HAND_END') {
+        const action = resolveHandEndHotkey(e);
+        if (!action) return;
+
+        if (action.type === 'READY') {
+          if (selfSeat && selfSeat.chips > 0) {
+            e.preventDefault();
+            const isReady = table?.ready_player_ids?.includes(selfSeat.player_id);
+            onSendWsEvent('PLAYER_READY', { ready: !isReady });
+          } else if (selfSeat && selfSeat.chips === 0) {
+            e.preventDefault();
+            handleRebuy();
+          }
+        } else if (action.type === 'START_NEXT') {
+          if (isHost) {
+            e.preventDefault();
+            handleStartGame();
+          }
+        } else if (action.type === 'REVEAL_BOARD') {
+          e.preventDefault();
+          handleRevealBoard();
+        } else if (action.type === 'REOPEN_MODAL') {
+          e.preventDefault();
+          setHandResultDismissed(false);
+        } else if (action.type === 'TOGGLE_CARD') {
+          if (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0) {
+            const ordered = sortCardsWithIndex(selfSeat.hole_cards);
+            if (ordered[action.cardIndex] !== undefined) {
+              e.preventDefault();
+              onSendWsEvent('SHOW_CARD', { toggle_index: ordered[action.cardIndex].index });
+            }
+          }
+        } else if (action.type === 'SHOW_ALL') {
+          if (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0) {
+            e.preventDefault();
+            onSendWsEvent('SHOW_CARD', { show_all: true });
+          }
+        } else if (action.type === 'HIDE_ALL') {
+          if (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0) {
+            e.preventDefault();
+            onSendWsEvent('SHOW_CARD', { hide_all: true });
+          }
+        }
+        return;
+      }
+
+      if (table?.street === 'IDLE') {
         if (e.code === 'Space') {
           if (selfSeat && selfSeat.chips > 0) {
             e.preventDefault();
@@ -255,20 +309,22 @@ export default function PokerTable({
 
     window.addEventListener('keydown', handleTableHotkeys);
     return () => window.removeEventListener('keydown', handleTableHotkeys);
-  }, [table?.street, handResultDismissed, selfSeat, table?.ready_player_ids, isHost, onSendWsEvent]);
+  }, [
+    table?.street,
+    handResultDismissed,
+    selfSeat,
+    table?.ready_player_ids,
+    isHost,
+    onSendWsEvent,
+    handleRebuy,
+    handleStartGame,
+    handleRevealBoard,
+  ]);
 
   const handleAddTestBot = () => {
     if (canAddTestBot) {
       onSendWsEvent('ADD_TEST_BOT', {});
     }
-  };
-
-  const handleRevealBoard = () => {
-    if (table?.street !== 'HAND_END' || table?.board_cards_revealed || isRevealingBoard) {
-      return;
-    }
-    setIsRevealingBoard(true);
-    onSendWsEvent('REVEAL_BOARD_CARDS', {});
   };
 
   const handleUseAssistant = useCallback(() => {
@@ -902,9 +958,11 @@ export default function PokerTable({
                     {table?.street === 'HAND_END' && handResultDismissed && (
                       <button
                         onClick={() => setHandResultDismissed(false)}
-                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-amber-500/50 text-amber-300 text-xs font-bold rounded-xl shadow transition active:scale-95 cursor-pointer"
+                        className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-amber-500/50 text-amber-300 text-xs font-bold rounded-xl shadow transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+                        title="查看本局结算 (快捷键 O)"
                       >
-                        查看本局结算
+                        <span>查看本局结算</span>
+                        <span className="font-mono text-[10px] opacity-75">[O]</span>
                       </button>
                     )}
                     {selfSeat && selfSeat.chips === 0 ? (

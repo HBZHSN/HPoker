@@ -8,6 +8,8 @@ import {
   getPresetByShortcut,
   calculatePresetAmount,
   resolveTableHotkey,
+  resolveHandEndHotkey,
+  HAND_END_HOTKEYS,
   isIgnoredInputTarget,
 } from '../tableShortcuts.js';
 
@@ -282,3 +284,81 @@ test('presets correctly arm pre-action raise when not yet my turn', () => {
   assert.equal(preBB.preAction, 'RAISE');
   assert.equal(preBB.targetAmount, 50);
 });
+
+test('resolveHandEndHotkey resolves all game-ended showdown actions', () => {
+  // Ready / Rebuy: Space
+  assert.deepEqual(resolveHandEndHotkey({ code: 'Space' }), { type: 'READY' });
+
+  // Host Next Hand: Enter / NumpadEnter
+  assert.deepEqual(resolveHandEndHotkey({ code: 'Enter' }), { type: 'START_NEXT' });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'NumpadEnter' }), { type: 'START_NEXT' });
+
+  // Close Modal: Escape
+  assert.deepEqual(resolveHandEndHotkey({ code: 'Escape' }), { type: 'CLOSE' });
+
+  // Reopen Modal: KeyO / 'o'
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyO' }), { type: 'REOPEN_MODAL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'o' }), { type: 'REOPEN_MODAL' });
+
+  // Reveal Unrevealed Community Cards: KeyB, KeyV, KeyC, 'b', 'v', 'c'
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyB' }), { type: 'REVEAL_BOARD' });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyV' }), { type: 'REVEAL_BOARD' });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyC' }), { type: 'REVEAL_BOARD' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'b' }), { type: 'REVEAL_BOARD' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'B' }), { type: 'REVEAL_BOARD' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'v' }), { type: 'REVEAL_BOARD' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'c' }), { type: 'REVEAL_BOARD' });
+
+  // Toggle Card 1: Digit1, Numpad1, KeyZ, '1', 'z'
+  assert.deepEqual(resolveHandEndHotkey({ code: 'Digit1' }), { type: 'TOGGLE_CARD', cardIndex: 0 });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'Numpad1' }), { type: 'TOGGLE_CARD', cardIndex: 0 });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyZ' }), { type: 'TOGGLE_CARD', cardIndex: 0 });
+  assert.deepEqual(resolveHandEndHotkey({ key: '1' }), { type: 'TOGGLE_CARD', cardIndex: 0 });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'z' }), { type: 'TOGGLE_CARD', cardIndex: 0 });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'Z' }), { type: 'TOGGLE_CARD', cardIndex: 0 });
+
+  // Toggle Card 2: Digit2, Numpad2, KeyX, '2', 'x'
+  assert.deepEqual(resolveHandEndHotkey({ code: 'Digit2' }), { type: 'TOGGLE_CARD', cardIndex: 1 });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'Numpad2' }), { type: 'TOGGLE_CARD', cardIndex: 1 });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyX' }), { type: 'TOGGLE_CARD', cardIndex: 1 });
+  assert.deepEqual(resolveHandEndHotkey({ key: '2' }), { type: 'TOGGLE_CARD', cardIndex: 1 });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'x' }), { type: 'TOGGLE_CARD', cardIndex: 1 });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'X' }), { type: 'TOGGLE_CARD', cardIndex: 1 });
+
+  // Show All: KeyA, KeyS, 'a', 's'
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyA' }), { type: 'SHOW_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyS' }), { type: 'SHOW_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'a' }), { type: 'SHOW_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'A' }), { type: 'SHOW_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 's' }), { type: 'SHOW_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'S' }), { type: 'SHOW_ALL' });
+
+  // Hide All (Muck): KeyH, KeyM, 'h', 'm'
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyH' }), { type: 'HIDE_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ code: 'KeyM' }), { type: 'HIDE_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'h' }), { type: 'HIDE_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'H' }), { type: 'HIDE_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'm' }), { type: 'HIDE_ALL' });
+  assert.deepEqual(resolveHandEndHotkey({ key: 'M' }), { type: 'HIDE_ALL' });
+
+  // Ignored in input targets
+  assert.equal(resolveHandEndHotkey({ code: 'KeyB', target: { tagName: 'INPUT' } }), null);
+  assert.equal(resolveHandEndHotkey({ code: 'Digit1', target: { tagName: 'TEXTAREA' } }), null);
+  assert.equal(resolveHandEndHotkey({ code: 'KeyA', target: { isContentEditable: true } }), null);
+
+  // Unhandled key returns null
+  assert.equal(resolveHandEndHotkey({ code: 'Digit9' }), null);
+  assert.equal(resolveHandEndHotkey({ code: 'KeyQ' }), null);
+  assert.equal(resolveHandEndHotkey(null), null);
+});
+
+test('HAND_END_HOTKEYS constant provides key and label metadata', () => {
+  assert.ok(HAND_END_HOTKEYS.CARD_1);
+  assert.equal(HAND_END_HOTKEYS.CARD_1.key, '1');
+  assert.equal(HAND_END_HOTKEYS.CARD_2.key, '2');
+  assert.equal(HAND_END_HOTKEYS.SHOW_ALL.key, 'A');
+  assert.equal(HAND_END_HOTKEYS.HIDE_ALL.key, 'H');
+  assert.equal(HAND_END_HOTKEYS.REVEAL_BOARD.key, 'B');
+  assert.equal(HAND_END_HOTKEYS.READY.key, 'Space');
+});
+
