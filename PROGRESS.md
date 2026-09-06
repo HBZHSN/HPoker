@@ -92,10 +92,13 @@
 | **阶段 81** | 移动端公共牌与左右下角玩家标注防遮挡安全布局优化 | 5 | 5 | 已完成 |
 | **阶段 82** | 移动端公共牌背景底板全包覆与自适应宽度修复 | 3 | 3 | 已完成 |
 | **阶段 83** | 移动端牌局结果单行操作栏与紧凑准备交互重构 | 3 | 3 | 已完成 |
+| **阶段 84** | 移动端 PWA 安装按钮常驻化与弹窗多次唤起修复 | 5 | 5 | 已完成 |
 | **阶段 85** | 国产安卓浏览器 PWA 门禁误拦放行与独立窗口识别修复 | 4 | 4 | 已完成 |
 | **阶段 86** | 手机端移除顶栏/抽屉/大厅的 PWA 安装与全屏入口按钮 | 4 | 4 | 已完成 |
 | **阶段 87** | PWA 启动后隐藏大厅「安装到手机主屏幕」横幅 | 1 | 1 | 已完成 |
-| **总计** | **全部功能模块** | **398** | **398** | 已完成 |
+| **阶段 88** | 生产数据库历史测试账单污染清理与待结清单恢复 | 3 | 3 | 已完成 |
+| **阶段 89** | 手机端切后台声音消失与生命周期恢复修复 | 3 | 3 | 已完成 |
+| **总计** | **全部功能模块** | **409** | **409** | 已完成 |
 
 ---
 
@@ -902,6 +905,13 @@
 - [x] 88.1 定向清理正式数据库脏账单 (`scripts/cleanup_dirty_test_balances.py`)：原子化移除 2026-09-04 调试遗留的 31 条测试流水（涵盖 `dave`, `charlie`, `bob`, `alice`, `host`），保持真实用户 (`u_hx`, `u_fwd`, `u_yy`) 账单数据 100% 完整与零和守恒
 - [x] 88.2 重启后台服务与状态验证：重载 `balance_manager` 缓存，核验待结清单 API 恢复为仅显示真实用户，总额收支平衡 (`is_balanced: true`)，193 项后端单元测试全量通过
 - [x] 88.3 补全 `.gitignore` 过滤备份文件：忽略 `backend/data/*.bak*` 与 `*.sqlite3*`，确保生产数据与备份永不污染 Git 仓库
+
+---
+
+### 阶段 89：手机端切后台声音消失与生命周期恢复修复 (Mobile Background AudioContext Lifecycle & Gesture Unlock Recovery)
+- [x] 89.1 后台生命周期监听与主动挂起恢复 (`SoundEngine.js`)：监听 `visibilitychange`、`pageshow`、`focus`、`pagehide`、`blur` 事件，切后台与锁屏时主动挂起 `ctx.suspend()` 防止 WebKit/Chromium 底层音频输出单元硬中断损坏，返回前台时发起安全自动恢复，并配置 iOS 17+ `navigator.audioSession.type = 'playback'` 避免物理静音模式误关声音。
+- [x] 89.2 全局手势唤醒与死锁重建机制 (`SoundEngine.js`, `PokerTable.jsx`)：捕获移动端全局触控与点击手势（`touchstart`、`touchend`、`click` 等），在前台首次交互时立即 `unlock` 并播放 1 采样静音缓冲激活硬件声道；当检测到 WebKit `interrupted` 状态死锁或 `InvalidStateError` 时自动销毁并全新实例化 `AudioContext`，彻底根治切后台后必须清理后台才能恢复声音的顽疾；牌桌扬声器静音切换联动唤醒。
+- [x] 89.3 音频方法上下文防御、全量回归测试与生产构建 (`SoundEngine.js`, `soundEngine.test.mjs`)：为全部 procedural 合成方法增加上下文存在性与状态防御（`playDealCard`, `playCheckKnock`, `playChipsClink`, `playRaise`, `playFold`, `playAllIn`, `playWinPot`, `playCountdownTick`, `playChime`, `playTimeCard`, `playTimeCardGain`），异步定时回调增设状态守卫；编写覆盖前后台切换、手势解锁、WebKit interrupted 恢复与重建、静音联动的单元测试（56/56 前端测试全量通过，193 后端测试全量通过），Vite 生产打包验证成功。
 
 
 

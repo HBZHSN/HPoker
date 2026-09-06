@@ -9,22 +9,221 @@ class SoundEngine {
     this.ctx = null;
     this.muted = false;
     this.volume = 0.7;
+    this._wasBackgrounded = false;
+    this._needsHardwareWakeup = false;
+    this._listenersAttached = false;
+    this._isUnlocking = false;
+
+    if (typeof window !== 'undefined') {
+      this._setupLifecycleListeners();
+      this._setupUserGestureListeners();
+    }
+  }
+
+  _setupLifecycleListeners() {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+    // Visibility change: background / foreground
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this._handleBackground();
+      } else {
+        this._handleForeground();
+      }
+    });
+
+    // Mobile bfcache and focus/blur lifecycle
+    window.addEventListener('pageshow', () => this._handleForeground());
+    window.addEventListener('focus', () => this._handleForeground());
+    window.addEventListener('pagehide', () => this._handleBackground());
+    window.addEventListener('blur', () => {
+      if (typeof document !== 'undefined' && document.hidden) {
+        this._handleBackground();
+      }
+    });
+  }
+
+  _setupUserGestureListeners() {
+    if (typeof window === 'undefined') return;
+    if (this._listenersAttached) return;
+    this._listenersAttached = true;
+
+    const unlockHandler = () => {
+      if (!this.muted) {
+        if (!this.ctx || this.ctx.state !== 'running' || this._needsHardwareWakeup) {
+          this.unlock();
+        }
+      }
+    };
+
+    const events = ['touchstart', 'touchend', 'pointerdown', 'click', 'keydown'];
+    events.forEach((evt) => {
+      window.addEventListener(evt, unlockHandler, { capture: true, passive: true });
+    });
+  }
+
+  _handleBackground() {
+    this._wasBackgrounded = true;
+    this._needsHardwareWakeup = true;
+
+    // Proactively suspend active audio context before OS aggressively cuts hardware off
+    if (this.ctx && this.ctx.state === 'running') {
+      try {
+        this.ctx.suspend().catch(() => {});
+      } catch (_) {}
+    }
+  }
+
+  _handleForeground() {
+    this._needsHardwareWakeup = true;
+    this._resumeOrRestore();
+  }
+
+  _configureAudioSession() {
+    if (typeof navigator !== 'undefined' && navigator.audioSession) {
+      try {
+        // 'playback' category keeps audio session alive and bypasses silent switch in iOS 17+
+        navigator.audioSession.type = 'playback';
+      } catch (_) {}
+    }
+  }
+
+  _bindContextStateListener() {
+    if (!this.ctx) return;
+    try {
+      this.ctx.onstatechange = () => {
+        if (!this.ctx) return;
+        if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
+          this._needsHardwareWakeup = true;
+        }
+      };
+    } catch (_) {}
   }
 
   _initContext() {
-    if (!this.ctx) {
+    if (typeof window === 'undefined') return;
+
+    if (!this.ctx || this.ctx.state === 'closed') {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) {
-        this.ctx = new AudioCtx();
+        try {
+          this.ctx = new AudioCtx();
+          this._bindContextStateListener();
+        } catch (e) {
+          console.warn("[SoundEngine] Failed to initialize AudioContext:", e);
+          return;
+        }
       }
     }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+
+    this._configureAudioSession();
+
+    if (this.ctx && (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted')) {
+      try {
+        this.ctx.resume().catch(() => {});
+      } catch (_) {}
+    }
+  }
+
+  _recreateContext() {
+    try {
+      if (this.ctx && typeof this.ctx.close === 'function') {
+        this.ctx.close().catch(() => {});
+      }
+    } catch (_) {}
+    this.ctx = null;
+
+    const AudioCtx = typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : null;
+    if (AudioCtx) {
+      try {
+        this.ctx = new AudioCtx();
+        this._bindContextStateListener();
+        this._configureAudioSession();
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      } catch (e) {
+        console.warn("[SoundEngine] Failed to recreate AudioContext:", e);
+      }
+    }
+  }
+
+  async _resumeOrRestore() {
+    if (this.muted) return;
+
+    this._configureAudioSession();
+
+    if (!this.ctx || this.ctx.state === 'closed') {
+      this._initContext();
+      return;
+    }
+
+    // Programmatic resume attempt upon returning to foreground
+    if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
+      try {
+        await this.ctx.resume();
+      } catch (err) {
+        // Autoplay policy prevented resume without user gesture.
+        // User gesture listener will handle it on next touch.
+      }
+    }
+  }
+
+  /**
+   * Explicitly unlock audio within a user gesture (touchstart/click/touchend).
+   */
+  async unlock() {
+    if (this.muted || this._isUnlocking) return;
+    this._isUnlocking = true;
+
+    try {
+      this._configureAudioSession();
+
+      if (!this.ctx || this.ctx.state === 'closed') {
+        this._initContext();
+      }
+
+      if (this.ctx) {
+        if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
+          try {
+            await this.ctx.resume();
+          } catch (e) {
+            // Resume failed or threw InvalidStateError on iOS, recreate context
+            this._recreateContext();
+          }
+        }
+
+        // If context remains stuck in interrupted state even after resume, force recreate
+        if (this.ctx && this.ctx.state === 'interrupted') {
+          this._recreateContext();
+        }
+
+        // Hardware kick: play a 1-sample silent buffer to activate the audio output unit
+        if (this.ctx && (this.ctx.state === 'running' || this.ctx.state === 'suspended')) {
+          try {
+            const buffer = this.ctx.createBuffer(1, 1, 22050);
+            const source = this.ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(this.ctx.destination);
+            source.start(0);
+          } catch (_) {}
+        }
+
+        if (this.ctx && this.ctx.state === 'running') {
+          this._needsHardwareWakeup = false;
+          this._wasBackgrounded = false;
+        }
+      }
+    } finally {
+      this._isUnlocking = false;
     }
   }
 
   setMuted(muted) {
     this.muted = muted;
+    if (!muted) {
+      this.unlock();
+    }
   }
 
   setVolume(vol) {
@@ -35,6 +234,14 @@ class SoundEngine {
     if (this.muted) return;
     try {
       this._initContext();
+      if (!this.ctx) return;
+
+      if (this.ctx.state === 'closed') {
+        this._recreateContext();
+      } else if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
+        this.ctx.resume().catch(() => {});
+      }
+
       if (!this.ctx) return;
 
       switch (soundName) {
@@ -78,11 +285,14 @@ class SoundEngine {
       }
     } catch (e) {
       console.warn("Audio play error:", e);
+      // Attempt recovery on subsequent action
+      this._recreateContext();
     }
   }
 
   playDealCard() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const filter = ctx.createBiquadFilter();
@@ -107,6 +317,7 @@ class SoundEngine {
 
   playCheckKnock() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     // Two quick knocks
     [0, 0.09].forEach(delay => {
       const osc = ctx.createOscillator();
@@ -129,6 +340,7 @@ class SoundEngine {
 
   playChipsClink() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     // Multi-frequency metallic clink
     [2400, 3100, 4200].forEach((freq, i) => {
       const osc = ctx.createOscillator();
@@ -150,6 +362,7 @@ class SoundEngine {
 
   playRaise() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     this.playChipsClink();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -170,6 +383,7 @@ class SoundEngine {
 
   playFold() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
@@ -189,6 +403,7 @@ class SoundEngine {
 
   playAllIn() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     // Sub-bass heavy thump
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -207,11 +422,16 @@ class SoundEngine {
     osc.stop(ctx.currentTime + 0.4);
 
     // Followed by crisp chips stack
-    setTimeout(() => this.playChipsClink(), 80);
+    setTimeout(() => {
+      if (!this.muted && this.ctx && this.ctx.state !== 'closed') {
+        this.playChipsClink();
+      }
+    }, 80);
   }
 
   playWinPot() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     const chords = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
     chords.forEach((freq, idx) => {
       const osc = ctx.createOscillator();
@@ -230,12 +450,16 @@ class SoundEngine {
       osc.stop(ctx.currentTime + idx * 0.08 + 0.35);
     });
 
-    setTimeout(() => this.playChipsClink(), 250);
+    setTimeout(() => {
+      if (!this.muted && this.ctx && this.ctx.state !== 'closed') {
+        this.playChipsClink();
+      }
+    }, 250);
   }
 
   playCountdownTick(secondsLeft = 5, isMyTurn = false) {
     const ctx = this.ctx;
-    if (!ctx) return;
+    if (!ctx || ctx.state === 'closed') return;
 
     const volMultiplier = isMyTurn ? 1.0 : 0.65;
     const pitchMap = {
@@ -303,6 +527,7 @@ class SoundEngine {
 
   playChime() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     [440, 660].forEach((freq, idx) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -323,6 +548,7 @@ class SoundEngine {
 
   playTimeCard() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     // Dramatic resonant dual-bell clock / chime for time extension
     [587.33, 880.0, 1174.66].forEach((freq, idx) => {
       const osc = ctx.createOscillator();
@@ -345,6 +571,7 @@ class SoundEngine {
 
   playTimeCardGain() {
     const ctx = this.ctx;
+    if (!ctx || ctx.state === 'closed') return;
     // Pleasant reward arpeggio when gaining a periodic time card
     [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
       const osc = ctx.createOscillator();
@@ -365,4 +592,6 @@ class SoundEngine {
   }
 }
 
+export { SoundEngine };
 export const soundEngine = new SoundEngine();
+export default soundEngine;
