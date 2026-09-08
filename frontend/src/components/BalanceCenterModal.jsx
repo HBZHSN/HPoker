@@ -50,7 +50,7 @@ export default function BalanceCenterModal({
   const fetchMyBalance = useCallback(async () => {
     if (!currentUser?.user_id) return;
     try {
-      const res = await fetch(`/api/balance/my?user_id=${currentUser.user_id}`, {
+      const res = await fetch('/api/balance/my', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
@@ -142,7 +142,6 @@ export default function BalanceCenterModal({
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          operator_id: currentUser.user_id,
           include_test: includeTest,
         }),
       });
@@ -167,7 +166,7 @@ export default function BalanceCenterModal({
     if (!window.confirm('确认清理测试账号与机器人的对局记录？')) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/balance/test-records?admin_id=${currentUser.user_id}`, {
+      const res = await fetch('/api/balance/test-records', {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -198,7 +197,7 @@ export default function BalanceCenterModal({
     setError('');
     setSuccessMsg('');
     try {
-      const res = await fetch(`/api/balance/all-records?admin_id=${currentUser.user_id}`, {
+      const res = await fetch('/api/balance/all-records', {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });

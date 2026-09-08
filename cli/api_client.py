@@ -25,6 +25,11 @@ class PokerApiClient:
             timeout=timeout,
             trust_env=False,
         )
+        self.auth_token: Optional[str] = None
+
+    def _auth_headers(self, token: Optional[str] = None) -> Dict[str, str]:
+        active_token = token or self.auth_token
+        return {"Authorization": f"Bearer {active_token}"} if active_token else {}
 
     async def close(self) -> None:
         """Close the underlying HTTP session; safe to call more than once."""
@@ -56,20 +61,17 @@ class PokerApiClient:
             detail = cls._error_detail(response)
             raise PokerApiError(detail, response.status_code) from exc
 
-    async def list_users(self, token: Optional[str] = None, admin_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def list_users(self, token: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetch users via admin endpoint."""
-        headers = {}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        params = {}
-        if admin_id:
-            params["admin_id"] = admin_id
-        response = await self.client.get("/api/admin/users", headers=headers, params=params)
+        response = await self.client.get(
+            "/api/admin/users",
+            headers=self._auth_headers(token),
+        )
         self._raise_for_status(response)
         payload = response.json()
         return payload if isinstance(payload, list) else []
 
-    async def login(self, username: str, password: str = "123") -> Dict[str, Any]:
+    async def login(self, username: str, password: str) -> Dict[str, Any]:
         """Login and get user data with auth token."""
 
         response = await self.client.post(
@@ -77,12 +79,18 @@ class PokerApiClient:
             json={"username": username, "password": password},
         )
         self._raise_for_status(response)
-        return response.json()
+        payload = response.json()
+        if isinstance(payload, dict):
+            self.auth_token = payload.get("token")
+        return payload
 
     async def get_me(self, token: str) -> Optional[Dict[str, Any]]:
         """Verify a token and return the current user."""
 
-        response = await self.client.get("/api/auth/me", params={"token": token})
+        response = await self.client.get(
+            "/api/auth/me",
+            headers=self._auth_headers(token),
+        )
         self._raise_for_status(response)
         payload = response.json()
         return payload.get("user") if isinstance(payload, dict) else None
@@ -100,7 +108,6 @@ class PokerApiClient:
 
     async def create_room(
         self,
-        host_player_id: str,
         room_name: str = "HPoker 现金桌",
         buyin_chips: int = 1000,
         cash_value: float = 100.0,
@@ -111,7 +118,6 @@ class PokerApiClient:
         """Create a new poker room."""
 
         payload = {
-            "host_player_id": host_player_id,
             "room_name": room_name,
             "buyin_chips": buyin_chips,
             "cash_value": cash_value,
@@ -119,38 +125,51 @@ class PokerApiClient:
             "action_timeout": action_timeout,
             "max_seats": max_seats,
         }
-        response = await self.client.post("/api/rooms", json=payload)
+        response = await self.client.post(
+            "/api/rooms",
+            headers=self._auth_headers(),
+            json=payload,
+        )
         self._raise_for_status(response)
         return response.json()
 
     async def get_room(
         self,
         room_id: str,
-        viewer_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Fetch a room snapshot through REST."""
 
-        params = {"viewer_id": viewer_id} if viewer_id else None
-        response = await self.client.get(f"/api/rooms/{room_id}", params=params)
-        self._raise_for_status(response)
-        return response.json()
-
-    async def end_room(self, room_id: str, requester_id: str, settlement_type: str = "balance") -> Dict[str, Any]:
-        """End a room and return its settlement report."""
-
-        response = await self.client.post(
-            f"/api/rooms/{room_id}/end",
-            params={"requester_id": requester_id, "settlement_type": settlement_type},
+        response = await self.client.get(
+            f"/api/rooms/{room_id}",
+            headers=self._auth_headers(),
         )
         self._raise_for_status(response)
         return response.json()
 
-    async def delete_room(self, room_id: str, requester_id: str) -> Dict[str, Any]:
+    async def end_room(
+        self,
+        room_id: str,
+        settlement_type: str = "balance",
+    ) -> Dict[str, Any]:
+        """End a room and return its settlement report."""
+
+        response = await self.client.post(
+            f"/api/rooms/{room_id}/end",
+            headers=self._auth_headers(),
+            params={"settlement_type": settlement_type},
+        )
+        self._raise_for_status(response)
+        return response.json()
+
+    async def delete_room(
+        self,
+        room_id: str,
+    ) -> Dict[str, Any]:
         """Delete a room as its host or an administrator."""
 
         response = await self.client.delete(
             f"/api/rooms/{room_id}",
-            params={"requester_id": requester_id},
+            headers=self._auth_headers(),
         )
         self._raise_for_status(response)
         return response.json()
@@ -158,18 +177,17 @@ class PokerApiClient:
     async def add_test_bot(
         self,
         room_id: str,
-        requester_id: str,
         seat_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Add a virtual test bot to the room through REST."""
 
-        params: Dict[str, Any] = {"requester_id": requester_id}
+        params: Dict[str, Any] = {}
         if seat_index is not None:
             params["seat_index"] = seat_index
         response = await self.client.post(
             f"/api/rooms/{room_id}/test-bots",
+            headers=self._auth_headers(),
             params=params,
         )
         self._raise_for_status(response)
         return response.json()
-

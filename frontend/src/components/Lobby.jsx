@@ -80,7 +80,6 @@ export default function Lobby({
   const handleSubmitCreate = (e) => {
     e.preventDefault();
     onCreateRoom({
-      host_player_id: currentUser?.user_id || 'u_admin',
       room_name: roomName,
       buyin_chips: Number(buyinChips),
       cash_value: Number(cashValue),

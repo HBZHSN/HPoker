@@ -79,7 +79,9 @@ export default function App() {
   // Verify stored token on startup
   useEffect(() => {
     if (token) {
-      fetch(`/api/auth/me?token=${token}`)
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
         .then((res) => {
           if (res.status === 401) {
             throw new Error('Token expired');
@@ -141,7 +143,9 @@ export default function App() {
     try {
       const [roomsRes, usersRes] = await Promise.all([
         fetch('/api/rooms'),
-        fetch('/api/lobby/users'),
+        fetch('/api/lobby/users', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
       if (roomsRes.ok) {
         const roomsJson = await roomsRes.json();
@@ -154,7 +158,7 @@ export default function App() {
     } catch (e) {
       console.error("Failed to load lobby data:", e);
     }
-  }, []);
+  }, [token]);
 
   useEffect(() => {
     fetchLobbyData();
@@ -172,7 +176,7 @@ export default function App() {
       setActiveRoomId(savedRoomId);
       setConnectionStatus('connecting');
     }
-  }, [currentUser?.user_id]);
+  }, [currentUser?.user_id, token]);
 
   const rememberAndEnterRoom = useCallback((roomId, options = {}) => {
     const isSpectate = Boolean(options.spectate);
@@ -428,7 +432,7 @@ export default function App() {
       if (wsRef.current) wsRef.current.close();
       wsRef.current = null;
     };
-  }, [activeRoomId, currentUser?.user_id, spectateMode, handleLeaveRoom]);
+  }, [activeRoomId, currentUser?.user_id, spectateMode, token, handleLeaveRoom]);
 
   const sendWsEvent = (event, payload = {}) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -440,7 +444,10 @@ export default function App() {
     try {
       const res = await fetch('/api/rooms', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify(config),
       });
       const data = await res.json();
@@ -452,8 +459,9 @@ export default function App() {
 
   const handleDeleteRoom = async (roomId) => {
     try {
-      const res = await fetch(`/api/rooms/${roomId}?requester_id=${currentUser?.user_id}`, {
+      const res = await fetch(`/api/rooms/${roomId}`, {
         method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         if (activeRoomId === roomId) {

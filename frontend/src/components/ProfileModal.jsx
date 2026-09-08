@@ -25,8 +25,8 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
         setError('修改密码需输入原密码');
         return;
       }
-      if (newPassword.trim().length < 3) {
-        setError('新密码长度不能少于3位');
+      if (newPassword.trim().length < 12) {
+        setError('新密码长度不能少于12位');
         return;
       }
       if (newPassword.trim() !== confirmPassword.trim()) {
@@ -45,7 +45,6 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          user_id: user.user_id,
           nickname: nickname.trim() || undefined,
           avatar: avatar,
           old_password: oldPassword.trim() || undefined,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 import hashlib
+import secrets
 import time
 from typing import Dict, List, Optional
 import uuid
@@ -20,7 +21,9 @@ class User:
     avatar: str                       # e.g., "👑", "🦈", "🦁"
     is_admin: bool = False
     is_test: bool = False
-    password_hash: str = field(default_factory=lambda: hash_password("123456"))
+    password_hash: str = field(
+        default_factory=lambda: hash_password(secrets.token_urlsafe(24))
+    )
     created_at: float = field(default_factory=time.time)
 
     def verify_password(self, password: str) -> bool:
@@ -69,7 +72,9 @@ class User:
             avatar=data.get("avatar", "👤"),
             is_admin=data.get("is_admin", False),
             is_test=is_test_val,
-            password_hash=data.get("password_hash", hash_password("123")),
+            password_hash=data.get(
+                "password_hash",
+                hash_password(secrets.token_urlsafe(24)),
+            ),
             created_at=data.get("created_at", time.time()),
         )
-

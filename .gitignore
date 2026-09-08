@@ -22,6 +22,7 @@ dist/
 # Runtime room checkpoints
 backend/data/rooms.json
 backend/data/rooms.json.tmp
+backend/data/*.json
 
 # Runtime SQLite databases (production and dedicated pytest database)
 backend/data/*.sqlite
