@@ -318,6 +318,36 @@ async def test_textual_tui_handles_input_and_responsive_layout():
         await controller.api.close()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("waiting_for_input", [True, False])
+async def test_textual_ctrl_c_exits_even_with_focused_input_or_pending_request(waiting_for_input):
+    controller = PokerCliController(enable_color=False)
+    entered = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def lobby():
+        entered.set()
+        try:
+            if waiting_for_input:
+                await controller.tui.read_line("大厅> ")
+            else:
+                await asyncio.Future()
+        finally:
+            cancelled.set()
+
+    controller.run_lobby_loop = lobby
+    app = PokerTextualApp(controller)
+    try:
+        async with app.run_test() as pilot:
+            await asyncio.wait_for(entered.wait(), 1)
+            await pilot.press("ctrl+c")
+            await pilot.pause()
+            assert app._exit is True
+        assert cancelled.is_set()
+    finally:
+        await controller.api.close()
+
+
 class TestPokerUiRenderer:
     """Tests for terminal UI rendering."""
 
