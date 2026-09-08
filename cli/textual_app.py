@@ -13,6 +13,7 @@ from typing import Iterable, Optional
 from rich.text import Text
 from textual import events, on
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.widgets import Input, Static
 
@@ -129,7 +130,7 @@ class PokerTextualApp(App[int]):
     TITLE = "HPoker"
     SUB_TITLE = "Texas Hold'em"
     BINDINGS = [
-        ("ctrl+c", "shutdown", "退出"),
+        Binding("ctrl+c", "quit", "退出", priority=True),
         ("ctrl+d", "eof", "返回/退出"),
     ]
 
@@ -374,10 +375,6 @@ class PokerTextualApp(App[int]):
 
     def action_eof(self) -> None:
         self.bridge.request_eof()
-
-    def action_shutdown(self) -> None:
-        self.bridge.request_eof()
-
 
 async def run_textual_ui(controller, room_id: Optional[str] = None) -> int:
     """Run the dashboard frontend in the caller's asyncio loop."""
