@@ -125,7 +125,7 @@ def test_aggregation_weights_shrinkage():
     neutral = {k:[0,1,1] for k in WEIGHTS}
     good = {k:[1,1,1] for k in WEIGHTS}
     assert aggregate_luck([])['luck'] == 50
-    assert aggregate_luck([good])['luck'] == pytest.approx(54.5)
+    assert 60 < aggregate_luck([good])['luck'] < 85
     assert aggregate_luck([good]*100)['luck'] > 95
     assert aggregate_luck([neutral]*100)['luck'] == 50
 
@@ -154,3 +154,39 @@ def test_allin_folded_cards_not_used_as_known_blockers():
                              starting_chips=100, contributed_chips=0))
     h['actions'].insert(0,dict(player_id='c',action='FOLD',amount=0,street='PREFLOP'))
     assert all_in_samples(h,'a') == pytest.approx([(-42/44,4)])
+
+
+def test_score_mapping_symmetry_missing_dimensions_and_long_history():
+    def observation(value):
+        return {k: [value, 1, 1] if k == 'starting' else [0, 0, 0] for k in WEIGHTS}
+    positive = aggregate_luck([observation(.8)] * 8)
+    negative = aggregate_luck([observation(-.8)] * 8)
+    assert positive['luck'] + negative['luck'] == pytest.approx(100)
+    assert positive['luck'] == positive['luck_dimensions']['starting']['score']
+    assert positive['luck'] > 90
+    assert aggregate_luck([observation(0)] * 1000)['luck'] == 50
+    # Same cumulative deviation in units of natural fluctuation stays visible
+    # as the history grows (rather than being divided away by hand count).
+    short = [observation(1)] * 60 + [observation(-1)] * 40
+    long = [observation(1)] * 5100 + [observation(-1)] * 4900
+    assert abs(aggregate_luck(short)['luck'] - aggregate_luck(long)['luck']) < 1
+
+
+def test_correlated_dimensions_do_not_multiply_independent_evidence(monkeypatch):
+    from backend.app.services import comprehensive_luck as module
+    monkeypatch.setattr(module, 'PRIOR_ENERGY', {k: 3 for k in WEIGHTS})
+    single = [{k: [.5, 1, 1] if k == 'starting' else [0, 0, 0] for k in WEIGHTS} for _ in range(5)]
+    repeated = [{k: [.5, 1, 1] for k in WEIGHTS} for _ in range(5)]
+    assert aggregate_luck(single)['luck'] == aggregate_luck(repeated)['luck']
+
+
+def test_mapping_random_starting_sessions_spread_and_center():
+    rng = random.Random(20260909)
+    for n in (20, 200):
+        scores = []
+        for _ in range(500):
+            records = [{k: [rng.uniform(-1, 1), 1, 1] if k == 'starting' else [0, 0, 0] for k in WEIGHTS} for _ in range(n)]
+            scores.append(aggregate_luck(records)['luck'])
+        assert 46 < sum(scores) / len(scores) < 54
+        assert sum(40 <= s <= 60 for s in scores) / len(scores) < .4
+        assert sum(s <= 10 or s >= 90 for s in scores) / len(scores) < .3

@@ -107,6 +107,7 @@ def test_full_luck_public_table_matches_history_and_cache_survives_restart(tmp_p
     lifetime = query_statistics(manager._database,'a')
     assert table == lifetime
     assert table['luck'] > 50 and table['luck_samples'] == 3
+    assert table['luck_version'] == 2
     assert table['luck_dimensions']['starting']['samples'] == 3
     assert table['luck_dimensions']['board']['samples'] == 0
     assert 'luck_band' not in table

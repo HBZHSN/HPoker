@@ -239,16 +239,49 @@ def hand_luck(hand, player_id):
     return result
 
 
+# Score mapping v2 consumes the same v1 per-hand observations: no card
+# recalculation or historical cache invalidation is necessary.
+SCORE_VERSION = 2
+# Neutral pseudo-hand RMS scales, not claims of exact population variance.
+# Starting percentile has variance 1/3. Other residuals use conservative
+# bounded-share reference scales; all-in includes its usual maximum weight 4.
+PRIOR_ENERGY = {'starting': 10 / 3, 'board': 10 * .25**2,
+                'matchup': 10 * .5**2, 'all_in': 10 * (4 * .5)**2}
+
+
+def score_from_signal(signal):
+    """Smooth 0–100 index; not an empirical player percentile or confidence."""
+    return round(max(0, min(100, 50 * (1 + math.erf(signal / math.sqrt(2))))), 1)
+
+
 def aggregate_luck(records):
-    dimensions = {}
+    records = list(records)
+    dimensions, denominators, active = {}, {}, []
     for key, weight in WEIGHTS.items():
-        total = sum(r[key][0] for r in records)
-        exposure = sum(r[key][1] for r in records)
+        values = [r[key][0] for r in records]
+        total = math.fsum(values)
         samples = sum(r[key][2] for r in records)
-        # Ten neutral pseudo-hands. All-in weighting uses bounded exposure;
-        # one giant pot never overwhelms the historical score.
-        value = max(0, min(100, 50 + 50 * total / (exposure + 10)))
-        dimensions[key] = {'score': round(value, 1), 'samples': samples, 'weight': weight}
-    overall = sum(dimensions[k]['score'] * w for k, w in WEIGHTS.items())
-    return {'luck': round(overall, 1), 'luck_samples': dimensions['starting']['samples'],
-            'luck_dimensions': dimensions, 'luck_version': VERSION, 'luck_visibility': 'full'}
+        # Compare cumulative good/bad fortune to the magnitude of its random
+        # fluctuations (~sqrt(n)), rather than to hand count (~n).
+        denominator = math.sqrt(math.fsum(x*x for x in values) + PRIOR_ENERGY[key])
+        denominators[key] = denominator
+        if samples:
+            active.append(key)
+        dimensions[key] = {'score': score_from_signal(total / denominator),
+                           'samples': samples, 'weight': weight}
+    overall = 50.0
+    if active:
+        # Missing dimensions carry no evidence and must not dilute real data.
+        weight_sum = math.fsum(WEIGHTS[key] for key in active)
+        coefficients = {key: WEIGHTS[key] / weight_sum / denominators[key] for key in active}
+        contributions = [math.fsum(coefficients[key] * r[key][0] for key in active) for r in records]
+        # Squaring each HAND's combined contribution preserves cross-dimension
+        # covariance: one lucky runout appearing in several dimensions is not
+        # counted as several independent lucky events. Neutral prior terms are
+        # fully correlated, conservatively limiting tiny-sample amplification.
+        prior = math.fsum(coefficients[key] * math.sqrt(PRIOR_ENERGY[key]) for key in active)**2
+        scale = math.sqrt(math.fsum(x*x for x in contributions) + prior)
+        overall = score_from_signal(math.fsum(contributions) / scale)
+    return {'luck': overall, 'luck_samples': dimensions['starting']['samples'],
+            'luck_dimensions': dimensions, 'luck_version': SCORE_VERSION,
+            'luck_visibility': 'full'}
