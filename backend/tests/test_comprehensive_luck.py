@@ -4,7 +4,7 @@ from backend.app.engine.card import Card
 from backend.app.engine.evaluator import evaluate_hand
 from backend.app.services.comprehensive_luck import (
     DECK, WEIGHTS, score, shares, starting_table, starting_values, fixed_equity,
-    hand_luck, aggregate_luck, public_luck, action_snapshots, all_in_samples,
+    hand_luck, aggregate_luck, action_snapshots, all_in_samples,
 )
 
 
@@ -121,16 +121,36 @@ def test_missing_records_and_hidden_showdown_skip_dimensions():
     assert all(v[2] == 0 for v in hand_luck(h,'a').values())
 
 
-def test_aggregation_weights_shrinkage_and_public_batches():
+def test_aggregation_weights_shrinkage():
     neutral = {k:[0,1,1] for k in WEIGHTS}
     good = {k:[1,1,1] for k in WEIGHTS}
     assert aggregate_luck([])['luck'] == 50
     assert aggregate_luck([good])['luck'] == pytest.approx(54.5)
     assert aggregate_luck([good]*100)['luck'] > 95
     assert aggregate_luck([neutral]*100)['luck'] == 50
-    assert public_luck([good]*39)['luck_band'] is None
-    published = public_luck([neutral]*20 + [good]*20)
-    assert published['luck_samples'] == 20
-    assert published['luck_band']['label'] == '平常'
-    assert published == public_luck([neutral]*20 + [good]*39)
-    assert 'luck_dimensions' not in published and published['luck'] is None
+
+
+def test_same_allin_result_ignores_money_deductions_and_net_profit():
+    h = make_hand()
+    original = hand_luck(h, 'a')
+    h['players'][0].update(net_chips=999999, payout_chips=999999)
+    assert hand_luck(h, 'a') == original
+
+
+def test_board_improvement_and_cooler_have_opposite_meaning():
+    # Top set improving to quads is good board luck; a lower full house
+    # losing to quads is bad matchup luck, despite strong absolute hand value.
+    h = make_hand(board=('Ac','Ad','Kc','2s','2d'))
+    a = hand_luck(h,'a')
+    b = hand_luck(h,'b')
+    assert a['board'][0] > 0
+    assert b['board'][0] > 0
+    assert b['matchup'][0] < -.9
+
+
+def test_allin_folded_cards_not_used_as_known_blockers():
+    h = make_hand()
+    h['players'].append(dict(player_id='c', hole_cards=serial(('Kd','4s')),shown_cards=[],
+                             starting_chips=100, contributed_chips=0))
+    h['actions'].insert(0,dict(player_id='c',action='FOLD',amount=0,street='PREFLOP'))
+    assert all_in_samples(h,'a') == pytest.approx([(-42/44,4)])

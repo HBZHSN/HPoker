@@ -1,41 +1,14 @@
 """Aggregate completed hands; never return cards or individual action records."""
 import json
-from functools import lru_cache
-
-from backend.app.engine.card import Card, Rank, Suit
-from backend.app.engine.evaluator import evaluate_hand
-
-
-@lru_cache(maxsize=4096)
-def river_luck(board, holdings):
-    """Equal-share showdown result minus exact turn equity, using PUBLIC cards only.
-
-    This measures river runout luck, not skill, money EV, or all-in EV. RIT is
-    excluded because its second runout has a different conditional card pool.
-    """
-    cards = [Card.from_str(c) for c in board]
-    hands = [[Card.from_str(c) for c in hand] for hand in holdings]
-    known = set(cards[:4] + [c for hand in hands for c in hand])
-    if len(known) != 4 + 2 * len(hands) or cards[4] in known:
-        return None
-    def shares(river):
-        scores = [evaluate_hand(h + cards[:4] + [river]).score_vector for h in hands]
-        best = max(scores)
-        count = scores.count(best)
-        return [1 / count if score == best else 0 for score in scores]
-    possible = [Card(r, s) for s in Suit for r in Rank if Card(r, s) not in known]
-    expected = [0.0] * len(hands)
-    for river in possible:
-        for i, share in enumerate(shares(river)):
-            expected[i] += share / len(possible)
-    return tuple(a - e for a, e in zip(shares(cards[4]), expected))
+from backend.app.services.comprehensive_luck import (
+    VERSION, aggregate_luck, hand_luck,
+)
 
 
 def summarize(hands, player_id):
     totals = dict(hands=0, vpip_hands=0, pfr_hands=0, three_bet_hands=0,
                   three_bet_opportunities=0, winning_hands=0, collected_hands=0,
-                  showdown_hands=0, luck_samples=0)
-    luck_sum = 0.0
+                  showdown_hands=0)
     for hand in hands:
         players = hand['players']
         hero = next((p for p in players if p['player_id'] == player_id), None)
@@ -74,13 +47,6 @@ def summarize(hands, player_id):
         contenders = [p for p in players if p['player_id'] not in folded]
         showdown = len(contenders) > 1 and len(hand['board']) == 5
         totals['showdown_hands'] += showdown and player_id not in folded
-        if (showdown and not hand['board_2'] and player_id not in folded
-                and all(len(p['shown_cards']) == 2 for p in contenders)):
-            residuals = river_luck(tuple(c['notation'] for c in hand['board']),
-                                  tuple(tuple(c['notation'] for c in p['shown_cards']) for p in contenders))
-            if residuals is not None:
-                totals['luck_samples'] += 1
-                luck_sum += residuals[next(i for i, p in enumerate(contenders) if p['player_id'] == player_id)]
     def rate(n, d):
         return round(100 * n / d, 1) if d else None
     return {**totals,
@@ -89,30 +55,52 @@ def summarize(hands, player_id):
             'three_bet': rate(totals['three_bet_hands'], totals['three_bet_opportunities']),
             'win_rate': rate(totals['winning_hands'], totals['hands']),
             'collect_rate': rate(totals['collected_hands'], totals['hands']),
-            'showdown_rate': rate(totals['showdown_hands'], totals['hands']),
-            'luck': round(max(0, min(100, 50 + 50 * luck_sum / (totals['luck_samples'] + 10))), 1)}
+            'showdown_rate': rate(totals['showdown_hands'], totals['hands'])}
 
 
 def query_statistics(database, player_id, room_id=None):
-    # No LIMIT: lifetime counters include the entire durable history. Only
-    # public shown cards are selected; private hole_cards_json is never read.
+    # Only the target's private cards are read internally, never opponents'.
+    # Raw cards and per-hand luck observations must never enter an API response.
     scope = ' AND h.room_id = ?' if room_id is not None else ''
-    params = [player_id] + ([room_id] if room_id is not None else [])
+    params = [player_id, player_id] + ([room_id] if room_id is not None else [])
     with database.connection() as connection:
         rows = connection.execute('''SELECT h.hand_id, h.big_blind, h.board_json,
             h.board_2_json, h.actions_json, p.player_id, p.shown_cards_json,
-            p.net_chips, p.payout_chips, p.starting_chips, p.contributed_chips FROM poker_hands h
+            p.net_chips, p.payout_chips, p.starting_chips, p.contributed_chips,
+            CASE WHEN p.player_id = ? THEN p.hole_cards_json ELSE '{"cards":[]}' END AS hero_cards_json FROM poker_hands h
             JOIN poker_hand_players p ON p.hand_id = h.hand_id
             WHERE EXISTS (SELECT 1 FROM poker_hand_players hero
-                WHERE hero.hand_id = h.hand_id AND hero.player_id = ?)''' + scope, params).fetchall()
+                WHERE hero.hand_id = h.hand_id AND hero.player_id = ?)''' + scope + ' ORDER BY h.ended_at, h.hand_id, p.player_id', params).fetchall()
+        cached = {r['hand_id']: json.loads(r['stats_json']) for r in connection.execute(
+            'SELECT hand_id, stats_json FROM poker_hand_luck WHERE player_id = ? AND version = ?',
+            (player_id, VERSION)).fetchall()}
     hands = {}
     for row in rows:
         hand = hands.setdefault(row['hand_id'], {
-            'big_blind': row['big_blind'], 'board': json.loads(row['board_json'])['cards'],
+            'hand_id': row['hand_id'], 'big_blind': row['big_blind'], 'board': json.loads(row['board_json'])['cards'],
             'board_2': json.loads(row['board_2_json'])['cards'],
             'actions': json.loads(row['actions_json'])['actions'], 'players': []})
         hand['players'].append({'player_id': row['player_id'], 'net_chips': row['net_chips'],
                                'payout_chips': row['payout_chips'], 'starting_chips': row['starting_chips'],
                                'contributed_chips': row['contributed_chips'],
+                               'hole_cards': json.loads(row['hero_cards_json'])['cards'],
                                'shown_cards': json.loads(row['shown_cards_json'])['cards']})
-    return summarize(hands.values(), player_id)
+    completed = list(hands.values())
+    observations, pending = [], []
+    for hand in completed:
+        hand_id = hand['hand_id']
+        observation = cached.get(hand_id)
+        if observation is None:
+            observation = hand_luck(hand, player_id)
+            pending.append((hand_id, player_id, VERSION, json.dumps(observation)))
+        observations.append(observation)
+    if pending:
+        with database.connection(write=True) as connection:
+            # Recheck existence in case history was cleared during computation.
+            connection.executemany(
+                """INSERT OR IGNORE INTO poker_hand_luck(hand_id, player_id, version, stats_json)
+                   SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM poker_hand_players
+                       WHERE hand_id = ? AND player_id = ?)""",
+                [(*row, row[0], row[1]) for row in pending])
+    luck = aggregate_luck(observations)
+    return {**summarize(completed, player_id), **luck}

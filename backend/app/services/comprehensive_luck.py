@@ -251,17 +251,5 @@ def aggregate_luck(records):
         dimensions[key] = {'score': round(value, 1), 'samples': samples, 'weight': weight}
     overall = sum(dimensions[k]['score'] * w for k, w in WEIGHTS.items())
     return {'luck': round(overall, 1), 'luck_samples': dimensions['starting']['samples'],
-            'luck_dimensions': dimensions, 'luck_version': VERSION, 'luck_visibility': 'private'}
+            'luck_dimensions': dimensions, 'luck_version': VERSION, 'luck_visibility': 'full'}
 
-
-def public_luck(records):
-    # Keep the latest 20 hands private; publish only complete 20-hand batches.
-    count = max(0, (len(records) - 20) // 20 * 20)
-    if not count:
-        return {'luck': None, 'luck_band': None, 'luck_samples': 0, 'luck_visibility': 'public', 'luck_version': VERSION}
-    value = aggregate_luck(records[:count])['luck']
-    low, high, label = next((lo, hi, name) for lo, hi, name in
-        [(0, 29, '偏背'), (30, 44, '稍背'), (45, 54, '平常'), (55, 69, '较顺'), (70, 100, '很顺')]
-        if value < hi + 1)
-    return {'luck': None, 'luck_band': {'min': low, 'max': high, 'label': label},
-            'luck_samples': count, 'luck_visibility': 'public', 'luck_version': VERSION}
