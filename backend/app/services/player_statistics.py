@@ -46,7 +46,9 @@ def summarize(hands, player_id):
         # Uncalled excess alone is a refund, not a collected pot. A folded
         # player cannot win a pot, even when a refund is recorded as payout.
         folded = {a['player_id'] for a in hand['actions'] if a['action'] == 'FOLD'}
-        totals['collected_hands'] += hero['payout_chips'] > 0 and player_id not in folded
+        uncalled = max(0, hero.get('contributed_chips', 0) - max(
+            (p.get('contributed_chips', 0) for p in players if p is not hero), default=0))
+        totals['collected_hands'] += hero['payout_chips'] > uncalled and player_id not in folded
         highest = hand['big_blind']
         raises = 0
         vpip = pfr = opportunity = three_bet = False
@@ -99,7 +101,7 @@ def query_statistics(database, player_id, room_id=None):
     with database.connection() as connection:
         rows = connection.execute('''SELECT h.hand_id, h.big_blind, h.board_json,
             h.board_2_json, h.actions_json, p.player_id, p.shown_cards_json,
-            p.net_chips, p.payout_chips, p.starting_chips FROM poker_hands h
+            p.net_chips, p.payout_chips, p.starting_chips, p.contributed_chips FROM poker_hands h
             JOIN poker_hand_players p ON p.hand_id = h.hand_id
             WHERE EXISTS (SELECT 1 FROM poker_hand_players hero
                 WHERE hero.hand_id = h.hand_id AND hero.player_id = ?)''' + scope, params).fetchall()
@@ -111,5 +113,6 @@ def query_statistics(database, player_id, room_id=None):
             'actions': json.loads(row['actions_json'])['actions'], 'players': []})
         hand['players'].append({'player_id': row['player_id'], 'net_chips': row['net_chips'],
                                'payout_chips': row['payout_chips'], 'starting_chips': row['starting_chips'],
+                               'contributed_chips': row['contributed_chips'],
                                'shown_cards': json.loads(row['shown_cards_json'])['cards']})
     return summarize(hands.values(), player_id)
