@@ -248,48 +248,13 @@ class Room:
     def _checkpoint_refund_key(self, player_id: str, hand_number: int) -> str:
         return f"{self.room_id}:hand:{hand_number}:{player_id}:checkpoint_refund"
 
-    def _checkpoint_recovery_refunds(self) -> List[dict]:
-        """Describe open-pot contributions belonging to players without seats."""
-        if self.table.street in (Street.IDLE, Street.HAND_END):
-            return []
-        seated_ids = {seat.player_id for seat in self.table.active_seated_players}
-        refunds = []
-        for player_id, contribution in self.table.pot_manager.total_contributions.items():
-            if player_id in seated_ids or contribution <= 0:
-                continue
-            history = self.historical_players.get(player_id)
-            if history is None:
-                continue
-            key = self._checkpoint_refund_key(player_id, self.table.hand_number)
-            if key in self._checkpoint_refund_keys:
-                continue
-            refunds.append({
-                "player_id": player_id,
-                "player_name": history.get("player_name", player_id),
-                "avatar": history.get("avatar", "👤"),
-                "amount": int(contribution),
-                "is_bot": bool(history.get("is_bot", False)),
-                "is_test": bool(history.get("is_test", False)),
-                "wallet_mode": history.get("wallet_mode", "real"),
-                "idempotency_key": key,
-            })
-        return refunds
-
-    def _apply_checkpoint_refund(self, refund: dict, *, update_history: bool = True) -> None:
+    def _apply_checkpoint_refund(self, refund: dict) -> None:
         """Apply one restart-safe off-table refund exactly once."""
         player_id = refund["player_id"]
         amount = int(refund.get("amount", 0))
         key = refund["idempotency_key"]
         if amount <= 0 or key in self._checkpoint_refund_keys:
             return
-
-        history = self.historical_players.get(player_id)
-        if update_history and history is not None:
-            history["cashed_out_chips"] = int(
-                history.get("cashed_out_chips", history.get("final_chips", 0))
-            ) + amount
-            history["final_chips"] = history["cashed_out_chips"]
-            history["is_seated"] = False
 
         if refund.get("wallet_mode", "real") == "real" and not refund.get("is_test", False):
             from types import SimpleNamespace
@@ -309,19 +274,12 @@ class Room:
             )
         self._checkpoint_refund_keys.add(key)
 
-    def reconcile_checkpoint_refunds(self) -> int:
-        """Credit off-table open-pot owners before persisting a checkpoint."""
-        refunds = self._checkpoint_recovery_refunds()
-        for refund in refunds:
-            self._apply_checkpoint_refund(refund)
-        return len(refunds)
-
     def _restore_checkpoint_refunds(self, refunds: List[dict]) -> None:
         """Replay checkpoint refunds after restoring an interrupted room."""
         for refund in refunds:
             if not isinstance(refund, dict) or not refund.get("idempotency_key"):
                 continue
-            self._apply_checkpoint_refund(refund, update_history=False)
+            self._apply_checkpoint_refund(refund)
 
     def to_checkpoint_dict(self) -> dict:
         """Serialize a restart-safe room checkpoint.
