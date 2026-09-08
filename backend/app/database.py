@@ -276,6 +276,16 @@ class SQLiteDatabase:
                 CREATE INDEX IF NOT EXISTS idx_poker_hand_players_user_result
                     ON poker_hand_players(player_id, net_chips, hand_id);
 
+                CREATE TABLE IF NOT EXISTS poker_hand_luck (
+                    hand_id TEXT NOT NULL,
+                    player_id TEXT NOT NULL,
+                    version INTEGER NOT NULL,
+                    stats_json TEXT NOT NULL,
+                    PRIMARY KEY (hand_id, player_id, version),
+                    FOREIGN KEY (hand_id, player_id)
+                        REFERENCES poker_hand_players(hand_id, player_id) ON DELETE CASCADE
+                );
+
                 INSERT OR IGNORE INTO schema_migrations(version, applied_at)
                     VALUES (1, CAST(strftime('%s', 'now') AS REAL));
                 """

@@ -1,6 +1,6 @@
 import pytest
 from fastapi import HTTPException
-from backend.app.services.player_statistics import summarize, river_luck, query_statistics
+from backend.app.services.player_statistics import summarize, query_statistics
 from backend.app.engine.card import Card
 from backend.app.api.endpoints import get_my_statistics
 
@@ -18,12 +18,10 @@ def hand(actions=(), board=(), shown=True):
 
 def test_empty_and_blinds_checks_folds():
     assert summarize([], 'a')['vpip'] is None
-    assert summarize([], 'a')['luck'] == 50
     s = summarize([hand([action('a','POST_BB',10), action('a','CHECK'), action('b','FOLD')])], 'a')
     assert s['vpip'] == s['pfr'] == 0
     assert s['three_bet'] is None
     assert s['win_rate'] == s['collect_rate'] == 100
-    assert s['luck_samples'] == 0
 
 
 def test_three_bet_denominator_calls_short_allins_and_fourbets():
@@ -43,22 +41,6 @@ def test_three_bet_denominator_calls_short_allins_and_fourbets():
 def test_folded_refund_does_not_collect_and_postflop_not_vpip():
     s = summarize([hand([action('a','BET',20,'FLOP'), action('a','FOLD',0,'TURN')])], 'a')
     assert s['vpip'] == s['collect_rate'] == 0
-
-
-def test_exact_river_luck_symmetric_tie_and_privacy():
-    board = ('2c','3d','7h','9s','Kd')
-    luck = river_luck(board, (('As','Ah'), ('Ks','Kh')))
-    assert luck[0] == pytest.approx(-42/44)
-    assert sum(luck) == pytest.approx(0)
-    s = summarize([hand(board=board)], 'b')
-    assert 50 < s['luck'] < 55
-    assert s['luck_samples'] == 1
-    assert summarize([hand(board=board, shown=False)], 'b')['luck_samples'] == 0
-    rit = hand(board=board)
-    rit['board_2'] = rit['board']
-    assert summarize([rit], 'a')['luck_samples'] == 0
-    assert river_luck(('As','Ks','Qs','Js','Ts'), (('2c','3c'), ('2d','3d'))) == pytest.approx((0, 0))
-    assert not any('cards' in key or 'actions' in key for key in s)
 
 
 def test_history_identity_required():
@@ -109,3 +91,31 @@ def test_statistics_endpoints_scope_and_history_owner(monkeypatch):
     _, token = user_manager.authenticate('test1', '123')
     assert get_my_statistics(authorization=f'Bearer {token}', token=None) == {'hands': 0}
     assert calls[-1] == ('u_test1', None)
+
+
+def test_full_luck_public_table_matches_history_and_cache_survives_restart(tmp_path, monkeypatch):
+    from backend.app.services.hand_history_manager import HandHistoryManager
+    from backend.app.services import player_statistics
+    manager = HandHistoryManager(str(tmp_path / 'luck.sqlite3'))
+    for number in range(1, 4):
+        record = {**hand([action('a','FOLD')]), 'hand_id':f'one:{number}',
+                  'room_id':'one', 'room_name':'one', 'hand_number':number,
+                  'ended_at':number, 'small_blind':5}
+        record['players'][0]['hole_cards'] = [Card.from_str(c).to_dict() for c in ('As','Ah')]
+        manager.record_hand(record)
+    table = query_statistics(manager._database,'a','one')
+    lifetime = query_statistics(manager._database,'a')
+    assert table == lifetime
+    assert table['luck'] > 50 and table['luck_samples'] == 3
+    assert table['luck_dimensions']['starting']['samples'] == 3
+    assert table['luck_dimensions']['board']['samples'] == 0
+    assert 'luck_band' not in table
+    assert not any(k in str(table) for k in ('hole_cards','shown_cards','As','Ah'))
+    # Durable per-hand observations, not averages of previously rounded scores.
+    restarted = HandHistoryManager(manager.storage_path)
+    monkeypatch.setattr(player_statistics,'hand_luck',lambda *_: pytest.fail('unexpected cache miss'))
+    assert query_statistics(restarted._database,'a') == lifetime
+    manager.clear_all()
+    with manager._database.connection() as connection:
+        assert connection.execute('SELECT COUNT(*) FROM poker_hand_luck').fetchone()[0] == 0
+    assert query_statistics(manager._database,'a')['luck'] == 50
