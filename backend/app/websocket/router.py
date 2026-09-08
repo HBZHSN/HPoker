@@ -583,6 +583,11 @@ async def websocket_endpoint(
 
             event = msg.get("event")
             payload = msg.get("payload", {})
+            # Echo only a bounded correlation ID; identity always comes from auth.
+            sound_request_id = msg.get("sound_request_id")
+            local_sound_metadata = {"player_id": user_id}
+            if isinstance(sound_request_id, str) and len(sound_request_id) <= 128:
+                local_sound_metadata["sound_request_id"] = sound_request_id
 
             if event == EventType.PING:
                 await ws_manager.send_personal_message(websocket, make_message(EventType.PONG, {}))
@@ -660,7 +665,7 @@ async def websocket_endpoint(
                         ),
                     )
                     if ok:
-                        await ws_manager.broadcast_sound(room_id, "sit")
+                        await ws_manager.broadcast_sound(room_id, "sit", local_sound_metadata)
                         await ws_manager.broadcast_room_state(room)
 
             elif event == EventType.STAND_UP:
@@ -691,7 +696,7 @@ async def websocket_endpoint(
                     lambda current_room: current_room.rebuy_player(user_id),
                 )
                 if ok:
-                    await ws_manager.broadcast_sound(room_id, "rebuy")
+                    await ws_manager.broadcast_sound(room_id, "rebuy", local_sound_metadata)
                     await ws_manager.broadcast_room_state(room)
 
             elif event == EventType.START_GAME:
@@ -784,7 +789,7 @@ async def websocket_endpoint(
                         ActionType.ALL_IN: "allin",
                     }
                     sound = sound_map.get(action, "bet")
-                    await ws_manager.broadcast_sound(room_id, sound, {"player_id": user_id})
+                    await ws_manager.broadcast_sound(room_id, sound, local_sound_metadata)
 
                     # Check if street transitioned
                     if room.table.street != prev_street:
@@ -865,7 +870,7 @@ async def websocket_endpoint(
                         ok = room.table.use_time_bank_for_current_player()
                         if ok:
                             timeout_manager.cancel_turn_timer(room_id)
-                            await ws_manager.broadcast_sound(room_id, "time_card", {"player_id": user_id})
+                            await ws_manager.broadcast_sound(room_id, "time_card", local_sound_metadata)
                             await ws_manager.broadcast_room_state(room)
                             await trigger_room_turn_timer(room_id)
 
