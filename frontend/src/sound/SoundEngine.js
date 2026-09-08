@@ -12,7 +12,7 @@ class SoundEngine {
     this._wasBackgrounded = false;
     this._needsHardwareWakeup = false;
     this._listenersAttached = false;
-    this._isUnlocking = false;
+    this._unlockAttempt = 0;
 
     if (typeof window !== 'undefined') {
       this._setupLifecycleListeners();
@@ -75,6 +75,13 @@ class SoundEngine {
   }
 
   _handleForeground() {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    // A running state does not guarantee a working output device after mobile sleep.
+    if (this._wasBackgrounded && this.ctx) {
+      this._unlockAttempt += 1;
+      this._recreateContext();
+      this._wasBackgrounded = false;
+    }
     this._needsHardwareWakeup = true;
     this._resumeOrRestore();
   }
@@ -127,6 +134,7 @@ class SoundEngine {
 
   _recreateContext() {
     try {
+      if (this.ctx) this.ctx.onstatechange = null;
       if (this.ctx && typeof this.ctx.close === 'function') {
         this.ctx.close().catch(() => {});
       }
@@ -173,50 +181,41 @@ class SoundEngine {
    * Explicitly unlock audio within a user gesture (touchstart/click/touchend).
    */
   async unlock() {
-    if (this.muted || this._isUnlocking) return;
-    this._isUnlocking = true;
-
+    if (this.muted) return;
+    const attempt = ++this._unlockAttempt;
+    this._configureAudioSession();
+    // Never wait for a previous resume: mobile browsers can leave it pending forever.
+    if (this._resumePending || this._wasBackgrounded) this._recreateContext();
+    this._wasBackgrounded = false;
+    if (!this.ctx || this.ctx.state === 'closed') this._initContext();
+    const ctx = this.ctx;
+    if (!ctx) return;
+    let timer;
     try {
-      this._configureAudioSession();
-
-      if (!this.ctx || this.ctx.state === 'closed') {
-        this._initContext();
+      if (ctx.state !== 'running') {
+        this._resumePending = true;
+        await Promise.race([
+          ctx.resume(),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Audio resume timed out')), 250);
+          }),
+        ]);
       }
-
-      if (this.ctx) {
-        if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
-          try {
-            await this.ctx.resume();
-          } catch (e) {
-            // Resume failed or threw InvalidStateError on iOS, recreate context
-            this._recreateContext();
-          }
-        }
-
-        // If context remains stuck in interrupted state even after resume, force recreate
-        if (this.ctx && this.ctx.state === 'interrupted') {
-          this._recreateContext();
-        }
-
-        // Hardware kick: play a 1-sample silent buffer to activate the audio output unit
-        if (this.ctx && (this.ctx.state === 'running' || this.ctx.state === 'suspended')) {
-          try {
-            const buffer = this.ctx.createBuffer(1, 1, 22050);
-            const source = this.ctx.createBufferSource();
-            source.buffer = buffer;
-            source.connect(this.ctx.destination);
-            source.start(0);
-          } catch (_) {}
-        }
-
-        if (this.ctx && this.ctx.state === 'running') {
-          this._needsHardwareWakeup = false;
-          this._wasBackgrounded = false;
-        }
-      }
+    } catch (_) {
+      if (attempt === this._unlockAttempt && this.ctx === ctx) this._recreateContext();
     } finally {
-      this._isUnlocking = false;
+      clearTimeout(timer);
     }
+    if (attempt !== this._unlockAttempt) return;
+    this._resumePending = false;
+    if (this.ctx?.state === 'interrupted') this._recreateContext();
+    try {
+      const source = this.ctx.createBufferSource();
+      source.buffer = this.ctx.createBuffer(1, 1, 22050);
+      source.connect(this.ctx.destination);
+      source.start(0);
+    } catch (_) {}
+    this._needsHardwareWakeup = this.ctx?.state !== 'running';
   }
 
   setMuted(muted) {

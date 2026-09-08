@@ -120,11 +120,15 @@ test('SoundEngine: handles background and foreground transitions correctly', asy
   assert.equal(mockCtx.state, 'suspended');
 
   // Simulate returning to foreground
-  engine._handleForeground();
-  assert.equal(engine._needsHardwareWakeup, true);
-  // Programmatic resume should have been called
-  assert.equal(mockCtx.resumeCalled, 1);
-  assert.equal(mockCtx.state, 'running');
+  globalThis.window = { AudioContext: MockAudioContext };
+  try {
+    engine._handleForeground();
+    assert.notEqual(engine.ctx, mockCtx);
+    assert.equal(mockCtx.closeCalled, 1);
+    assert.equal(engine.ctx.state, 'running');
+  } finally {
+    delete globalThis.window;
+  }
 });
 
 test('SoundEngine: unlock resumes suspended context and plays silent hardware wake-up buffer', async () => {
@@ -132,7 +136,6 @@ test('SoundEngine: unlock resumes suspended context and plays silent hardware wa
   const mockCtx = new MockAudioContext('suspended');
   engine.ctx = mockCtx;
   engine._needsHardwareWakeup = true;
-  engine._wasBackgrounded = true;
 
   await engine.unlock();
 
@@ -262,4 +265,43 @@ test('SoundEngine: play safely executes sound effects with mock context', () => 
   assert.doesNotThrow(() => {
     engine.play('deal');
   });
+});
+
+
+test('SoundEngine: a hanging resume cannot block the next gesture or replace its context later', async () => {
+  const engine = new SoundEngine();
+  const stuck = new MockAudioContext('suspended');
+  let finish;
+  stuck.resume = () => new Promise(resolve => { finish = resolve; });
+  engine.ctx = stuck;
+  globalThis.window = { AudioContext: MockAudioContext };
+  try {
+    const first = engine.unlock();
+    await engine.unlock();
+    const restored = engine.ctx;
+    assert.notEqual(restored, stuck);
+    assert.equal(restored.state, 'running');
+    finish();
+    await first;
+    assert.equal(engine.ctx, restored);
+    assert.equal(engine._needsHardwareWakeup, false);
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test('SoundEngine: hanging resume times out and permits later unlock', async () => {
+  const engine = new SoundEngine();
+  engine.ctx = new MockAudioContext('interrupted');
+  engine.ctx.resume = () => new Promise(() => {});
+  globalThis.window = { AudioContext: MockAudioContext };
+  try {
+    await engine.unlock();
+    assert.equal(engine.ctx.state, 'running');
+    assert.equal(engine._resumePending, false);
+    await engine.unlock();
+    assert.equal(engine._needsHardwareWakeup, false);
+  } finally {
+    delete globalThis.window;
+  }
 });
