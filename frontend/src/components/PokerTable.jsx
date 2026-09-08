@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import PlayerSeat from './PlayerSeat';
+import PlayerStatsModal from './PlayerStatsModal';
 import CommunityBoard from './CommunityBoard';
 import ActionBar from './ActionBar';
 import CardView from './CardView';
@@ -57,6 +58,7 @@ const buildSeatPositions = (seatCount) => {
 export default function PokerTable({
   room,
   currentUser,
+  token,
   socialHistory = [],
   seatSocialBubbles = {},
   spectatorSocialBubbles = [],
@@ -428,8 +430,12 @@ export default function PokerTable({
     isMyTurn,
   ]);
 
+  const [statsPlayer, setStatsPlayer] = useState(null);
+  const closeStats = useCallback(() => setStatsPlayer(null), []);
+
   return (
     <div className="poker-table-root relative w-full h-full min-h-full overflow-hidden flex flex-col justify-between bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]">
+      {statsPlayer && <PlayerStatsModal key={`${room.room_id}:${statsPlayer.player_id}`} player={statsPlayer} roomId={room.room_id} currentUserId={currentUser?.user_id} token={token} handNumber={table?.hand_number} street={table?.street} onClose={closeStats} />}
       {/* Top Navigation Bar */}
       <header className="poker-table-header flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
         <div className="poker-table-mobile-header">
@@ -1168,6 +1174,7 @@ export default function PokerTable({
                     style={{ top: pos.top, left: pos.left }}
                   >
                     <PlayerSeat
+                      onViewStats={setStatsPlayer}
                       seatIndex={seatIdx}
                       screenPosition={screenIdx}
                       blindUnit={room?.config?.small_blind || 10}

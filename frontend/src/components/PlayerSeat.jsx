@@ -13,6 +13,7 @@ export default function PlayerSeat({
   isSB,
   isBB,
   onSitDown,
+  onViewStats,
   isHost = false,
   onKick,
   canKick = false,
@@ -289,7 +290,10 @@ export default function PlayerSeat({
         </div>
 
         {/* === MAIN AVATAR CARD === */}
-        <div
+        <button
+          type="button"
+          onClick={() => onViewStats?.(seatData)}
+          aria-label={`查看 ${seatData.name} 的统计`}
           className={`poker-player-avatar-card relative flex flex-col items-center justify-between w-full h-full rounded-xl md:rounded-2xl border-2 bg-gradient-to-b from-slate-850 via-slate-900 to-slate-950 shadow-2xl p-1 md:p-1.5 transition-all duration-300 overflow-hidden ${
             effectiveIsCurrentTurn && isUsingTimeBank
               ? 'border-purple-400 shadow-glow-cyan scale-105 ring-2 ring-purple-400/80'
@@ -351,7 +355,7 @@ export default function PlayerSeat({
               FOLD
             </div>
           )}
-        </div>
+        </button>
 
         {/* Cards Display */}
         {(() => {
