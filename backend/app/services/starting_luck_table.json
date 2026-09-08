@@ -1,0 +1,852 @@
+{
+  "version": 1,
+  "iterations_per_class": 8192,
+  "method": "deterministic heads-up random-opponent Monte Carlo; combo-weighted midrank",
+  "hands": {
+    "22": {
+      "equity": 0.50634765625,
+      "combinations": 6,
+      "percentile": 0.5452488687782805
+    },
+    "32o": {
+      "equity": 0.33087158203125,
+      "combinations": 12,
+      "percentile": 0.004524886877828055
+    },
+    "32s": {
+      "equity": 0.36224365234375,
+      "combinations": 4,
+      "percentile": 0.05580693815987934
+    },
+    "33": {
+      "equity": 0.53448486328125,
+      "combinations": 6,
+      "percentile": 0.6251885369532428
+    },
+    "42o": {
+      "equity": 0.340576171875,
+      "combinations": 12,
+      "percentile": 0.02262443438914027
+    },
+    "42s": {
+      "equity": 0.3648681640625,
+      "combinations": 4,
+      "percentile": 0.058823529411764705
+    },
+    "43o": {
+      "equity": 0.34295654296875,
+      "combinations": 12,
+      "percentile": 0.03167420814479638
+    },
+    "43s": {
+      "equity": 0.3853759765625,
+      "combinations": 4,
+      "percentile": 0.13423831070889894
+    },
+    "44": {
+      "equity": 0.57366943359375,
+      "combinations": 6,
+      "percentile": 0.7654600301659125
+    },
+    "52o": {
+      "equity": 0.33941650390625,
+      "combinations": 12,
+      "percentile": 0.013574660633484163
+    },
+    "52s": {
+      "equity": 0.37237548828125,
+      "combinations": 4,
+      "percentile": 0.07993966817496229
+    },
+    "53o": {
+      "equity": 0.3707275390625,
+      "combinations": 12,
+      "percentile": 0.07390648567119155
+    },
+    "53s": {
+      "equity": 0.39044189453125,
+      "combinations": 4,
+      "percentile": 0.1493212669683258
+    },
+    "54o": {
+      "equity": 0.3861083984375,
+      "combinations": 12,
+      "percentile": 0.14027149321266968
+    },
+    "54s": {
+      "equity": 0.41595458984375,
+      "combinations": 4,
+      "percentile": 0.2458521870286576
+    },
+    "55": {
+      "equity": 0.613525390625,
+      "combinations": 6,
+      "percentile": 0.8815987933634992
+    },
+    "62o": {
+      "equity": 0.34429931640625,
+      "combinations": 12,
+      "percentile": 0.04072398190045249
+    },
+    "62s": {
+      "equity": 0.3846435546875,
+      "combinations": 4,
+      "percentile": 0.13122171945701358
+    },
+    "63o": {
+      "equity": 0.367431640625,
+      "combinations": 12,
+      "percentile": 0.06485671191553545
+    },
+    "63s": {
+      "equity": 0.39581298828125,
+      "combinations": 4,
+      "percentile": 0.17043740573152338
+    },
+    "64o": {
+      "equity": 0.37677001953125,
+      "combinations": 12,
+      "percentile": 0.09502262443438914
+    },
+    "64s": {
+      "equity": 0.41229248046875,
+      "combinations": 4,
+      "percentile": 0.23076923076923078
+    },
+    "65o": {
+      "equity": 0.4022216796875,
+      "combinations": 12,
+      "percentile": 0.1975867269984917
+    },
+    "65s": {
+      "equity": 0.4322509765625,
+      "combinations": 4,
+      "percentile": 0.27601809954751133
+    },
+    "66": {
+      "equity": 0.63128662109375,
+      "combinations": 6,
+      "percentile": 0.9223227752639518
+    },
+    "72o": {
+      "equity": 0.34466552734375,
+      "combinations": 12,
+      "percentile": 0.049773755656108594
+    },
+    "72s": {
+      "equity": 0.3826904296875,
+      "combinations": 4,
+      "percentile": 0.1282051282051282
+    },
+    "73o": {
+      "equity": 0.38079833984375,
+      "combinations": 12,
+      "percentile": 0.11312217194570136
+    },
+    "73s": {
+      "equity": 0.3897705078125,
+      "combinations": 4,
+      "percentile": 0.14630467571644043
+    },
+    "74o": {
+      "equity": 0.3824462890625,
+      "combinations": 12,
+      "percentile": 0.12217194570135746
+    },
+    "74s": {
+      "equity": 0.41943359375,
+      "combinations": 4,
+      "percentile": 0.248868778280543
+    },
+    "75o": {
+      "equity": 0.410400390625,
+      "combinations": 12,
+      "percentile": 0.2066365007541478
+    },
+    "75s": {
+      "equity": 0.43603515625,
+      "combinations": 4,
+      "percentile": 0.28808446455505277
+    },
+    "76o": {
+      "equity": 0.41461181640625,
+      "combinations": 12,
+      "percentile": 0.2398190045248869
+    },
+    "76s": {
+      "equity": 0.4593505859375,
+      "combinations": 4,
+      "percentile": 0.36048265460030166
+    },
+    "77": {
+      "equity": 0.668212890625,
+      "combinations": 6,
+      "percentile": 0.9630467571644042
+    },
+    "82o": {
+      "equity": 0.37420654296875,
+      "combinations": 12,
+      "percentile": 0.08597285067873303
+    },
+    "82s": {
+      "equity": 0.396240234375,
+      "combinations": 4,
+      "percentile": 0.18250377073906485
+    },
+    "83o": {
+      "equity": 0.3768310546875,
+      "combinations": 12,
+      "percentile": 0.10407239819004525
+    },
+    "83s": {
+      "equity": 0.4134521484375,
+      "combinations": 4,
+      "percentile": 0.23378582202111614
+    },
+    "84o": {
+      "equity": 0.39080810546875,
+      "combinations": 12,
+      "percentile": 0.15535444947209653
+    },
+    "84s": {
+      "equity": 0.41973876953125,
+      "combinations": 4,
+      "percentile": 0.25188536953242835
+    },
+    "85o": {
+      "equity": 0.41119384765625,
+      "combinations": 12,
+      "percentile": 0.22473604826546004
+    },
+    "85s": {
+      "equity": 0.44061279296875,
+      "combinations": 4,
+      "percentile": 0.31221719457013575
+    },
+    "86o": {
+      "equity": 0.43804931640625,
+      "combinations": 12,
+      "percentile": 0.2971342383107089
+    },
+    "86s": {
+      "equity": 0.46002197265625,
+      "combinations": 4,
+      "percentile": 0.37254901960784315
+    },
+    "87o": {
+      "equity": 0.451416015625,
+      "combinations": 12,
+      "percentile": 0.34992458521870284
+    },
+    "87s": {
+      "equity": 0.491455078125,
+      "combinations": 4,
+      "percentile": 0.4751131221719457
+    },
+    "88": {
+      "equity": 0.69573974609375,
+      "combinations": 6,
+      "percentile": 0.9705882352941176
+    },
+    "92o": {
+      "equity": 0.3916015625,
+      "combinations": 12,
+      "percentile": 0.16440422322775264
+    },
+    "92s": {
+      "equity": 0.422607421875,
+      "combinations": 4,
+      "percentile": 0.2549019607843137
+    },
+    "93o": {
+      "equity": 0.39727783203125,
+      "combinations": 12,
+      "percentile": 0.1885369532428356
+    },
+    "93s": {
+      "equity": 0.437744140625,
+      "combinations": 4,
+      "percentile": 0.2911010558069382
+    },
+    "94o": {
+      "equity": 0.39593505859375,
+      "combinations": 12,
+      "percentile": 0.17647058823529413
+    },
+    "94s": {
+      "equity": 0.44091796875,
+      "combinations": 4,
+      "percentile": 0.3152337858220211
+    },
+    "95o": {
+      "equity": 0.43170166015625,
+      "combinations": 12,
+      "percentile": 0.26998491704374056
+    },
+    "95s": {
+      "equity": 0.46014404296875,
+      "combinations": 4,
+      "percentile": 0.3755656108597285
+    },
+    "96o": {
+      "equity": 0.44049072265625,
+      "combinations": 12,
+      "percentile": 0.30618401206636503
+    },
+    "96s": {
+      "equity": 0.47027587890625,
+      "combinations": 4,
+      "percentile": 0.40271493212669685
+    },
+    "97o": {
+      "equity": 0.46307373046875,
+      "combinations": 12,
+      "percentile": 0.38461538461538464
+    },
+    "97s": {
+      "equity": 0.49755859375,
+      "combinations": 4,
+      "percentile": 0.4841628959276018
+    },
+    "98o": {
+      "equity": 0.48114013671875,
+      "combinations": 12,
+      "percentile": 0.43891402714932126
+    },
+    "98s": {
+      "equity": 0.51336669921875,
+      "combinations": 4,
+      "percentile": 0.5520361990950227
+    },
+    "99": {
+      "equity": 0.7197265625,
+      "combinations": 6,
+      "percentile": 0.9751131221719457
+    },
+    "T2o": {
+      "equity": 0.41070556640625,
+      "combinations": 12,
+      "percentile": 0.21568627450980393
+    },
+    "T2s": {
+      "equity": 0.451416015625,
+      "combinations": 4,
+      "percentile": 0.34992458521870284
+    },
+    "T3o": {
+      "equity": 0.43060302734375,
+      "combinations": 12,
+      "percentile": 0.2609351432880845
+    },
+    "T3s": {
+      "equity": 0.45355224609375,
+      "combinations": 4,
+      "percentile": 0.3574660633484163
+    },
+    "T4o": {
+      "equity": 0.4327392578125,
+      "combinations": 12,
+      "percentile": 0.28205128205128205
+    },
+    "T4s": {
+      "equity": 0.4617919921875,
+      "combinations": 4,
+      "percentile": 0.37858220211161386
+    },
+    "T5o": {
+      "equity": 0.44915771484375,
+      "combinations": 12,
+      "percentile": 0.3393665158371041
+    },
+    "T5s": {
+      "equity": 0.464599609375,
+      "combinations": 4,
+      "percentile": 0.39064856711915535
+    },
+    "T6o": {
+      "equity": 0.4599609375,
+      "combinations": 12,
+      "percentile": 0.3665158371040724
+    },
+    "T6s": {
+      "equity": 0.48828125,
+      "combinations": 4,
+      "percentile": 0.46304675716440424
+    },
+    "T7o": {
+      "equity": 0.4803466796875,
+      "combinations": 12,
+      "percentile": 0.4298642533936652
+    },
+    "T7s": {
+      "equity": 0.50909423828125,
+      "combinations": 4,
+      "percentile": 0.5490196078431373
+    },
+    "T8o": {
+      "equity": 0.49017333984375,
+      "combinations": 12,
+      "percentile": 0.46907993966817496
+    },
+    "T8s": {
+      "equity": 0.525146484375,
+      "combinations": 4,
+      "percentile": 0.6063348416289592
+    },
+    "T9o": {
+      "equity": 0.51739501953125,
+      "combinations": 12,
+      "percentile": 0.579185520361991
+    },
+    "T9s": {
+      "equity": 0.5406494140625,
+      "combinations": 4,
+      "percentile": 0.6621417797888386
+    },
+    "TT": {
+      "equity": 0.74346923828125,
+      "combinations": 6,
+      "percentile": 0.9796380090497737
+    },
+    "J2o": {
+      "equity": 0.44232177734375,
+      "combinations": 12,
+      "percentile": 0.3212669683257919
+    },
+    "J2s": {
+      "equity": 0.471923828125,
+      "combinations": 4,
+      "percentile": 0.4238310708898944
+    },
+    "J3o": {
+      "equity": 0.44818115234375,
+      "combinations": 12,
+      "percentile": 0.33031674208144796
+    },
+    "J3s": {
+      "equity": 0.4925537109375,
+      "combinations": 4,
+      "percentile": 0.4781297134238311
+    },
+    "J4o": {
+      "equity": 0.47064208984375,
+      "combinations": 12,
+      "percentile": 0.40874811463046756
+    },
+    "J4s": {
+      "equity": 0.4991455078125,
+      "combinations": 4,
+      "percentile": 0.5052790346907994
+    },
+    "J5o": {
+      "equity": 0.47161865234375,
+      "combinations": 12,
+      "percentile": 0.4177978883861237
+    },
+    "J5s": {
+      "equity": 0.503173828125,
+      "combinations": 4,
+      "percentile": 0.5399698340874811
+    },
+    "J6o": {
+      "equity": 0.48297119140625,
+      "combinations": 12,
+      "percentile": 0.45701357466063347
+    },
+    "J6s": {
+      "equity": 0.503173828125,
+      "combinations": 4,
+      "percentile": 0.5399698340874811
+    },
+    "J7o": {
+      "equity": 0.5018310546875,
+      "combinations": 12,
+      "percentile": 0.5233785822021116
+    },
+    "J7s": {
+      "equity": 0.51727294921875,
+      "combinations": 4,
+      "percentile": 0.5731523378582202
+    },
+    "J8o": {
+      "equity": 0.5164794921875,
+      "combinations": 12,
+      "percentile": 0.5580693815987934
+    },
+    "J8s": {
+      "equity": 0.54119873046875,
+      "combinations": 4,
+      "percentile": 0.665158371040724
+    },
+    "J9o": {
+      "equity": 0.53692626953125,
+      "combinations": 12,
+      "percentile": 0.6440422322775264
+    },
+    "J9s": {
+      "equity": 0.55413818359375,
+      "combinations": 4,
+      "percentile": 0.7134238310708899
+    },
+    "JTo": {
+      "equity": 0.55084228515625,
+      "combinations": 12,
+      "percentile": 0.6953242835595776
+    },
+    "JTs": {
+      "equity": 0.57733154296875,
+      "combinations": 4,
+      "percentile": 0.7963800904977375
+    },
+    "JJ": {
+      "equity": 0.78472900390625,
+      "combinations": 6,
+      "percentile": 0.9841628959276018
+    },
+    "Q2o": {
+      "equity": 0.469970703125,
+      "combinations": 12,
+      "percentile": 0.39668174962292607
+    },
+    "Q2s": {
+      "equity": 0.493896484375,
+      "combinations": 4,
+      "percentile": 0.48114630467571645
+    },
+    "Q3o": {
+      "equity": 0.4818115234375,
+      "combinations": 12,
+      "percentile": 0.4479638009049774
+    },
+    "Q3s": {
+      "equity": 0.50103759765625,
+      "combinations": 4,
+      "percentile": 0.5173453996983409
+    },
+    "Q4o": {
+      "equity": 0.497802734375,
+      "combinations": 12,
+      "percentile": 0.49019607843137253
+    },
+    "Q4s": {
+      "equity": 0.518798828125,
+      "combinations": 4,
+      "percentile": 0.5852187028657617
+    },
+    "Q5o": {
+      "equity": 0.5008544921875,
+      "combinations": 12,
+      "percentile": 0.5113122171945701
+    },
+    "Q5s": {
+      "equity": 0.53228759765625,
+      "combinations": 4,
+      "percentile": 0.6123680241327301
+    },
+    "Q6o": {
+      "equity": 0.498046875,
+      "combinations": 12,
+      "percentile": 0.49924585218702866
+    },
+    "Q6s": {
+      "equity": 0.5372314453125,
+      "combinations": 4,
+      "percentile": 0.6500754147812972
+    },
+    "Q7o": {
+      "equity": 0.51715087890625,
+      "combinations": 12,
+      "percentile": 0.5671191553544495
+    },
+    "Q7s": {
+      "equity": 0.53680419921875,
+      "combinations": 4,
+      "percentile": 0.6380090497737556
+    },
+    "Q8o": {
+      "equity": 0.5380859375,
+      "combinations": 12,
+      "percentile": 0.6561085972850679
+    },
+    "Q8s": {
+      "equity": 0.5533447265625,
+      "combinations": 4,
+      "percentile": 0.7104072398190046
+    },
+    "Q9o": {
+      "equity": 0.55950927734375,
+      "combinations": 12,
+      "percentile": 0.7315233785822021
+    },
+    "Q9s": {
+      "equity": 0.5679931640625,
+      "combinations": 4,
+      "percentile": 0.7405731523378583
+    },
+    "QTo": {
+      "equity": 0.5711669921875,
+      "combinations": 12,
+      "percentile": 0.746606334841629
+    },
+    "QTs": {
+      "equity": 0.59326171875,
+      "combinations": 4,
+      "percentile": 0.8416289592760181
+    },
+    "QJo": {
+      "equity": 0.57513427734375,
+      "combinations": 12,
+      "percentile": 0.7903469079939668
+    },
+    "QJs": {
+      "equity": 0.60272216796875,
+      "combinations": 4,
+      "percentile": 0.8597285067873304
+    },
+    "QQ": {
+      "equity": 0.79986572265625,
+      "combinations": 6,
+      "percentile": 0.9886877828054299
+    },
+    "K2o": {
+      "equity": 0.502685546875,
+      "combinations": 12,
+      "percentile": 0.5324283559577677
+    },
+    "K2s": {
+      "equity": 0.52838134765625,
+      "combinations": 4,
+      "percentile": 0.6093514328808446
+    },
+    "K3o": {
+      "equity": 0.51885986328125,
+      "combinations": 12,
+      "percentile": 0.5912518853695324
+    },
+    "K3s": {
+      "equity": 0.54296875,
+      "combinations": 4,
+      "percentile": 0.6681749622926093
+    },
+    "K4o": {
+      "equity": 0.52020263671875,
+      "combinations": 12,
+      "percentile": 0.6003016591251885
+    },
+    "K4s": {
+      "equity": 0.5472412109375,
+      "combinations": 4,
+      "percentile": 0.6711915535444947
+    },
+    "K5o": {
+      "equity": 0.5330810546875,
+      "combinations": 12,
+      "percentile": 0.6184012066365008
+    },
+    "K5s": {
+      "equity": 0.555419921875,
+      "combinations": 4,
+      "percentile": 0.7164404223227753
+    },
+    "K6o": {
+      "equity": 0.5352783203125,
+      "combinations": 12,
+      "percentile": 0.6319758672699849
+    },
+    "K6s": {
+      "equity": 0.57122802734375,
+      "combinations": 4,
+      "percentile": 0.7526395173453997
+    },
+    "K7o": {
+      "equity": 0.550537109375,
+      "combinations": 12,
+      "percentile": 0.6862745098039216
+    },
+    "K7s": {
+      "equity": 0.5882568359375,
+      "combinations": 4,
+      "percentile": 0.8265460030165912
+    },
+    "K8o": {
+      "equity": 0.55023193359375,
+      "combinations": 12,
+      "percentile": 0.6772247360482655
+    },
+    "K8s": {
+      "equity": 0.57965087890625,
+      "combinations": 4,
+      "percentile": 0.808446455505279
+    },
+    "K9o": {
+      "equity": 0.5791015625,
+      "combinations": 12,
+      "percentile": 0.8024132730015083
+    },
+    "K9s": {
+      "equity": 0.59014892578125,
+      "combinations": 4,
+      "percentile": 0.8295625942684767
+    },
+    "KTo": {
+      "equity": 0.60089111328125,
+      "combinations": 12,
+      "percentile": 0.8506787330316742
+    },
+    "KTs": {
+      "equity": 0.610107421875,
+      "combinations": 4,
+      "percentile": 0.8748114630467572
+    },
+    "KJo": {
+      "equity": 0.60955810546875,
+      "combinations": 12,
+      "percentile": 0.8687782805429864
+    },
+    "KJs": {
+      "equity": 0.6123046875,
+      "combinations": 4,
+      "percentile": 0.8778280542986425
+    },
+    "KQo": {
+      "equity": 0.61541748046875,
+      "combinations": 12,
+      "percentile": 0.8883861236802413
+    },
+    "KQs": {
+      "equity": 0.61944580078125,
+      "combinations": 4,
+      "percentile": 0.9064856711915535
+    },
+    "KK": {
+      "equity": 0.82354736328125,
+      "combinations": 6,
+      "percentile": 0.9932126696832579
+    },
+    "A2o": {
+      "equity": 0.55194091796875,
+      "combinations": 12,
+      "percentile": 0.7043740573152338
+    },
+    "A2s": {
+      "equity": 0.56585693359375,
+      "combinations": 4,
+      "percentile": 0.7375565610859729
+    },
+    "A3o": {
+      "equity": 0.5560302734375,
+      "combinations": 12,
+      "percentile": 0.722473604826546
+    },
+    "A3s": {
+      "equity": 0.5831298828125,
+      "combinations": 4,
+      "percentile": 0.8114630467571644
+    },
+    "A4o": {
+      "equity": 0.57177734375,
+      "combinations": 12,
+      "percentile": 0.7586726998491704
+    },
+    "A4s": {
+      "equity": 0.58721923828125,
+      "combinations": 4,
+      "percentile": 0.8144796380090498
+    },
+    "A5o": {
+      "equity": 0.57373046875,
+      "combinations": 12,
+      "percentile": 0.7767722473604827
+    },
+    "A5s": {
+      "equity": 0.60137939453125,
+      "combinations": 4,
+      "percentile": 0.8567119155354449
+    },
+    "A6o": {
+      "equity": 0.57373046875,
+      "combinations": 12,
+      "percentile": 0.7767722473604827
+    },
+    "A6s": {
+      "equity": 0.59503173828125,
+      "combinations": 4,
+      "percentile": 0.8446455505279035
+    },
+    "A7o": {
+      "equity": 0.5872802734375,
+      "combinations": 12,
+      "percentile": 0.8205128205128205
+    },
+    "A7s": {
+      "equity": 0.60870361328125,
+      "combinations": 4,
+      "percentile": 0.8627450980392157
+    },
+    "A8o": {
+      "equity": 0.592041015625,
+      "combinations": 12,
+      "percentile": 0.8355957767722474
+    },
+    "A8s": {
+      "equity": 0.61883544921875,
+      "combinations": 4,
+      "percentile": 0.9034690799396682
+    },
+    "A9o": {
+      "equity": 0.616455078125,
+      "combinations": 12,
+      "percentile": 0.8974358974358975
+    },
+    "A9s": {
+      "equity": 0.61981201171875,
+      "combinations": 4,
+      "percentile": 0.9095022624434389
+    },
+    "ATo": {
+      "equity": 0.62640380859375,
+      "combinations": 12,
+      "percentile": 0.9155354449472096
+    },
+    "ATs": {
+      "equity": 0.64959716796875,
+      "combinations": 4,
+      "percentile": 0.947209653092006
+    },
+    "AJo": {
+      "equity": 0.63714599609375,
+      "combinations": 12,
+      "percentile": 0.9291101055806938
+    },
+    "AJs": {
+      "equity": 0.647705078125,
+      "combinations": 4,
+      "percentile": 0.9441930618401206
+    },
+    "AQo": {
+      "equity": 0.6451416015625,
+      "combinations": 12,
+      "percentile": 0.9381598793363499
+    },
+    "AQs": {
+      "equity": 0.66265869140625,
+      "combinations": 4,
+      "percentile": 0.9592760180995475
+    },
+    "AKo": {
+      "equity": 0.657470703125,
+      "combinations": 12,
+      "percentile": 0.9532428355957768
+    },
+    "AKs": {
+      "equity": 0.6715087890625,
+      "combinations": 4,
+      "percentile": 0.9668174962292609
+    },
+    "AA": {
+      "equity": 0.84808349609375,
+      "combinations": 6,
+      "percentile": 0.997737556561086
+    }
+  }
+}
