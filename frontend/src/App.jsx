@@ -8,6 +8,7 @@ import BalanceCenterModal from './components/BalanceCenterModal';
 import PWAInstallModal from './components/PWAInstallModal';
 import MobilePWAGate from './components/MobilePWAGate';
 import { soundEngine } from './sound/SoundEngine';
+import { ActionSounds } from './sound/ActionSounds';
 import { usePWA } from './utils/usePWA';
 
 const lastRoomStorageKey = (userId) => `hpoker_active_room_${userId}`;
@@ -64,6 +65,8 @@ export default function App() {
   const pwa = usePWA();
 
   const wsRef = useRef(null);
+  const actionSoundsRef = useRef(null);
+  if (!actionSoundsRef.current) actionSoundsRef.current = new ActionSounds(soundEngine);
   const socialBubbleTimersRef = useRef(new Map());
 
   useEffect(() => {
@@ -303,6 +306,7 @@ export default function App() {
         : `${protocol}//${window.location.host}/ws/lobby/${currentUser.user_id}${tokenParam}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
+      actionSoundsRef.current.reset();
 
       ws.onopen = () => {
         if (disposed) return;
@@ -345,7 +349,7 @@ export default function App() {
             });
             fetchLobbyData();
           } else if (msg.event === 'SOUND_EFFECT') {
-            soundEngine.play(msg.payload.sound);
+            actionSoundsRef.current.receive(msg.payload);
           } else if (msg.event === 'CHAT_MESSAGE') {
             appendSocialActivity({
               ...msg.payload,
@@ -435,9 +439,7 @@ export default function App() {
   }, [activeRoomId, currentUser?.user_id, spectateMode, token, handleLeaveRoom]);
 
   const sendWsEvent = (event, payload = {}) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ event, payload }));
-    }
+    actionSoundsRef.current.send(wsRef.current, event, payload, currentUser?.user_id);
   };
 
   const handleCreateRoom = async (config) => {
