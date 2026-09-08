@@ -31,12 +31,13 @@ def test_three_bet_denominator_calls_short_allins_and_fourbets():
              hand([action('b','RAISE',30), action('a','RAISE',60), action('b','RAISE',120), action('a','CALL',60)]),
              hand([action('a','CALL',10), action('b','RAISE',30), action('a','FOLD')]),
              hand([action('a','RAISE',30), action('b','RAISE',60), action('a','RAISE',120)])]
+    hands[0]['players'][0]['starting_chips'] = 20
     s = summarize(hands, 'a')
     assert s['vpip'] == 100
     assert s['pfr'] == 50
     assert s['three_bet_hands'] == 1
-    assert s['three_bet_opportunities'] == 3
-    assert s['three_bet'] == 33.3
+    assert s['three_bet_opportunities'] == 2
+    assert s['three_bet'] == 50
 
 
 def test_folded_refund_does_not_collect_and_postflop_not_vpip():
@@ -78,3 +79,33 @@ def test_durable_statistics_scoped_and_idempotent(tmp_path):
     assert query_statistics(manager._database, 'a')['hands'] == 2
     assert query_statistics(manager._database, 'a', 'one')['hands'] == 1
     assert query_statistics(manager._database, 'unknown')['hands'] == 0
+
+
+def test_uncalled_refund_without_winning_any_pot():
+    h = hand()
+    h['players'][0].update(contributed_chips=100, payout_chips=60, net_chips=-40)
+    h['players'][1].update(contributed_chips=40, payout_chips=80, net_chips=40)
+    assert summarize([h], 'a')['collect_rate'] == 0
+    assert summarize([h], 'b')['collect_rate'] == 100
+
+
+def test_statistics_endpoints_scope_and_history_owner(monkeypatch):
+    from types import SimpleNamespace
+    from backend.app.api.endpoints import get_table_player_statistics
+    from backend.app.services.room_manager import room_manager
+    from backend.app.services.user_manager import user_manager
+    from backend.app.services import player_statistics
+    calls = []
+    monkeypatch.setattr(player_statistics, 'query_statistics',
+                        lambda db, pid, room_id=None: calls.append((pid, room_id)) or {'hands': 0})
+    monkeypatch.setattr(room_manager, 'get_room', lambda rid: SimpleNamespace(
+        table=SimpleNamespace(active_seated_players=[SimpleNamespace(player_id='u_test2')])) if rid == 'table' else None)
+    assert get_table_player_statistics('table', 'u_test2') == {'hands': 0}
+    assert calls[-1] == ('u_test2', 'table')
+    with pytest.raises(HTTPException):
+        get_table_player_statistics('table', 'u_test1')
+    with pytest.raises(HTTPException):
+        get_table_player_statistics('missing', 'u_test2')
+    _, token = user_manager.authenticate('test1', '123')
+    assert get_my_statistics(authorization=f'Bearer {token}', token=None) == {'hands': 0}
+    assert calls[-1] == ('u_test1', None)
