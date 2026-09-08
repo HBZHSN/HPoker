@@ -548,6 +548,7 @@ export default function App() {
     <div className={`w-full h-full bg-[#080b11] text-slate-100 flex flex-col font-sans ${activeRoomId && roomData ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'}`}>
       {activeRoomId && roomData ? (
         <PokerTable
+          token={token}
           room={roomData}
           currentUser={currentUser}
           socialHistory={socialHistory}
