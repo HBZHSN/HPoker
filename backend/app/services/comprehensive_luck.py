@@ -252,4 +252,3 @@ def aggregate_luck(records):
     overall = sum(dimensions[k]['score'] * w for k, w in WEIGHTS.items())
     return {'luck': round(overall, 1), 'luck_samples': dimensions['starting']['samples'],
             'luck_dimensions': dimensions, 'luck_version': VERSION, 'luck_visibility': 'full'}
-
