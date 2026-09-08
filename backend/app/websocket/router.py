@@ -21,6 +21,7 @@ from backend.app.services.room_manager import room_manager
 from backend.app.services.user_manager import user_manager
 from backend.app.services.timeout_manager import timeout_manager
 from backend.app.services.bot_player import choose_bot_action
+from backend.app.services.authentication import AuthenticationError, authenticate_websocket
 from backend.app.engine.state_machine import ActionType, Street
 
 logger = logging.getLogger("poker.router")
@@ -84,10 +85,17 @@ async def trigger_room_after_action(room_id: str):
         return
 
     if room.table.street == Street.HAND_END and room.pending_auto_leave_ids:
-        # Persist the completed hand before removing a participant whose
-        # all-in seat had to remain for pot eligibility.
-        room_manager.checkpoint_room(room)
-        if room.process_pending_auto_leaves():
+        # Record the completed hand before removing a participant whose
+        # all-in seat had to remain for pot eligibility. Keep that history
+        # write, seat removal, wallet credit, and checkpoint in one room
+        # transaction so a failed departure cannot leave partial refunds.
+        def _complete_hand_and_process_departures(current_room):
+            completed_hand = current_room.record_completed_hand()
+            if completed_hand:
+                room_manager.hand_history_manager.record_hand(completed_hand)
+            return current_room.process_pending_auto_leaves()
+
+        if room_manager.transact_room(room_id, _complete_hand_and_process_departures):
             await ws_manager.broadcast_room_state(room)
             if await close_room_if_empty(room_id):
                 return
@@ -207,29 +215,37 @@ async def trigger_room_turn_timer(room_id: str):
             action = decision.action
             amount = decision.amount
             prev_street = r.table.street
-            success = r.table.handle_action(
-                bot.player_id,
-                action,
-                raise_total_amount=amount,
-            )
-            if not success:
+            def _bot_mutation(current_room):
+                success = current_room.table.handle_action(
+                    bot.player_id,
+                    action,
+                    raise_total_amount=amount,
+                )
+                if success:
+                    return True, action
                 # The decision helper only emits legal actions. This fallback
                 # keeps a test hand moving if a state changes between the
                 # snapshot and the delayed callback.
-                legal = r.table.get_legal_actions(bot.player_id)
-                action = (
+                legal = current_room.table.get_legal_actions(bot.player_id)
+                fallback_action = (
                     ActionType.CHECK
                     if legal.can_check
                     else ActionType.CALL
                     if legal.can_call
                     else ActionType.FOLD
                 )
-                amount = legal.call_amount if action is ActionType.CALL else 0
-                success = r.table.handle_action(
-                    bot.player_id,
-                    action,
-                    raise_total_amount=amount,
+                fallback_amount = legal.call_amount if fallback_action is ActionType.CALL else 0
+                return (
+                    current_room.table.handle_action(
+                        bot.player_id,
+                        fallback_action,
+                        raise_total_amount=fallback_amount,
+                    ),
+                    fallback_action,
                 )
+
+            result = room_manager.transact_room(r_id, _bot_mutation)
+            success, action = result if result else (False, action)
 
             if not success:
                 logger.warning("Test bot action failed for player %s", bot.player_id)
@@ -320,11 +336,22 @@ async def trigger_room_turn_timer(room_id: str):
             sound = "fold"
 
         prev_street = r.table.street
-        success = r.table.handle_action(target_player.player_id, action)
-        if not success:
-            logger.warning(f"Timeout auto-action {action} failed for player {target_player.player_id}, fallback FOLD")
-            r.table.handle_action(target_player.player_id, ActionType.FOLD)
-            action = ActionType.FOLD
+        def _timeout_mutation(current_room):
+            success = current_room.table.handle_action(target_player.player_id, action)
+            if success:
+                return True, action
+            logger.warning(
+                f"Timeout auto-action {action} failed for player "
+                f"{target_player.player_id}, fallback FOLD"
+            )
+            return (
+                current_room.table.handle_action(target_player.player_id, ActionType.FOLD),
+                ActionType.FOLD,
+            )
+
+        result = room_manager.transact_room(r_id, _timeout_mutation)
+        success, action = result if result else (False, action)
+        if action is ActionType.FOLD:
             sound = "fold"
 
         await ws_manager.broadcast_sound(r_id, sound, {"player_id": target_player.player_id})
@@ -366,8 +393,10 @@ async def handle_disconnected_player_timeout(room_id: str, user_id: str) -> None
     room = room_manager.get_room(room_id)
     if not room or room.is_ended:
         return
-    room.auto_leave_disconnected_player(user_id)
-    room_manager.checkpoint_room(room)
+    room_manager.transact_room(
+        room_id,
+        lambda current_room: current_room.auto_leave_disconnected_player(user_id),
+    )
     await ws_manager.broadcast_room_state(room)
     await close_room_if_empty(room_id)
 
@@ -401,20 +430,29 @@ async def broadcast_lobby_online_users():
 
 
 @ws_router.websocket("/ws/lobby/{user_id}")
-async def lobby_websocket_endpoint(websocket: WebSocket, user_id: str, token: Optional[str] = Query(None)):
-    user = user_manager.get_user(user_id)
-    if user is not None:
-        if not token or not user_manager.verify_user_token(user_id, token):
-            await websocket.accept()
-            await websocket.send_text(json.dumps(make_message(
-                EventType.ERROR_MESSAGE,
-                {"message": "认证失败：请提供有效的用户 Token"},
-                room_id="lobby",
-            )))
-            await websocket.close(code=4003, reason="Authentication failed")
-            return
+async def lobby_websocket_endpoint(
+    websocket: WebSocket,
+    user_id: str,
+    token: Optional[str] = Query(None),
+    authorization: Optional[str] = None,
+):
+    try:
+        user, effective_user_id = authenticate_websocket(
+            claimed_user_id=user_id,
+            token=token,
+            authorization=authorization or websocket.headers.get("authorization"),
+        )
+    except AuthenticationError as exc:
+        await websocket.accept()
+        await websocket.send_text(json.dumps(make_message(
+            EventType.ERROR_MESSAGE,
+            {"message": str(exc)},
+            room_id="lobby",
+        )))
+        await websocket.close(code=4003, reason="Authentication failed")
+        return
 
-    await ws_manager.connect(websocket, "lobby", user_id)
+    await ws_manager.connect(websocket, "lobby", effective_user_id)
     await broadcast_lobby_online_users()
     try:
         while True:
@@ -445,9 +483,14 @@ async def websocket_endpoint(
     user_id: str,
     token: Optional[str] = Query(None),
     spectate: Optional[bool] = Query(False),
-):
+    ):
     if room_id == "lobby":
-        await lobby_websocket_endpoint(websocket, user_id, token=token)
+        await lobby_websocket_endpoint(
+            websocket,
+            user_id,
+            token=token,
+            authorization=websocket.headers.get("authorization"),
+        )
         return
 
     room = room_manager.get_room(room_id)
@@ -457,18 +500,37 @@ async def websocket_endpoint(
         await websocket.close()
         return
 
-    user = user_manager.get_user(user_id)
-    # Security: If claiming a registered user account, token is strictly verified
-    if user is not None:
-        if not token or not user_manager.verify_user_token(user_id, token):
-            await websocket.accept()
-            await websocket.send_text(json.dumps(make_message(
-                EventType.ERROR_MESSAGE,
-                {"message": "认证失败：未提供有效 Token 或身份不匹配"},
-                room_id=room_id,
-            )))
-            await websocket.close(code=4003, reason="Authentication failed")
-            return
+    try:
+        user, effective_user_id = authenticate_websocket(
+            claimed_user_id=user_id,
+            token=token,
+            authorization=websocket.headers.get("authorization"),
+        )
+    except AuthenticationError as exc:
+        await websocket.accept()
+        await websocket.send_text(json.dumps(make_message(
+            EventType.ERROR_MESSAGE,
+            {"message": str(exc)},
+            room_id=room_id,
+        )))
+        await websocket.close(code=4003, reason="Authentication failed")
+        return
+
+    # A path that names a bot or a stale seated account is never an anonymous
+    # principal.  Anonymous observers receive a generated identity instead.
+    if user is None and any(
+        seat and seat.player_id == user_id for seat in room.table.seats
+    ):
+        await websocket.accept()
+        await websocket.send_text(json.dumps(make_message(
+            EventType.ERROR_MESSAGE,
+            {"message": "认证失败：牌桌身份必须通过 Token 建立"},
+            room_id=room_id,
+        )))
+        await websocket.close(code=4003, reason="Authentication failed")
+        return
+
+    user_id = effective_user_id
 
     if room.is_player_kicked(user_id):
         await websocket.accept()
@@ -491,12 +553,15 @@ async def websocket_endpoint(
         if not is_already_seated:
             for idx in range(room.config.max_seats):
                 if room.table.seats[idx] is None:
-                    room.sit_down_player(
-                        user_id,
-                        nickname,
-                        idx,
-                        avatar=avatar,
-                        is_test=user.is_test_account,
+                    room_manager.transact_room(
+                        room_id,
+                        lambda current_room: current_room.sit_down_player(
+                            user_id,
+                            nickname,
+                            idx,
+                            avatar=avatar,
+                            is_test=user.is_test_account,
+                        ),
                     )
                     break
 
@@ -584,19 +649,25 @@ async def websocket_endpoint(
             elif event == EventType.SIT_DOWN:
                 seat_index = payload.get("seat_index")
                 if seat_index is not None and user is not None:
-                    ok = room.sit_down_player(
-                        user_id,
-                        nickname,
-                        seat_index,
-                        avatar=avatar,
-                        is_test=user.is_test_account,
+                    ok = room_manager.transact_room(
+                        room_id,
+                        lambda current_room: current_room.sit_down_player(
+                            user_id,
+                            nickname,
+                            seat_index,
+                            avatar=avatar,
+                            is_test=user.is_test_account,
+                        ),
                     )
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
 
             elif event == EventType.STAND_UP:
-                departed = room.leave_player(user_id)
+                departed = room_manager.transact_room(
+                    room_id,
+                    lambda current_room: current_room.leave_player(user_id),
+                )
                 if departed:
                     await ws_manager.broadcast_room_state(room)
                     await trigger_room_after_action(room_id)
@@ -615,7 +686,10 @@ async def websocket_endpoint(
                     )
 
             elif event == EventType.REBUY:
-                ok = room.rebuy_player(user_id)
+                ok = room_manager.transact_room(
+                    room_id,
+                    lambda current_room: current_room.rebuy_player(user_id),
+                )
                 if ok:
                     await ws_manager.broadcast_sound(room_id, "rebuy")
                     await ws_manager.broadcast_room_state(room)
@@ -623,17 +697,21 @@ async def websocket_endpoint(
             elif event == EventType.START_GAME:
                 # Only room host can trigger start of next hand when idle / hand_end
                 if user_id == room.host_player_id:
-                    room.prepare_next_hand()
-                    for seat in room.table.seats:
-                        if seat and seat.is_bot and seat.chips <= 0:
-                            room.rebuy_player(seat.player_id)
-                    if room.table.can_start_hand():
+                    def _start_next_hand(current_room):
+                        current_room.prepare_next_hand()
+                        for seat in current_room.table.seats:
+                            if seat and seat.is_bot and seat.chips <= 0:
+                                current_room.rebuy_player(seat.player_id)
+                        if not current_room.table.can_start_hand():
+                            return False
+                        return current_room.table.start_new_hand()
+
+                    ok = room_manager.transact_room(room_id, _start_next_hand)
+                    if ok:
                         timeout_manager.cancel_all_timers(room_id)
-                        ok = room.table.start_new_hand()
-                        if ok:
-                            await ws_manager.broadcast_sound(room_id, "deal")
-                            await ws_manager.broadcast_room_state(room)
-                            await trigger_room_after_action(room_id)
+                        await ws_manager.broadcast_sound(room_id, "deal")
+                        await ws_manager.broadcast_room_state(room)
+                        await trigger_room_after_action(room_id)
 
             elif event in (EventType.ADD_TEST_BOT, EventType.ADD_BOT):
                 # Test bots are intentionally a host-only room control. They
@@ -646,7 +724,10 @@ async def websocket_endpoint(
                             seat_index = int(seat_index)
                         except (TypeError, ValueError):
                             seat_index = None
-                    bot = room.add_test_bot(seat_index=seat_index)
+                    bot = room_manager.transact_room(
+                        room_id,
+                        lambda current_room: current_room.add_test_bot(seat_index=seat_index),
+                    )
                     if bot:
                         await ws_manager.broadcast_sound(room_id, "sit")
                         await ws_manager.broadcast_room_state(room)
@@ -682,7 +763,14 @@ async def websocket_endpoint(
                     continue
 
                 prev_street = room.table.street
-                success = room.table.handle_action(user_id, action, raise_total_amount=amount)
+                success = room_manager.transact_room(
+                    room_id,
+                    lambda current_room: current_room.table.handle_action(
+                        user_id,
+                        action,
+                        raise_total_amount=amount,
+                    ),
+                )
                 if success:
                     timeout_manager.cancel_turn_timer(room_id)
 
@@ -751,11 +839,18 @@ async def websocket_endpoint(
 
             elif event == EventType.PLAYER_READY:
                 ready = payload.get("ready", True)
-                all_ready = room.table.set_player_ready(user_id, ready)
-                if all_ready and room.table.can_start_hand():
-                    room.prepare_next_hand()
+
+                def _ready_mutation(current_room):
+                    all_ready = current_room.table.set_player_ready(user_id, ready)
+                    if all_ready and current_room.table.can_start_hand():
+                        current_room.prepare_next_hand()
+                        return all_ready, current_room.table.start_new_hand()
+                    return all_ready, False
+
+                ready_result = room_manager.transact_room(room_id, _ready_mutation)
+                all_ready, ok = ready_result if ready_result else (False, False)
+                if all_ready and ok:
                     timeout_manager.cancel_all_timers(room_id)
-                    ok = room.table.start_new_hand()
                     if ok:
                         await ws_manager.broadcast_sound(room_id, "deal")
                         await ws_manager.broadcast_room_state(room)
@@ -803,7 +898,10 @@ async def websocket_endpoint(
                     )
                     continue
 
-                kicked = room.kick_player(target_player_id)
+                kicked = room_manager.transact_room(
+                    room_id,
+                    lambda current_room: current_room.kick_player(target_player_id),
+                )
                 if not kicked:
                     await ws_manager.send_personal_message(
                         websocket,
@@ -839,7 +937,13 @@ async def websocket_endpoint(
             elif event == EventType.END_ROOM:
                 settlement_type = payload.get("settlement_type", "balance")
                 try:
-                    report = room.end_room(requester_id=user_id, settlement_type=settlement_type)
+                    report = room_manager.transact_room(
+                        room_id,
+                        lambda current_room: current_room.end_room(
+                            requester_id=user_id,
+                            settlement_type=settlement_type,
+                        ),
+                    )
                 except ValueError as exc:
                     await ws_manager.send_personal_message(
                         websocket,

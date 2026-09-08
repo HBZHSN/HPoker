@@ -38,7 +38,7 @@ class PokerCliController:
         self,
         server_url: str = "http://127.0.0.1:8000",
         username: Optional[str] = None,
-        password: Optional[str] = "123",
+        password: Optional[str] = None,
         mode: str = "dashboard",
         enable_color: bool = True,
         http_timeout: float = 10.0,
@@ -310,7 +310,11 @@ class PokerCliController:
 
         if self.default_username:
             username = self.default_username
-            password = self.default_password if self.default_password is not None else "123"
+            password = self.default_password
+            if password is None:
+                password = await self._async_password_input("密码: ")
+                if self._stdin_closed:
+                    return False
             if await self._try_login(username, password):
                 return True
             # Do not keep retrying the same failed command-line credentials
@@ -343,7 +347,7 @@ class PokerCliController:
             self._output(self.renderer.c("仅管理员有权限查看用户列表", Colors.YELLOW))
             return
         try:
-            users = await self.api.list_users(token=self.token, admin_id=self.current_user.get("user_id"))
+            users = await self.api.list_users(token=self.auth_token)
             self._output(self.renderer.render_users(users), panel=True)
         except Exception as exc:
             self._output(self.renderer.c(f"获取用户列表失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
@@ -445,7 +449,7 @@ class PokerCliController:
 
     async def _show_room_info(self, room_id: str) -> None:
         try:
-            room = await self.api.get_room(room_id, self._current_user_id())
+            room = await self.api.get_room(room_id)
             self._output(self.renderer.render_room_details(room), panel=True)
         except Exception as exc:
             self._output(self.renderer.c(f"获取房间详情失败: {self._friendly_error(exc)}", Colors.BRIGHT_RED))
@@ -500,7 +504,6 @@ class PokerCliController:
         try:
             self._validate_create_options(defaults)
             room_data = await self.api.create_room(
-                host_player_id=self._current_user_id(),
                 room_name=str(defaults["name"]),
                 buyin_chips=int(defaults["buyin"]),
                 cash_value=float(defaults["cash"]),
@@ -915,7 +918,6 @@ class PokerCliController:
         try:
             room = await self.api.add_test_bot(
                 self.active_room_id or "",
-                requester_id=self._current_user_id(),
                 seat_index=seat_index,
             )
             self.active_room_data = room
@@ -963,7 +965,6 @@ class PokerCliController:
         try:
             report = await self.api.end_room(
                 self.active_room_id or "",
-                self._current_user_id(),
                 settlement_type=settlement_type,
             )
             self._merge_settlement_report(report)
@@ -983,7 +984,7 @@ class PokerCliController:
             await self._send_ws("delete_room")
             return
         try:
-            await self.api.delete_room(self.active_room_id or "", self._current_user_id())
+            await self.api.delete_room(self.active_room_id or "")
             self._output("房间已解散。")
             self._in_room = False
         except Exception as exc:
@@ -998,7 +999,7 @@ class PokerCliController:
             self._output("当前没有房间结算清单。")
             return
         try:
-            room = await self.api.get_room(self.active_room_id, self._current_user_id())
+            room = await self.api.get_room(self.active_room_id)
             report = room.get("settlement_report")
             if report:
                 self.active_room_data = room

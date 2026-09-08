@@ -19,7 +19,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="HPoker 德州扑克命令行客户端：大厅、实时牌桌与现金结算",
         epilog=(
-            "登录后输入 help 查看命令；示例: poker_cli.py --user fwd "
+            "登录后输入 help 查看命令；示例: poker_cli.py --user <username> "
             '--room ab12cd34 --mode stream'
         ),
     )

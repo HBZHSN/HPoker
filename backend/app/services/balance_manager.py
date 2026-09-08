@@ -6,6 +6,7 @@ Strictly isolates test accounts and bot matches to prevent contaminating real ba
 """
 
 from __future__ import annotations
+import copy
 import json
 import hashlib
 import logging
@@ -49,12 +50,6 @@ class BalanceManager:
         self._database = SQLiteDatabase(selected_path)
         self.storage_path = self._database.path
         self.legacy_storage_path = legacy_storage_path
-        if (
-            legacy_storage_path is None
-            and self.storage_path == os.path.realpath(DEFAULT_DATABASE_PATH)
-        ):
-            self.legacy_storage_path = LEGACY_STORAGE_FILE
-
         self._entries: Dict[str, LedgerEntry] = {}
         self._batches: Dict[str, SettlementBatch] = {}
         self.load_from_storage()
@@ -110,6 +105,19 @@ class BalanceManager:
             entries,
             [batch.to_dict() for batch in self._batches.values()],
         )
+
+    def snapshot_state(self) -> dict:
+        """Return an in-memory snapshot for a cross-service room transaction."""
+        return {
+            "entries": copy.deepcopy(self._entries),
+            "batches": copy.deepcopy(self._batches),
+        }
+
+    def restore_state(self, snapshot: dict) -> None:
+        """Restore a snapshot and persist it as the transaction rollback state."""
+        self._entries = copy.deepcopy(snapshot.get("entries", {}))
+        self._batches = copy.deepcopy(snapshot.get("batches", {}))
+        self.save_to_storage()
 
     def record_settlement(
         self,

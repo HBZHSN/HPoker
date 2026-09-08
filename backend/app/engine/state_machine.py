@@ -52,6 +52,10 @@ class PlayerSeat:
     avatar: str = "👤"
     is_bot: bool = False
     is_test: bool = False
+    # ``real`` means this stack has been debited from the cash wallet.  A
+    # human may temporarily sit in a play-money hand while a test player is
+    # present, so funding cannot be inferred from the room-wide mode.
+    wallet_mode: str = "real"
     hole_cards: List[Card] = field(default_factory=list)
     is_folded: bool = False
     is_all_in: bool = False
@@ -105,6 +109,7 @@ class PlayerSeat:
             "avatar": self.avatar,
             "is_bot": self.is_bot,
             "is_test": self.is_test,
+            "wallet_mode": self.wallet_mode,
             "seat_index": self.seat_index,
             "chips": self.chips,
             "hole_cards": [c.to_dict() for c in self.hole_cards] if include_private_cards else [],
@@ -238,6 +243,7 @@ class TableStateMachine:
         avatar: str = "👤",
         is_bot: bool = False,
         is_test: bool = False,
+        wallet_mode: str = "real",
         time_bank_cards: int = 3,
         hands_played: int = 0,
         vpip_hands: int = 0,
@@ -266,6 +272,7 @@ class TableStateMachine:
             avatar=avatar or "👤",
             is_bot=is_bot,
             is_test=is_test,
+            wallet_mode=wallet_mode if wallet_mode in {"real", "play"} else "real",
             is_folded=hand_is_running,
             has_acted_this_round=hand_is_running,
         )

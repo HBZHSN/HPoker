@@ -771,14 +771,15 @@ class TestPokerApiClient:
 
             # Mock create room
             mock_post.return_value.json = MagicMock(return_value={"room_id": "rm_999"})
-            room = await client.create_room("u_test1", "新房间")
+            room = await client.create_room("新房间")
             assert room["room_id"] == "rm_999"
 
             # Mock add test bot
             mock_post.return_value.json = MagicMock(return_value={"room_id": "rm_999", "bot_added": True})
-            bot_res = await client.add_test_bot("rm_999", "u_test1", seat_index=2)
+            bot_res = await client.add_test_bot("rm_999", seat_index=2)
             assert bot_res["bot_added"] is True
-            assert mock_post.call_args[1]["params"] == {"requester_id": "u_test1", "seat_index": 2}
+            assert mock_post.call_args[1]["params"] == {"seat_index": 2}
+            assert mock_post.call_args[1]["headers"] == {"Authorization": "Bearer tk_123"}
 
             await client.close()
 

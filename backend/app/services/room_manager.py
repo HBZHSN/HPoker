@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 from backend.app.database import DEFAULT_DATABASE_PATH, SQLiteDatabase
 from backend.app.models.room import Room, RoomConfig
 from backend.app.services.hand_history_manager import HandHistoryManager
+from backend.app.services.balance_manager import balance_manager
 
 logger = logging.getLogger("poker.rooms")
 LEGACY_STORAGE_FILE = os.path.join(
@@ -35,11 +36,6 @@ class RoomManager:
         self._database = SQLiteDatabase(selected_path)
         self.storage_path = self._database.path
         self.legacy_storage_path = legacy_storage_path
-        if (
-            legacy_storage_path is None
-            and self.storage_path == os.path.realpath(DEFAULT_DATABASE_PATH)
-        ):
-            self.legacy_storage_path = LEGACY_STORAGE_FILE
         self._rooms: Dict[str, Room] = {}
         self.hand_history_manager = HandHistoryManager(database_path=self.storage_path)
         self._storage_lock = threading.RLock()
@@ -86,16 +82,69 @@ class RoomManager:
 
     def checkpoint_room(self, room: Room) -> None:
         """Record a completed hand if needed, then flush a safe checkpoint."""
-        completed_hand = room.record_completed_hand()
-        if completed_hand:
-            self.hand_history_manager.record_hand(completed_hand)
-        self.save_to_storage()
+        with self._storage_lock:
+            room_snapshot = room.snapshot_state()
+            wallet_snapshot = balance_manager.snapshot_state()
+            try:
+                completed_hand = room.record_completed_hand()
+                if completed_hand:
+                    self.hand_history_manager.record_hand(completed_hand)
+                self.save_to_storage()
+            except Exception:
+                room.restore_state(room_snapshot)
+                balance_manager.restore_state(wallet_snapshot)
+                try:
+                    self._database.replace_rooms(
+                        [
+                            candidate.to_checkpoint_dict()
+                            for candidate in self._rooms.values()
+                            if not candidate.is_ended
+                        ]
+                    )
+                except Exception:
+                    logger.exception("Failed to persist checkpoint rollback")
+                raise
+
+    def transact_room(self, room_id: str, operation, *, checkpoint: bool = True):
+        """Run a room mutation with wallet and checkpoint rollback semantics."""
+        with self._storage_lock:
+            room = self._rooms.get(room_id)
+            if room is None:
+                return None
+            room_snapshot = room.snapshot_state()
+            wallet_snapshot = balance_manager.snapshot_state()
+            try:
+                result = operation(room)
+                if checkpoint:
+                    self.checkpoint_room(room)
+                else:
+                    self.save_to_storage()
+                return result
+            except Exception:
+                room.restore_state(room_snapshot)
+                balance_manager.restore_state(wallet_snapshot)
+                try:
+                    self._database.replace_rooms(
+                        [
+                            room.to_checkpoint_dict()
+                            for room in self._rooms.values()
+                            if not room.is_ended
+                        ]
+                    )
+                except Exception:
+                    logger.exception("Failed to persist room transaction rollback")
+                raise
 
     def create_room(self, host_player_id: str, config: RoomConfig, room_id: Optional[str] = None) -> Room:
-        room = Room(host_player_id=host_player_id, config=config, room_id=room_id)
-        self._rooms[room.room_id] = room
-        self.save_to_storage()
-        return room
+        with self._storage_lock:
+            room = Room(host_player_id=host_player_id, config=config, room_id=room_id)
+            self._rooms[room.room_id] = room
+            try:
+                self.save_to_storage()
+            except Exception:
+                self._rooms.pop(room.room_id, None)
+                raise
+            return room
 
     def get_room(self, room_id: str) -> Optional[Room]:
         return self._rooms.get(room_id)
@@ -131,16 +180,35 @@ class RoomManager:
         return rooms_info
 
     def delete_room(self, room_id: str, reason: str = "room_deleted") -> bool:
-        room = self._rooms.get(room_id)
-        if room is not None:
-            # Deletion is also a cash-out boundary. Calling this after
-            # ``Room.end_room`` is harmless because that method empties seats.
-            room.cash_out_all_players(reason=reason)
-            room.is_ended = True
-            del self._rooms[room_id]
-            self.save_to_storage()
-            return True
-        return False
+        with self._storage_lock:
+            room = self._rooms.get(room_id)
+            if room is None:
+                return False
+            room_snapshot = room.snapshot_state()
+            wallet_snapshot = balance_manager.snapshot_state()
+            try:
+                # Deletion is also a cash-out boundary. Calling this after
+                # ``Room.end_room`` is harmless because that method empties seats.
+                room.cash_out_all_players(reason=reason)
+                room.is_ended = True
+                del self._rooms[room_id]
+                self.save_to_storage()
+                return True
+            except Exception:
+                self._rooms[room_id] = room
+                room.restore_state(room_snapshot)
+                balance_manager.restore_state(wallet_snapshot)
+                try:
+                    self._database.replace_rooms(
+                        [
+                            candidate.to_checkpoint_dict()
+                            for candidate in self._rooms.values()
+                            if not candidate.is_ended
+                        ]
+                    )
+                except Exception:
+                    logger.exception("Failed to persist room deletion rollback")
+                raise
 
 
 # Global instance

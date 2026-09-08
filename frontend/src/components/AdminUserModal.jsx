@@ -27,7 +27,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/users?admin_id=${adminUser.user_id}`, {
+      const res = await fetch('/api/admin/users', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error('获取用户列表失败');
@@ -42,7 +42,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
 
   useEffect(() => {
     fetchUsers();
-  }, [adminUser.user_id]);
+  }, [adminUser.user_id, token]);
 
   const handleCreateUser = async (e) => {
     e?.preventDefault();
@@ -52,6 +52,10 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
     }
     if (!newPassword.trim()) {
       setError('初始密码不能为空');
+      return;
+    }
+    if (newPassword.trim().length < 12) {
+      setError('初始密码长度不能少于12位');
       return;
     }
     setError('');
@@ -65,7 +69,6 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          admin_user_id: adminUser.user_id,
           username: newUsername.trim(),
           nickname: newNickname.trim() || newUsername.trim(),
           password: newPassword.trim(),
@@ -91,6 +94,10 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
   const handleUpdateUser = async (userId) => {
     setError('');
     setSuccess('');
+    if (editPassword.trim() && editPassword.trim().length < 12) {
+      setError('新密码长度不能少于12位');
+      return;
+    }
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'PUT',
@@ -99,7 +106,6 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          admin_user_id: adminUser.user_id,
           nickname: editNickname.trim() || undefined,
           password: editPassword.trim() || undefined,
         }),
@@ -122,7 +128,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch(`/api/admin/users/${userId}?admin_id=${adminUser.user_id}`, {
+      const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -148,7 +154,7 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch(`/api/balance/all-records?admin_id=${adminUser.user_id}`, {
+      const res = await fetch('/api/balance/all-records', {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
