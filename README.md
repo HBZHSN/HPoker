@@ -24,7 +24,7 @@
 - **自动转账结算账单（债务最小化算法）**：房主点击结束房间时，系统根据所有玩家的初始买入、补码与最终剩余筹码，自动计算各玩家的净盈亏，并通过**最小现金转账算法（Debt Simplification Flow）**输出最精简的“谁向谁付多少钱”清单。
 
 ### 4. 账号与房间管理
-- **免注册后台预置用户**：支持预设用户列表或管理员后台录入，保障局域网或私有局的安全便捷接入。
+- **显式账号引导**：生产环境不自动创建管理员或测试账号，首次管理员必须通过部署环境变量引导创建，之后由管理员后台录入账号。
 - **超时自动托管**：玩家在倒计时内未操作时，自动执行 Check（若无加注）或 Fold（若有下注）。
 - **全端响应式适配**：完美适配 PC 桌面端（支持键盘快捷键）与手机端触摸屏操作。
 - **小盲步进下注**：下注金额输入与滑块按小盲注的整数倍步进，避免出现非标准筹码档位。
@@ -92,7 +92,8 @@ sudo systemctl disable --now poker.service
 
 - 正式环境默认统一使用 `backend/data/poker.sqlite3`，也可通过 `POKER_DATABASE_PATH` 指定数据库绝对路径。
 - 用户、登录令牌、结算账单、账单参与者、转账、批次及批次关联均使用规范化数据表；现金金额以“分”为整数落库，避免浮点误差。房间运行态作为不可拆分的恢复快照保存，同时单独维护房主、房间名和时间等可查询字段。
-- 数据库启用外键、约束、索引、事务、WAL 与 schema version。首次启用时会一次性迁移原有 `users.json`、`rooms.json` 和 `balance_ledger.json`，迁移记录写入数据库，避免重复导入。
+- 数据库启用外键、约束、索引、事务、WAL 与 schema version。生产环境只读取配置的 SQLite 数据库；旧 JSON 数据迁移必须由运维显式传入 `legacy_storage_path`，仓库不会自动把文件中的账号、令牌或账单导入生产库。
+- 首次生产部署若数据库为空，需同时设置 `POKER_BOOTSTRAP_ADMIN_USERNAME` 和 `POKER_BOOTSTRAP_ADMIN_PASSWORD`（至少 12 个字符）。应用创建一次管理员后不会再次补建默认账号；部署前应删除旧数据库中的会话令牌并为历史账号设置新密码。
 - pytest 在导入应用前强制设置 `POKER_ENV=test`，并只使用 `backend/data/poker_test.sqlite3`。测试环境若尝试连接正式数据库会直接报错，测试前后也会重置专用测试库中的业务表。
 
 ---
@@ -106,10 +107,10 @@ CLI 支持大厅、实时牌桌、断线重连、单手结算页、终局结算�
 ./start.sh cli
 
 # 自动登录、直接进房间、使用事件流模式
-./start.sh cli --user fwd --room ROOM_ID --mode stream
+./start.sh cli --user <username> --room ROOM_ID --mode stream
 
 # 直接运行入口；密码建议留空后交互输入，避免出现在进程列表
-.venv/bin/python poker_cli.py --user fwd --no-color
+.venv/bin/python poker_cli.py --user <username> --no-color
 ```
 
 命令行参数：

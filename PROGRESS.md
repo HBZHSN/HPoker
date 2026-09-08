@@ -988,6 +988,14 @@
 - [x] 98.2 前端玩家数据展示工具函数与单元测试 (`playerStats.js`, `playerStats.test.mjs`)：实现 `formatVpip`（安全解析直接属性或自手牌数精确计算）、`formatTimeCards`（提取时间卡数量并默认回退为 3）、`getVpipTooltip` 与 `getTimeCardsTooltip`（支持区分本人与对手提示文案），编写覆盖率单元测试并全部通过（82/82 项前端测试 100% 通过）。
 - [x] 98.3 前端所有玩家头像框左下角 VPIP 与右下角时间卡数量徽章集成 (`PlayerSeat.jsx`)：左下角为全体入座玩家常驻展示青色高对比 HUD 风格 VPIP 数字徽章，右下角将原本仅自己可见的时间卡拓展至全体入座玩家并以极简数字形式展示时间卡剩余数量；针对本人行动轮保留点击补充时间卡交互与脉冲提醒；与原有胜率辅助标识、位置角标及买入角标和谐并存；完成全量测试回归验证（82 项前端测试与 200 项后端测试 100% 通过，Vite 生产构建打包成功）。
 
+---
+
+### 阶段 99：身份绑定、认证材料与房间资金事务修复 (Identity Binding, Credential Rotation & Room Wallet Transactions)
+- [x] 99.1 统一 REST 与 WebSocket Principal：所有受保护 REST 操作只接受 Token，房主、管理员、个人资料、余额与房间操作均忽略请求体/路径中的用户 ID；WebSocket 路径 ID 仅用于路由，运行身份由 Token 或隔离 spectator 身份建立，并补充身份冒用回归测试。
+- [x] 99.2 清理认证材料：移除仓库中的用户令牌、密码哈希与账单快照，生产数据库不再默认迁移 JSON 凭据或自动补建账号；生产首次启动改为显式 `POKER_BOOTSTRAP_ADMIN_USERNAME` / `POKER_BOOTSTRAP_ADMIN_PASSWORD`，登录与密码变更会撤销旧令牌。
+- [x] 99.3 修复 real/play 买入资金来源：座位与历史档案保存逐席 `wallet_mode`，晚加入 play 局的真实账号不会被免费兑回，模式切换与补码按实际资金来源记账。
+- [x] 99.4 统一钱包、座位、退款和 checkpoint 事务边界：房间资金操作支持内存与账本回滚，RoomManager 在 checkpoint 失败时恢复座位与钱包快照，REST/WS 的入座、离座、补码、踢出、开局、结束和自动离桌均经过同一事务入口。
+- [x] 99.5 修复中止/恢复退款：中止时为已离桌玩家退回未结算底池贡献，checkpoint 保存恢复退款幂等键，重启恢复时补记钱包且不重复兑回；覆盖主动中止、重复关闭和恢复场景测试。
 
 
 
