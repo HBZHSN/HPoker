@@ -348,6 +348,35 @@ async def test_textual_ctrl_c_exits_even_with_focused_input_or_pending_request(w
         await controller.api.close()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("size", [(120, 36), (80, 24), (40, 16)])
+async def test_textual_form_prompt_and_history_draft(size):
+    from textual.widgets import Input, Static
+
+    controller = PokerCliController(enable_color=False)
+    app = PokerTextualApp(controller, autostart=False)
+    try:
+        async with app.run_test(size=size) as pilot:
+            prompt = "房间名称 [这是一个足够长且需要完整显示的默认房间名称]: "
+            task = asyncio.create_task(app.bridge.read_line(prompt, ["rooms"]))
+            await pilot.pause()
+            label = app.query_one("#field-prompt", Static)
+            command = app.query_one("#command-input", Input)
+            assert label.display
+            assert str(label.renderable) == prompt.strip()
+            assert label.size.height >= (2 if size[0] == 40 else 1)
+            assert label.region.bottom <= command.region.y
+            assert command.region.bottom <= size[1]
+            await pilot.press("d", "r", "a", "f", "t", "up", "down")
+            assert command.value == "draft"
+            await pilot.press("enter")
+            assert await task == "draft"
+            app.set_prompt("大厅> ")
+            assert not label.display
+    finally:
+        await controller.api.close()
+
+
 class TestPokerUiRenderer:
     """Tests for terminal UI rendering."""
 

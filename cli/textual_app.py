@@ -30,6 +30,7 @@ class TextualTuiBridge:
         self._input_text = ""
         self._history: list[str] = []
         self._history_index: Optional[int] = None
+        self._history_draft = ""
         self._read_future: Optional[asyncio.Future[str]] = None
         self._eof_requested = False
 
@@ -92,6 +93,7 @@ class TextualTuiBridge:
         self._prompt = prompt
         self._history = [item for item in history if item]
         self._history_index = None
+        self._history_draft = ""
         self.clear_input()
         future: asyncio.Future[str] = loop.create_future()
         self._read_future = future
@@ -116,12 +118,13 @@ class TextualTuiBridge:
         if not self._history:
             return None
         if self._history_index is None:
+            self._history_draft = self.input_text
             self._history_index = len(self._history)
         if up:
             self._history_index = max(0, self._history_index - 1)
         else:
             self._history_index = min(len(self._history), self._history_index + 1)
-        return self._history[self._history_index] if self._history_index < len(self._history) else ""
+        return self._history[self._history_index] if self._history_index < len(self._history) else self._history_draft
 
 
 class PokerTextualApp(App[int]):
@@ -182,6 +185,12 @@ class PokerTextualApp(App[int]):
         background: #111722;
         border-top: solid #364154;
     }
+    #field-prompt {
+        height: auto;
+        padding: 0 1;
+        color: #e7c873;
+        background: #111722;
+    }
     #prompt-label {
         width: 10;
         padding-left: 2;
@@ -191,7 +200,7 @@ class PokerTextualApp(App[int]):
     }
     #command-input {
         width: 1fr;
-        height: 3;
+        height: 2;
         border: none;
         background: #111722;
     }
@@ -257,6 +266,7 @@ class PokerTextualApp(App[int]):
             yield Static("正在载入…", id="main-panel", markup=False)
             yield Static("输入 help 查看命令", id="side-panel", markup=False)
         yield Static("", id="notice", markup=False)
+        yield Static("", id="field-prompt", markup=False)
         with Horizontal(id="command-bar"):
             yield Static("大厅 ›", id="prompt-label", markup=False)
             yield Input(placeholder="输入命令，Enter 执行", id="command-input")
@@ -313,8 +323,12 @@ class PokerTextualApp(App[int]):
         return Text.from_ansi(value or "")
 
     def set_prompt(self, prompt: str) -> None:
+        field_prompt = self.query_one("#field-prompt", Static)
+        is_field = not prompt.rstrip().endswith(">") and bool(prompt.strip())
+        field_prompt.display = is_field
+        field_prompt.update(prompt.strip() if is_field else "")
         label = prompt.rstrip().rstrip(">").strip() or "命令"
-        self.query_one("#prompt-label", Static).update(f"{label} ›")
+        self.query_one("#prompt-label", Static).update("›" if is_field else f"{label} ›")
 
     def update_dashboard(self, fallback_frame: str, *, prompt: str, notice: str) -> None:
         controller = self.controller
