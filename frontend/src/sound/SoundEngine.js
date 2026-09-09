@@ -269,6 +269,7 @@ class SoundEngine {
         case 'countdown':
           this.playCountdownTick(options?.secondsLeft ?? 5, options?.isMyTurn ?? false);
           break;
+        case 'your_turn':
         case 'sit':
         case 'rebuy':
           this.playChime();
