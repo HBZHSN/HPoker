@@ -52,6 +52,7 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [balanceOpen, setBalanceOpen] = useState(false);
+  const [userBalance, setUserBalance] = useState(null);
 
   // User explicitly continued past the PWA gate (remembered on this device).
   // Needed because several Android system browsers (Huawei/Xiaomi etc.) launch
@@ -144,11 +145,14 @@ export default function App() {
   // Fetch initial active rooms and online users
   const fetchLobbyData = useCallback(async () => {
     try {
-      const [roomsRes, usersRes] = await Promise.all([
+      const [roomsRes, usersRes, balanceRes] = await Promise.all([
         fetch('/api/rooms'),
         fetch('/api/lobby/users', {
           headers: { Authorization: `Bearer ${token}` },
         }),
+        token ? fetch('/api/balance/my', {
+          headers: { Authorization: `Bearer ${token}` },
+        }) : Promise.resolve(null),
       ]);
       if (roomsRes.ok) {
         const roomsJson = await roomsRes.json();
@@ -157,6 +161,10 @@ export default function App() {
       if (usersRes.ok) {
         const usersJson = await usersRes.json();
         setLobbyUsers(usersJson);
+      }
+      if (balanceRes && balanceRes.ok) {
+        const balanceJson = await balanceRes.json();
+        setUserBalance(balanceJson.available_cash);
       }
     } catch (e) {
       console.error("Failed to load lobby data:", e);
@@ -568,6 +576,7 @@ export default function App() {
           onStandUpToSpectate={handleStandUpToSpectate}
           onToggleFullscreen={pwa.toggleFullscreen}
           isFullscreen={pwa.isFullscreen}
+          onOpenBalance={() => setBalanceOpen(true)}
         />
       ) : activeRoomId ? (
         <div className="w-full h-full min-h-screen bg-[#080b11] flex flex-col items-center justify-center gap-4 text-center p-6">
@@ -588,6 +597,7 @@ export default function App() {
         <Lobby
           currentUser={currentUser}
           token={token}
+          userBalance={userBalance}
           onUpdateUser={handleUpdateUser}
           onOpenProfile={() => setProfileOpen(true)}
           onOpenAdmin={() => setAdminOpen(true)}
@@ -635,7 +645,10 @@ export default function App() {
           isOpen={balanceOpen}
           currentUser={currentUser}
           token={token}
-          onClose={() => setBalanceOpen(false)}
+          onClose={() => {
+            setBalanceOpen(false);
+            fetchLobbyData();
+          }}
         />
       )}
 

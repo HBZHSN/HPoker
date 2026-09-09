@@ -30,6 +30,7 @@ import {
   SmilePlus,
   Maximize2,
   Minimize2,
+  Wallet,
 } from 'lucide-react';
 
 const STREET_LABELS = {
@@ -67,6 +68,7 @@ export default function PokerTable({
   onStandUpToSpectate,
   onToggleFullscreen,
   isFullscreen = false,
+  onOpenBalance,
 }) {
   const [isMuted, setIsMuted] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
@@ -531,6 +533,17 @@ export default function PokerTable({
             <span className="sm:hidden">离开</span>
           </button>
 
+          {onOpenBalance && (
+            <button
+              onClick={onOpenBalance}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 rounded-xl text-xs font-bold border border-amber-500/40 transition active:scale-95 cursor-pointer shadow"
+              title="查看余额与资金记录"
+            >
+              <Wallet className="w-3.5 h-3.5 text-amber-400" />
+              <span>余额</span>
+            </button>
+          )}
+
           {selfSeat && (
             <button
               onClick={handleStandUpClick}
@@ -776,6 +789,23 @@ export default function PokerTable({
                   <strong>{Math.round((room?.config?.assistant_win_ratio ?? 1) * 100)}%</strong>
                 </div>
               </section>
+
+              {onOpenBalance && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsRoomPanelOpen(false);
+                    onOpenBalance();
+                  }}
+                  className="flex items-center justify-between w-full p-3 rounded-2xl bg-slate-900 border border-amber-500/30 text-amber-300 font-bold text-xs active:scale-95 transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-amber-400" />
+                    余额中心
+                  </span>
+                  <span className="text-[10px] text-amber-400/80">充值/提现请联系管理员</span>
+                </button>
+              )}
 
               <section className="poker-mobile-room-spectators" aria-label="观战玩家">
                 <div className="poker-mobile-room-section-title">
