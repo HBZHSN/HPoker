@@ -1109,3 +1109,11 @@ class TestPokerCliController:
                 assert rep is not None
                 assert "player_records" in rep
                 assert len(rep["player_records"]) == 2
+
+
+def test_create_options_allow_zero_cash_and_reject_negative():
+    options = {"name": "娱乐局", "buyin": 1000, "cash": 0,
+               "sb": 10, "timeout": 15, "seats": 6}
+    PokerCliController._validate_create_options(options)
+    with pytest.raises(ValueError, match="现金金额不能小于 0"):
+        PokerCliController._validate_create_options({**options, "cash": -1})

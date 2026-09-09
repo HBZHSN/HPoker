@@ -192,7 +192,7 @@ def admin_delete_user(
 class CreateRoomRequest(BaseModel):
     room_name: str = "HPoker 现金桌"
     buyin_chips: int = Field(default=1000, ge=10)
-    cash_value: float = Field(default=100.0, ge=1.0)
+    cash_value: float = Field(default=100.0, ge=0.0)
     small_blind: int = Field(default=10, ge=1)
     action_timeout: int = Field(default=15, ge=5, le=60)
     max_seats: int = Field(default=6, ge=2, le=9)

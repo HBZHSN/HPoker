@@ -101,6 +101,9 @@ class SettlementEngine:
             net_chips_map: player_id -> (player_name, net_chips)
             chip_to_cash_ratio: cash per chip
         """
+        if chip_to_cash_ratio == 0:
+            return []
+
         # Debtors (net_chips < 0): need to pay
         debtors: List[List] = []
         # Creditors (net_chips > 0): need to receive

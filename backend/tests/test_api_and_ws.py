@@ -870,3 +870,20 @@ def test_security_rest_room_details_card_isolation():
                 if seat:
                     assert seat["hole_cards"] == []
 
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cash_value, status", [(0, 200), (-1, 422), (100, 200)])
+async def test_create_room_cash_value_boundary(cash_value, status):
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        login = await client.post("/api/auth/login", json={"username": "test1", "password": "123"})
+        response = await client.post(
+            "/api/rooms", json={"cash_value": cash_value},
+            headers={"Authorization": f"Bearer {login.json()['token']}"},
+        )
+    assert response.status_code == status
+    if status == 200:
+        data = response.json()
+        assert data["config"]["cash_value"] == cash_value
+        assert data["money_mode"] == ("play" if cash_value == 0 else "real")
