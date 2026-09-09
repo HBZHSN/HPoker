@@ -154,3 +154,48 @@ def test_other_user_overview_aggregates_without_private_records(tmp_path, monkey
     # Selecting another profile never changes ownership of the private history API.
     own = endpoints.get_my_statistics(authorization=f'Bearer {token}', token=None, room_id=None)
     assert own['hands'] == 0
+
+
+@pytest.mark.parametrize('count', [0, 1, 99, 100, 101, 125])
+def test_history_luck_uses_latest_100_but_rates_keep_all_hands(tmp_path, monkeypatch, count):
+    from backend.app.services.hand_history_manager import HandHistoryManager
+    from backend.app.services import player_statistics
+    from backend.app.services.comprehensive_luck import aggregate_luck
+    manager = HandHistoryManager(str(tmp_path / 'window.sqlite3'))
+    # Insert in reverse order; equal timestamps must have a stable hand-id order.
+    for number in reversed(range(count)):
+        record = {**hand([action('a', 'CALL', 10)]), 'hand_id': f'room:{number:03}',
+                  'room_id': 'room', 'room_name': 'room', 'hand_number': number + 1,
+                  'ended_at': number // 2, 'small_blind': 5}
+        manager.record_hand(record)
+    calls = []
+
+    def observation(number):
+        # The latest hand has no valid observations: do not replace it with an older hand.
+        if number == count - 1:
+            return {key: [0, 0, 0] for key in ('starting', 'board', 'matchup', 'all_in')}
+        value = 0.3 if number < 25 else -0.1
+        return {key: [value, 1, 1] for key in ('starting', 'board', 'matchup', 'all_in')}
+
+    def compute(record, player_id):
+        assert player_id == 'a'
+        number = int(record['hand_id'].split(':')[1])
+        calls.append(number)
+        return observation(number)
+
+    monkeypatch.setattr(player_statistics, 'hand_luck', compute)
+    result = query_statistics(manager._database, 'a')
+    expected_numbers = list(range(max(0, count - 100), count))
+    assert calls == expected_numbers
+    expected = aggregate_luck(observation(n) for n in expected_numbers)
+    for key, value in expected.items():
+        assert result[key] == value
+    assert result['hands'] == result['vpip_hands'] == count
+    assert result['vpip'] == (100 if count else None)
+    # Reading again reuses per-hand observations; current-table statistics retain their scope.
+    calls.clear()
+    assert query_statistics(manager._database, 'a') == result
+    assert calls == []
+    table = query_statistics(manager._database, 'a', 'room')
+    assert table['luck_samples'] == max(0, count - 1)
+    assert calls == list(range(max(0, count - 100)))

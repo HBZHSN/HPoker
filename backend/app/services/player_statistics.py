@@ -4,6 +4,8 @@ from backend.app.services.comprehensive_luck import (
     VERSION, aggregate_luck, hand_luck,
 )
 
+HISTORY_LUCK_HAND_LIMIT = 100
+
 
 def summarize(hands, player_id):
     totals = dict(hands=0, vpip_hands=0, pfr_hands=0, three_bet_hands=0,
@@ -87,7 +89,10 @@ def query_statistics(database, player_id, room_id=None):
                                'shown_cards': json.loads(row['shown_cards_json'])['cards']})
     completed = list(hands.values())
     observations, pending = [], []
-    for hand in completed:
+    # Lifetime gameplay rates retain all hands; historical luck describes only
+    # the latest 100 completed hands, including hands with missing observations.
+    luck_hands = completed[-HISTORY_LUCK_HAND_LIMIT:] if room_id is None else completed
+    for hand in luck_hands:
         hand_id = hand['hand_id']
         observation = cached.get(hand_id)
         if observation is None:

@@ -8,7 +8,7 @@ import time
 
 from backend.app.database import SQLiteDatabase
 
-OVERVIEW_VERSION = 1
+OVERVIEW_VERSION = 2
 
 
 class HandHistoryManager:

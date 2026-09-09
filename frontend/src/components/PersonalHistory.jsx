@@ -98,7 +98,7 @@ function Overview({ token, userId }) {
       ['现金局净额（元）', signed(data.summary.net_cash), tone(data.summary.net_cash)],
       ['最大赢牌', signed(data.summary.biggest_win?.net_chips), 'text-emerald-400'],
     ]} />}
-    {data && <StatisticsPanel data={data.statistics} />}
+    {data && <StatisticsPanel data={data.statistics} historyLuck />}
   </div>;
 }
 
