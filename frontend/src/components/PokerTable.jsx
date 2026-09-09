@@ -375,6 +375,14 @@ export default function PokerTable({
     return !!(selfSeat && hasCards && table?.current_turn_seat === selfSeat.seat_index);
   }, [selfSeat, table?.current_turn_seat]);
 
+  const notifiedTurnRef = useRef(null);
+  useEffect(() => {
+    const active = isMyTurn && ['PREFLOP', 'FLOP', 'TURN', 'RIVER'].includes(table?.street);
+    const key = active ? `${room?.room_id}:${table?.hand_number}:${table?.street}` : null;
+    if (key && key !== notifiedTurnRef.current) soundEngine.play('your_turn');
+    notifiedTurnRef.current = key;
+  }, [isMyTurn, room?.room_id, table?.hand_number, table?.street]);
+
   // Turn Countdown Audio Effect (5 seconds remaining warning). RIT voting
   // intentionally has no countdown; it waits for every contender's choice.
   const lastPlayedSecondRef = useRef(null);
