@@ -689,10 +689,20 @@ async def calculate_equity(req: EquityRequest):
 @api_router.get("/statistics/my")
 def get_my_statistics(
     authorization: Optional[str] = Header(None), token: Optional[str] = Query(None),
+    room_id: Optional[str] = None,
 ):
     user = _verify_user(authorization=authorization, token=token)
     from backend.app.services.player_statistics import query_statistics
-    return query_statistics(hand_history_manager._database, user.user_id)
+    return query_statistics(hand_history_manager._database, user.user_id, room_id)
+
+
+@api_router.get("/tables/my")
+def get_my_tables(
+    limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0),
+    authorization: Optional[str] = Header(None), token: Optional[str] = Query(None),
+):
+    user = _verify_user(authorization=authorization, token=token)
+    return hand_history_manager.list_user_tables(user.user_id, limit, offset)
 
 
 @api_router.get("/rooms/{room_id}/players/{player_id}/statistics")

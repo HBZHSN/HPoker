@@ -769,6 +769,14 @@ class SQLiteDatabase:
                 LIMIT ? OFFSET ?"""
         with self.connection() as connection:
             rows = connection.execute(sql, params).fetchall()
+            names = {}
+            if rows:
+                ids = [row['hand_id'] for row in rows]
+                for player in connection.execute(
+                    'SELECT hand_id, player_id, player_name FROM poker_hand_players '
+                    'WHERE hand_id IN (' + ','.join('?' for _ in ids) + ')', ids
+                ).fetchall():
+                    names[(player['hand_id'], player['player_id'])] = player['player_name']
 
         results = []
         for row in rows:
@@ -779,6 +787,9 @@ class SQLiteDatabase:
             item["board"] = json.loads(item.pop("board_json"))["cards"]
             item["board_2"] = json.loads(item.pop("board_2_json"))["cards"]
             item["actions"] = json.loads(item.pop("actions_json"))["actions"]
+            item["actions"] = [{**action, "player_name": names.get(
+                (item['hand_id'], action['player_id']), '未知玩家')}
+                for action in item['actions']]
             item["hole_cards"] = json.loads(item.pop("hole_cards_json"))["cards"]
             item["shown_cards"] = json.loads(item.pop("shown_cards_json"))["cards"]
             results.append(item)
