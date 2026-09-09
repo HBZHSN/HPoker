@@ -147,3 +147,55 @@ def test_hand_history_endpoint_requires_login_and_returns_only_owners_cards():
             token=None,
         )
     assert exc.value.status_code == 401
+
+
+def test_table_history_groups_all_hands_paginates_and_survives_restart(tmp_path):
+    from backend.app.services.hand_history_manager import HandHistoryManager
+    path = str(tmp_path / 'tables.sqlite3')
+    manager = HandHistoryManager(path)
+    for room, number, net in [('one', 1, 20), ('one', 2, -5), ('two', 1, 40)]:
+        manager.record_hand(dict(
+            hand_id=f'{room}:{number}', room_id=room, room_name='同名桌',
+            hand_number=number, ended_at=100 + number + (10 if room == 'two' else 0),
+            small_blind=5, big_blind=10, money_mode='real',
+            actions=[dict(player_id='alice', action='CALL', street='PREFLOP', amount=10)],
+            players=[dict(player_id='alice', player_name='Alice', net_chips=net,
+                          net_cash=net / 10, contributed_chips=10, payout_chips=10 + net),
+                     dict(player_id='bob', player_name='Bob', net_chips=-net,
+                          hole_cards=[{'rank': 'A', 'suit': 's'}])]))
+    manager = HandHistoryManager(path)
+    first = manager.list_user_tables('alice', limit=1)
+    second = manager.list_user_tables('alice', limit=1, offset=1)
+    assert first['total'] == 2
+    assert first['tables'][0]['room_id'] == 'two'
+    table = second['tables'][0]
+    assert table['hands'] == 2
+    assert table['net_chips'] == 15
+    assert table['net_cash'] == 1.5
+    assert table['winning_hands'] == 1
+    assert table['biggest_win'] == 20 and table['biggest_loss'] == -5
+    assert 'hole_cards' not in table
+    assert manager.list_user_tables('outsider')['total'] == 0
+    assert manager.list_user_tables('alice', offset=2)['tables'] == []
+    history = manager.list_user_hands('alice', room_id='one', limit=1, offset=1)
+    assert history['total'] == 2
+    assert history['hands'][0]['actions'][0]['player_name'] == 'Alice'
+    assert 'players' not in history['hands'][0]
+
+
+def test_table_history_and_archived_statistics_require_owner(monkeypatch):
+    from backend.app.api.endpoints import get_my_tables, get_my_statistics
+    from backend.app.services import player_statistics
+    calls = []
+    monkeypatch.setattr(hand_history_manager, 'list_user_tables',
+                        lambda uid, limit, offset: calls.append((uid, limit, offset)) or {})
+    monkeypatch.setattr(player_statistics, 'query_statistics',
+                        lambda db, uid, rid: calls.append((uid, rid)) or {})
+    token = user_manager.get_or_create_token('u_test1')
+    get_my_tables(limit=20, offset=0, authorization=None, token=token)
+    assert calls[-1] == ('u_test1', 20, 0)
+    get_my_statistics(authorization=None, token=token, room_id='deleted-room')
+    assert calls[-1] == ('u_test1', 'deleted-room')
+    with pytest.raises(HTTPException) as exc:
+        get_my_tables(limit=20, offset=0, authorization=None, token=None)
+    assert exc.value.status_code == 401
