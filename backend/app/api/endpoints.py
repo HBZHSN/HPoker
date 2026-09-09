@@ -5,7 +5,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from backend.app.services.user_manager import user_manager
+from backend.app.services.user_manager import MIN_PASSWORD_LENGTH, user_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.services.balance_manager import balance_manager
 from backend.app.services.hand_history_manager import hand_history_manager
@@ -47,7 +47,7 @@ class UpdateProfileRequest(BaseModel):
 class AdminCreateUserRequest(BaseModel):
     username: str
     nickname: str
-    password: str = Field(..., min_length=12)
+    password: str = Field(..., min_length=MIN_PASSWORD_LENGTH)
     avatar: str = "👤"
     is_admin: bool = False
     is_test: bool = False
