@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Lock, User, KeyRound, AlertCircle, ArrowRight, CheckSquare, Square } from 'lucide-react';
+import { getStoredRememberedUsername, saveRememberedUsername, removeRememberedUsername } from '../utils/authStorage';
 
 export default function LoginModal({ onLoginSuccess }) {
-  const [username, setUsername] = useState(() => localStorage.getItem('hpoker_remembered_username') || localStorage.getItem('ggpoker_remembered_username') || '');
+  const [username, setUsername] = useState(getStoredRememberedUsername);
   const [password, setPassword] = useState('');
   const [rememberLogin, setRememberLogin] = useState(true);
   const [error, setError] = useState('');
@@ -30,10 +31,9 @@ export default function LoginModal({ onLoginSuccess }) {
 
       const data = await res.json();
       if (rememberLogin) {
-        localStorage.setItem('hpoker_remembered_username', loginUser.trim());
+        saveRememberedUsername(loginUser.trim());
       } else {
-        localStorage.removeItem('hpoker_remembered_username');
-        localStorage.removeItem('ggpoker_remembered_username');
+        removeRememberedUsername();
       }
       onLoginSuccess(data.user, data.token, rememberLogin);
     } catch (err) {
