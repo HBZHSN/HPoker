@@ -150,12 +150,12 @@ export default function PlayerSeat({
             等下局
           </div>
         ) : seatData.current_round_bet > 0 && !seatData.last_action ? (
-          <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 whitespace-nowrap border border-amber-500/50 bg-slate-950/95 text-amber-300">
+          <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-base font-black shadow-md z-30 whitespace-nowrap border border-amber-500/50 bg-slate-950/95 text-amber-300">
             ${seatData.current_round_bet}
           </div>
         ) : seatData.last_action ? (
           <div
-            className={`absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-md z-30 max-w-[85px] md:max-w-[110px] truncate transition-all ${
+            className={`absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-base font-black shadow-md z-30 max-w-[85px] md:max-w-[160px] truncate transition-all ${
               seatData.last_action.startsWith('Raise') || seatData.last_action.startsWith('加注')
                 ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 border-amber-200 shadow-glow-gold'
                 : seatData.last_action.startsWith('Bet') || seatData.last_action.startsWith('下注')
