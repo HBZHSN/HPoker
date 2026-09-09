@@ -171,6 +171,7 @@ def test_preset_test_accounts(user_mgr):
 def test_balance_rest_api(tmp_path):
     from fastapi.testclient import TestClient
     from backend.main import app
+    from backend.app.services.user_manager import user_manager
 
     client = TestClient(app)
 
@@ -178,19 +179,22 @@ def test_balance_rest_api(tmp_path):
     login_res = client.post("/api/auth/login", json={"username": "test1", "password": "123"})
     assert login_res.status_code == 200
     assert login_res.json()["user"]["is_test"] is True
+    token = login_res.json()["token"]
 
     # 2. Query my balance for test1
-    my_res = client.get("/api/balance/my?user_id=u_test1")
+    my_res = client.get("/api/balance/my", headers={"Authorization": f"Bearer {token}"})
     assert my_res.status_code == 200
     data = my_res.json()
+    assert "available_cash" in data
     assert "pending_net_cash" in data
     assert "records" in data
 
-    # 3. Query overview
-    overview_res = client.get("/api/balance/overview?include_test=true")
+    # 3. Query overview as admin
+    user_manager._users["test_admin"] = User("test_admin", "admin_user", "Admin", "👑", is_admin=True)
+    admin_token = user_manager.get_or_create_token("test_admin")
+    overview_res = client.get("/api/balance/overview?include_test=true", headers={"Authorization": f"Bearer {admin_token}"})
     assert overview_res.status_code == 200
     assert "user_balances" in overview_res.json()
-    assert "preview" in overview_res.json()
 
 
 def test_balance_manager_clear_all_records(balance_mgr, user_mgr):
@@ -219,6 +223,13 @@ def test_balance_manager_clear_all_records(balance_mgr, user_mgr):
 def test_wallet_buyin_and_cashout_are_immediate_idempotent_and_persistent(
     balance_mgr, user_mgr
 ):
+    user_mgr._users["admin"] = User(
+        user_id="admin",
+        username="admin",
+        nickname="Admin",
+        avatar="👑",
+        is_admin=True,
+    )
     user_mgr._users["real_1"] = User(
         user_id="real_1",
         username="alice",
@@ -226,6 +237,16 @@ def test_wallet_buyin_and_cashout_are_immediate_idempotent_and_persistent(
         avatar="🦊",
     )
     user_mgr.save_to_storage()
+
+    balance_mgr.admin_wallet_change(
+        user_id="real_1",
+        amount="100",
+        kind="deposit",
+        operator_id="admin",
+        request_id="init-deposit",
+        u_mgr=user_mgr,
+    )
+    assert balance_mgr.available_cents("real_1") == 10000
 
     debit = balance_mgr.record_wallet_change(
         room_id="cash-1",
@@ -255,10 +276,8 @@ def test_wallet_buyin_and_cashout_are_immediate_idempotent_and_persistent(
     )
 
     assert duplicate.entry_id == debit.entry_id
-    assert debit.entry_kind == "buyin"
-    assert balance_mgr.get_user_balances()[0].net_cash == -100
-    with pytest.raises(ValueError, match="筹码在牌桌"):
-        balance_mgr.settle_batch(operator_id="admin")
+    assert debit.entry_kind == "wallet_buyin"
+    assert balance_mgr.available_cents("real_1") == 0
 
     credit = balance_mgr.record_wallet_change(
         room_id="cash-1",
@@ -273,9 +292,10 @@ def test_wallet_buyin_and_cashout_are_immediate_idempotent_and_persistent(
         idempotency_key="cash-1:real-1:cashout:1",
         u_mgr=user_mgr,
     )
-    assert credit.entry_kind == "cashout"
-    assert balance_mgr.get_user_balances()[0].net_cash == 25
+    assert credit.entry_kind == "wallet_cashout"
+    assert balance_mgr.available_cents("real_1") == 12500
 
     restored = BalanceManager(database_path=balance_mgr.storage_path)
-    records = restored.get_user_records("real_1")
-    assert {record["entry_kind"] for record in records} == {"buyin", "cashout"}
+    records = restored.get_user_records("real_1", include_settled=True)
+    assert {record["entry_kind"] for record in records} == {"wallet_buyin", "wallet_cashout", "wallet_deposit"}
+

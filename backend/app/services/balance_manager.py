@@ -7,6 +7,7 @@ Strictly isolates test accounts and bot matches to prevent contaminating real ba
 
 from __future__ import annotations
 import copy
+from decimal import Decimal, InvalidOperation
 import json
 import hashlib
 import logging
@@ -208,8 +209,8 @@ class BalanceManager:
     ) -> LedgerEntry:
         """Apply one durable table-wallet movement exactly once.
 
-        Negative ``chips_delta`` debits a buy-in from the player's pending
-        balance. Positive values credit chips cashed out from the table.
+        Negative deltas spend prepaid cash; positive deltas return table chips.
+        Legacy table refunds remain in the historical debt ledger.
         """
         if chips_delta == 0:
             raise ValueError("chips_delta must be non-zero")
@@ -230,6 +231,17 @@ class BalanceManager:
         ratio = cash_value / buyin_chips if buyin_chips > 0 else 0.0
         total_buyin = -chips_delta if chips_delta < 0 else 0
         final_chips = chips_delta if chips_delta > 0 else 0
+        # Debt-era tables must close before accepting prepaid funds.
+        legacy_table = any(
+            e.room_id == room_id and e.entry_kind in {"buyin", "cashout", "mode_change"}
+            for e in self._entries.values()
+        )
+        if legacy_table and chips_delta < 0:
+            raise ValueError("旧账牌桌请先结束，再创建新牌桌使用实时余额")
+        legacy_credit = legacy_table and chips_delta > 0
+        cash_delta = int((Decimal(chips_delta) * Decimal(str(cash_value)) * 100 / Decimal(buyin_chips)).quantize(Decimal("1"))) if buyin_chips > 0 else 0
+        if self.available_cents(player_id) + cash_delta < 0:
+            raise ValueError("可用余额不足，请联系管理员充值")
         participant = ParticipantRecord(
             player_id=player_id,
             username=user.username if user else player_id,
@@ -240,14 +252,14 @@ class BalanceManager:
             total_buyin_chips=total_buyin,
             final_chips=final_chips,
             net_chips=chips_delta,
-            net_cash=round(chips_delta * ratio, 2),
+            net_cash=cash_delta / 100,
         )
         entry = LedgerEntry(
             entry_id=entry_id,
             room_id=room_id,
             room_name=room_name,
             settlement_type="balance",
-            status="unsettled",
+            status="settled",
             created_at=time.time(),
             is_test_game=is_test,
             participants=[participant],
@@ -255,10 +267,66 @@ class BalanceManager:
             chip_to_cash_ratio=ratio,
             buyin_chips=buyin_chips,
             cash_value=cash_value,
-            entry_kind=entry_kind,
+            entry_kind=entry_kind if legacy_credit else "wallet_" + entry_kind,
         )
         self._entries[entry_id] = entry
-        self.save_to_storage()
+        try:
+            self.save_to_storage()
+        except Exception:
+            self._entries.pop(entry_id, None)
+            raise
+        return entry
+
+    def available_cents(self, user_id: str) -> int:
+        """New prepaid wallet only; legacy debt records remain historical."""
+        return sum(
+            int(Decimal(str(p.net_cash)) * 100)
+            for entry in self._entries.values()
+            if entry.entry_kind.startswith("wallet_")
+            for p in entry.participants if p.player_id == user_id
+        )
+
+    def admin_wallet_change(self, *, user_id: str, amount: str, kind: str,
+                            operator_id: str, request_id: str, u_mgr=None) -> LedgerEntry:
+        mgr = u_mgr or user_manager
+        operator = mgr.get_user(operator_id)
+        user = mgr.get_user(user_id)
+        if not operator or not operator.is_admin:
+            raise ValueError("仅管理员可以充值或提现")
+        if not user or user.is_test_account:
+            raise ValueError("请选择真实用户")
+        if kind not in {"deposit", "withdraw"} or not request_id.strip():
+            raise ValueError("无效的钱包操作")
+        try:
+            value = Decimal(str(amount))
+            if not value.is_finite() or value <= 0 or value != value.quantize(Decimal("0.01")) or value > 100000000:
+                raise ValueError("金额必须为正数，最多两位小数且不超过一亿元")
+        except InvalidOperation as exc:
+            raise ValueError("无效金额") from exc
+        cents = int(value * 100) * (1 if kind == "deposit" else -1)
+        entry_id = "admin_wallet_" + hashlib.sha256(f"{operator_id}:{request_id}".encode()).hexdigest()[:24]
+        existing = self._entries.get(entry_id)
+        if existing:
+            p = existing.participants[0]
+            if p.player_id != user_id or existing.entry_kind != "wallet_" + kind or int(Decimal(str(p.net_cash)) * 100) != cents:
+                raise ValueError("请求编号已用于其他操作")
+            return existing
+        if self.available_cents(user_id) + cents < 0:
+            raise ValueError("可用余额不足，无法提现")
+        entry = LedgerEntry(
+            entry_id=entry_id, room_id="", room_name="管理员充值" if cents > 0 else "管理员提现",
+            settlement_type="balance", status="settled", created_at=time.time(),
+            is_test_game=False, participants=[ParticipantRecord(
+                user_id, user.username, user.nickname, user.avatar, False, 0, 0, 0, 0, cents / 100,
+            )], transactions=[], chip_to_cash_ratio=0, buyin_chips=0, cash_value=abs(cents) / 100,
+            entry_kind="wallet_" + kind, settled_at=time.time(), settled_by=operator_id,
+        )
+        self._entries[entry_id] = entry
+        try:
+            self.save_to_storage()
+        except Exception:
+            self._entries.pop(entry_id, None)
+            raise
         return entry
 
     def get_user_balances(self, include_test: bool = False) -> List[UserBalanceSummary]:

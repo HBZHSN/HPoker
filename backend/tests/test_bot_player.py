@@ -1,6 +1,9 @@
 from backend.app.engine.state_machine import ActionType, Street, TableStateMachine
 from backend.app.models.room import Room, RoomConfig
 from backend.app.services.bot_player import choose_bot_action, execute_bot_action
+import pytest
+
+pytestmark = pytest.mark.usefixtures("funded_room_players")
 
 
 def make_bot_table() -> TableStateMachine:

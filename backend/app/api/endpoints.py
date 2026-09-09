@@ -487,6 +487,27 @@ class SettleBatchRequest(BaseModel):
     entry_ids: Optional[List[str]] = None
 
 
+class WalletChangeRequest(BaseModel):
+    user_id: str
+    amount: str
+    kind: str
+    request_id: str = Field(min_length=1, max_length=128)
+
+
+@api_router.post("/balance/wallet-change")
+def change_wallet(req: WalletChangeRequest, authorization: Optional[str] = Header(None), token: Optional[str] = Query(None)):
+    operator = _verify_admin(authorization=authorization, token=token)
+    try:
+        with room_manager._storage_lock:
+            entry = balance_manager.admin_wallet_change(
+                user_id=req.user_id, amount=req.amount, kind=req.kind,
+                operator_id=operator.user_id, request_id=req.request_id,
+            )
+            return {"entry": entry.to_dict(), "available_cash": balance_manager.available_cents(req.user_id) / 100}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @api_router.get("/balance/overview")
 def get_balance_overview(
     include_test: bool = Query(False),
@@ -495,11 +516,9 @@ def get_balance_overview(
 ):
     """Get aggregated unsettled user balances and preview of minimal peer-to-peer transfers."""
     _verify_admin(authorization=authorization, token=token)
-    balances = balance_manager.get_user_balances(include_test=include_test)
-    preview = balance_manager.preview_batch_settlement(include_test=include_test)
     return {
-        "user_balances": [b.to_dict() for b in balances],
-        "preview": preview,
+        "user_balances": [dict(u, available_cash=balance_manager.available_cents(u["user_id"]) / 100)
+                          for u in user_manager.list_users() if include_test or not u.get("is_test", False)],
     }
 
 
@@ -523,7 +542,8 @@ def get_my_balance(
         "nickname": user.nickname,
         "avatar": user.avatar,
         "is_test": user.is_test_account,
-        "pending_net_cash": summary.net_cash if summary else 0.0,
+        "available_cash": balance_manager.available_cents(user_id) / 100,
+        "pending_net_cash": (balance_manager.available_cents(user_id) / 100) or (summary.net_cash if summary else 0.0),
         "lifetime_net_cash": hand_history_manager.get_lifetime_net_cash(user_id),
         "pending_net_chips": summary.net_chips if summary else 0,
         "unsettled_games_count": summary.unsettled_games_count if summary else 0,
@@ -575,17 +595,8 @@ def settle_batch(
 ):
     """Admin executes one-time consolidated debt settlement."""
     operator = _verify_admin(authorization=authorization, token=token)
+    raise HTTPException(status_code=410, detail="已改用实时余额，请使用管理员充值或提现")
 
-    try:
-        batch = balance_manager.settle_batch(
-            operator_id=operator.user_id,
-            operator_name=operator.nickname or operator.username,
-            include_test=req.include_test,
-            entry_ids=req.entry_ids,
-        )
-        return batch.to_dict()
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
 
 
 @api_router.delete("/balance/test-records")
@@ -608,12 +619,7 @@ def clear_all_balance_records(
     """Admin clears all ledger entries and settlement batches to restart balance accounting afresh."""
     _verify_admin(authorization=authorization, token=token)
 
-    cleared_entries, cleared_batches = balance_manager.clear_all_records()
-    return {
-        "cleared_entries_count": cleared_entries,
-        "cleared_batches_count": cleared_batches,
-        "message": f"已成功清空所有结算记录（{cleared_entries} 条对局账单，{cleared_batches} 个对账批次），余额中心已重置。"
-    }
+    raise HTTPException(status_code=410, detail="钱包流水不可清空，请通过充值或提现调整余额")
 
 
 @api_router.post("/balance/clear-all")
