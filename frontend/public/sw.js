@@ -1,9 +1,9 @@
 /**
- * HPoker PWA Service Worker
+ * Portal Service Worker
  * Provides offline shell caching, instant launch, and safe bypass for real-time APIs.
  */
 
-const CACHE_NAME = 'hpoker-shell-v3';
+const CACHE_NAME = 'portal-shell-v4';
 
 // Core static assets to precache on install
 const PRECACHE_URLS = [
@@ -89,7 +89,7 @@ self.addEventListener('fetch', (event) => {
           if (cached) return cached;
           const fallback = await caches.match('/index.html');
           if (fallback) return fallback;
-          return new Response('HPoker 离线中，请检查网络连接', {
+          return new Response('服务暂不可用，请检查网络连接', {
             status: 503,
             headers: { 'Content-Type': 'text/plain; charset=utf-8' },
           });

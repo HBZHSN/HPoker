@@ -18,9 +18,12 @@ async def lifespan(app):
     yield
 
 app = FastAPI(
-    title="HPoker Texas Hold'em Online",
-    description="Multiplayer Texas Hold'em Cash Game Engine with HPoker UI",
+    title="Portal Application Service",
+    description="Application Core Engine Service",
     version="1.0.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
     lifespan=lifespan,
 )
 

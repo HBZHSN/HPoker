@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "HPoker 德州扑克在线现金局",
-  "short_name": "HPoker",
-  "description": "HPoker 在线德州扑克现金局，沉浸式竞技对局与实时结算",
+  "name": "用户中心",
+  "short_name": "Portal",
+  "description": "统一身份认证与工作台",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
@@ -18,8 +18,8 @@
   "lang": "zh-CN",
   "dir": "ltr",
   "categories": [
-    "games",
-    "entertainment"
+    "productivity",
+    "utilities"
   ],
   "icons": [
     {
@@ -55,9 +55,9 @@
   ],
   "shortcuts": [
     {
-      "name": "进入大厅",
-      "short_name": "大厅",
-      "description": "打开 HPoker 游戏大厅",
+      "name": "工作台",
+      "short_name": "工作台",
+      "description": "打开工作台",
       "url": "/",
       "icons": [
         {

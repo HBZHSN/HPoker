@@ -50,32 +50,34 @@ def make_ico(png_data_list: list[bytes]) -> bytes:
     return bytes(ico)
 
 
-def is_spade(x: float, y: float) -> bool:
-    """Check if normalized point (x, y) with center (0,0) falls inside spade symbol."""
-    # 1. Stem: flared base
-    if 0.18 <= y <= 0.68:
-        stem_w = 0.08 + 0.22 * ((y - 0.18) / 0.50) ** 2.2
-        if abs(x) <= stem_w:
+def is_geometric_glyph(x: float, y: float) -> bool:
+    """Check if normalized point (x, y) with center (0,0) falls inside geometric luxury shield."""
+    # Outer hexagon bounds: |x| <= 0.55, and top/bottom diagonals
+    abs_x = abs(x)
+    if abs_x > 0.55:
+        return False
+    # Top diagonal: from (0, -0.65) to (0.55, -0.32)
+    # Line equation: y >= -0.65 + 0.60 * abs_x
+    if y < -0.65 + 0.60 * abs_x:
+        return False
+    # Bottom diagonal: from (0.55, 0.28) to (0, 0.65)
+    # Line equation: y <= 0.65 - 0.67 * abs_x
+    if y > 0.65 - 0.67 * abs_x:
+        return False
+
+    # Inner cutout for luxury framed look
+    # If point is inside inner region, hollow out except for central diamond core
+    if abs_x <= 0.38 and -0.42 + 0.55 * abs_x <= y <= 0.42 - 0.60 * abs_x:
+        # Central luxury diamond core
+        if abs_x / 0.18 + abs(y) / 0.24 <= 1.0:
             return True
+        return False
 
-    # 2. Upper body & top cusp
-    if -0.68 <= y <= 0.22:
-        t = (y - (-0.68)) / 0.90
-        w = 0.70 * (t ** 0.62)
-        if abs(x) <= w:
-            return True
-
-    # 3. Bottom rounded lobes
-    r1 = math.hypot(x - 0.27, y - 0.08)
-    r2 = math.hypot(x + 0.27, y - 0.08)
-    if (r1 <= 0.36 or r2 <= 0.36) and y <= 0.44:
-        return True
-
-    return False
+    return True
 
 
 def render_icon(size: int, maskable: bool = False) -> bytes:
-    """Render HPoker luxury golden spade icon at given size."""
+    """Render neutral luxury golden geometric icon at given size."""
     rgba = bytearray(size * size * 4)
     # Supersampling 2x2 for antialiasing
     scale = 0.58 if maskable else 0.72
@@ -92,7 +94,7 @@ def render_icon(size: int, maskable: bool = False) -> bytes:
             dy = (y - size / 2) / (size / 2)
             dist_bg = math.hypot(dx, dy)
 
-            # Deep dark poker obsidian radial
+            # Deep dark obsidian radial
             bg_factor = min(1.0, dist_bg)
             bg_r = int(14 + (7 - 14) * bg_factor)
             bg_g = int(19 + (9 - 19) * bg_factor)
@@ -113,7 +115,7 @@ def render_icon(size: int, maskable: bool = False) -> bytes:
                     px = (x + sub_x - size / 2) / (size / 2 * scale)
                     py = (y + sub_y - size / 2) / (size / 2 * scale)
 
-                    if is_spade(px, py):
+                    if is_geometric_glyph(px, py):
                         hits += 1
                         g_t = max(0.0, min(1.0, (py + 0.7) / 1.4))
                         if g_t < 0.4:
@@ -136,17 +138,17 @@ def render_icon(size: int, maskable: bool = False) -> bytes:
                         gold_g_sum += g
                         gold_b_sum += b
 
-            # Blend spade over background
+            # Blend glyph over background
             idx = (y * size + x) * 4
             if hits > 0:
-                alpha_spade = hits / 4.0
+                alpha_glyph = hits / 4.0
                 sr = gold_r_sum / hits
                 sg = gold_g_sum / hits
                 sb = gold_b_sum / hits
 
-                final_r = int(sr * alpha_spade + bg_r * (1 - alpha_spade))
-                final_g = int(sg * alpha_spade + bg_g * (1 - alpha_spade))
-                final_b = int(sb * alpha_spade + bg_b * (1 - alpha_spade))
+                final_r = int(sr * alpha_glyph + bg_r * (1 - alpha_glyph))
+                final_g = int(sg * alpha_glyph + bg_g * (1 - alpha_glyph))
+                final_b = int(sb * alpha_glyph + bg_b * (1 - alpha_glyph))
                 rgba[idx] = max(0, min(255, final_r))
                 rgba[idx + 1] = max(0, min(255, final_g))
                 rgba[idx + 2] = max(0, min(255, final_b))
@@ -196,9 +198,10 @@ SVG_CONTENT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" w
   <!-- Outer Luxury Border -->
   <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="url(#ringGrad)" stroke-width="6" opacity="0.85" />
 
-  <!-- Spade Symbol with Glow -->
-  <g filter="url(#goldGlow)" transform="translate(0, 8)">
-    <path fill="url(#goldGrad)" d="M256,76 C232,156 128,214 128,284 C128,348 184,372 232,342 C236,340 240,336 244,332 C242,374 230,412 188,436 L324,436 C282,412 270,374 268,332 C272,336 276,340 280,342 C328,372 384,348 384,284 C384,214 280,156 256,76 Z" />
+  <!-- Geometric Luxury Shield Frame and Core with Glow -->
+  <g filter="url(#goldGlow)">
+    <polygon points="256,92 396,170 396,334 256,420 116,334 116,170" fill="none" stroke="url(#goldGrad)" stroke-width="26" stroke-linejoin="round" />
+    <polygon points="256,192 318,256 256,320 194,256" fill="url(#goldGrad)" />
   </g>
 </svg>
 """

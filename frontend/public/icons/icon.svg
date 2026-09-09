@@ -26,8 +26,9 @@
   <!-- Outer Luxury Border -->
   <rect x="16" y="16" width="480" height="480" rx="96" fill="none" stroke="url(#ringGrad)" stroke-width="6" opacity="0.85" />
 
-  <!-- Spade Symbol with Glow -->
-  <g filter="url(#goldGlow)" transform="translate(0, 8)">
-    <path fill="url(#goldGrad)" d="M256,76 C232,156 128,214 128,284 C128,348 184,372 232,342 C236,340 240,336 244,332 C242,374 230,412 188,436 L324,436 C282,412 270,374 268,332 C272,336 276,340 280,342 C328,372 384,348 384,284 C384,214 280,156 256,76 Z" />
+  <!-- Geometric Luxury Shield Frame and Core with Glow -->
+  <g filter="url(#goldGlow)">
+    <polygon points="256,92 396,170 396,334 256,420 116,334 116,170" fill="none" stroke="url(#goldGrad)" stroke-width="26" stroke-linejoin="round" />
+    <polygon points="256,192 318,256 256,320 194,256" fill="url(#goldGrad)" />
   </g>
 </svg>
