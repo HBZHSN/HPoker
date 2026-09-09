@@ -25,8 +25,8 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
         setError('修改密码需输入原密码');
         return;
       }
-      if (newPassword.trim().length < 12) {
-        setError('新密码长度不能少于12位');
+      if (newPassword.trim().length < 8) {
+        setError('新密码长度不能少于8位');
         return;
       }
       if (newPassword.trim() !== confirmPassword.trim()) {

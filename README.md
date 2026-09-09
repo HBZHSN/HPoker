@@ -93,7 +93,7 @@ sudo systemctl disable --now poker.service
 - 正式环境默认统一使用 `backend/data/poker.sqlite3`，也可通过 `POKER_DATABASE_PATH` 指定数据库绝对路径。
 - 用户、登录令牌、结算账单、账单参与者、转账、批次及批次关联均使用规范化数据表；现金金额以“分”为整数落库，避免浮点误差。房间运行态作为不可拆分的恢复快照保存，同时单独维护房主、房间名和时间等可查询字段。
 - 数据库启用外键、约束、索引、事务、WAL 与 schema version。生产环境只读取配置的 SQLite 数据库；旧 JSON 数据迁移必须由运维显式传入 `legacy_storage_path`，仓库不会自动把文件中的账号、令牌或账单导入生产库。
-- 首次生产部署若数据库为空，需同时设置 `POKER_BOOTSTRAP_ADMIN_USERNAME` 和 `POKER_BOOTSTRAP_ADMIN_PASSWORD`（至少 12 个字符）。应用创建一次管理员后不会再次补建默认账号；部署前应删除旧数据库中的会话令牌并为历史账号设置新密码。
+- 首次生产部署若数据库为空，需同时设置 `POKER_BOOTSTRAP_ADMIN_USERNAME` 和 `POKER_BOOTSTRAP_ADMIN_PASSWORD`（至少 8 个字符）。应用创建一次管理员后不会再次补建默认账号；部署前应删除旧数据库中的会话令牌并为历史账号设置新密码。
 - pytest 在导入应用前强制设置 `POKER_ENV=test`，并只使用 `backend/data/poker_test.sqlite3`。测试环境若尝试连接正式数据库会直接报错，测试前后也会重置专用测试库中的业务表。
 
 ---

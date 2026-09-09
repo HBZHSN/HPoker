@@ -54,8 +54,8 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
       setError('初始密码不能为空');
       return;
     }
-    if (newPassword.trim().length < 12) {
-      setError('初始密码长度不能少于12位');
+    if (newPassword.trim().length < 8) {
+      setError('初始密码长度不能少于8位');
       return;
     }
     setError('');
@@ -94,8 +94,8 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
   const handleUpdateUser = async (userId) => {
     setError('');
     setSuccess('');
-    if (editPassword.trim() && editPassword.trim().length < 12) {
-      setError('新密码长度不能少于12位');
+    if (editPassword.trim() && editPassword.trim().length < 8) {
+      setError('新密码长度不能少于8位');
       return;
     }
     try {

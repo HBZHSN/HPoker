@@ -23,7 +23,7 @@ TEST_PRESET_USERS = [
 ]
 
 TEST_DEFAULT_PASSWORD = "123"
-MIN_PASSWORD_LENGTH = 12
+MIN_PASSWORD_LENGTH = 8
 
 LEGACY_STORAGE_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
