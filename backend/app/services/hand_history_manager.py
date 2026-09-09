@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from typing import Optional
+import json
+import time
 
 from backend.app.database import SQLiteDatabase
+
+OVERVIEW_VERSION = 1
 
 
 class HandHistoryManager:
@@ -49,6 +53,52 @@ class HandHistoryManager:
         return self._database.clear_hand_histories()
 
     def get_user_overview(self, user_id: str) -> dict:
+        """Read a departure snapshot; a cache miss never scans hand history."""
+        with self._database.connection() as connection:
+            row = connection.execute(
+                "SELECT overview_json FROM poker_user_overviews WHERE player_id=? AND version=?",
+                (user_id, OVERVIEW_VERSION),
+            ).fetchone()
+        if row:
+            return json.loads(row["overview_json"])
+        from backend.app.services.player_statistics import summarize
+        from backend.app.services.comprehensive_luck import aggregate_luck
+        return {
+            "total": 0,
+            "summary": {"net_chips": 0, "net_cash": 0, "biggest_win": None},
+            "statistics": {**summarize([], user_id), **aggregate_luck([])},
+            "generated_at": None,
+        }
+
+    def refresh_user_overviews(self, user_ids) -> None:
+        """Build all affected snapshots, then publish them atomically."""
+        from backend.app.services.player_statistics import query_statistics
+        snapshots = []
+        for user_id in sorted(set(user_ids)):
+            payload = {
+                **self._calculate_user_overview(user_id),
+                "statistics": query_statistics(self._database, user_id),
+                "generated_at": time.time(),
+            }
+            snapshots.append((user_id, OVERVIEW_VERSION, payload["generated_at"], json.dumps(payload)))
+        if snapshots:
+            with self._database.connection(write=True) as connection:
+                connection.executemany(
+                    """INSERT INTO poker_user_overviews(player_id, version, generated_at, overview_json)
+                       VALUES (?, ?, ?, ?) ON CONFLICT(player_id) DO UPDATE SET
+                       version=excluded.version, generated_at=excluded.generated_at,
+                       overview_json=excluded.overview_json""", snapshots)
+
+    def backfill_user_overviews(self) -> None:
+        """Migrate historical users before serving requests, never on a cache read."""
+        with self._database.connection() as connection:
+            users = [row[0] for row in connection.execute(
+                """SELECT DISTINCT p.player_id FROM poker_hand_players p
+                   LEFT JOIN poker_user_overviews c ON c.player_id=p.player_id AND c.version=?
+                   WHERE c.player_id IS NULL""", (OVERVIEW_VERSION,))]
+        self.refresh_user_overviews(users)
+
+    def _calculate_user_overview(self, user_id: str) -> dict:
         """Aggregate lifetime results without exposing any individual hand."""
         with self._database.connection() as connection:
             row = connection.execute(

@@ -136,6 +136,7 @@ def test_other_user_overview_aggregates_without_private_records(tmp_path, monkey
                                     hole_cards=[Card.from_str('As').to_dict()])
         manager.record_hand(record)
     _, token = user_manager.authenticate('test1', '123')
+    manager.refresh_user_overviews(['u_test2'])
     result = endpoints.get_user_overview('u_test2', authorization=f'Bearer {token}', token=None)
     assert result['total'] == result['statistics']['hands'] == 2
     assert result['summary'] == {'net_chips': 20, 'net_cash': 2, 'biggest_win': {'net_chips': 30}}

@@ -1,17 +1,27 @@
 """Main FastAPI Application Entrypoint."""
 
 import os
+from contextlib import asynccontextmanager
+from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.endpoints import api_router
 from backend.app.websocket.router import ws_router
+from backend.app.services.hand_history_manager import hand_history_manager
+
+
+@asynccontextmanager
+async def lifespan(app):
+    await run_in_threadpool(hand_history_manager.backfill_user_overviews)
+    yield
 
 app = FastAPI(
     title="HPoker Texas Hold'em Online",
     description="Multiplayer Texas Hold'em Cash Game Engine with HPoker UI",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 # Enable CORS for frontend development
