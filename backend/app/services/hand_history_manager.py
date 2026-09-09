@@ -48,6 +48,26 @@ class HandHistoryManager:
     def clear_all(self) -> int:
         return self._database.clear_hand_histories()
 
+    def get_user_overview(self, user_id: str) -> dict:
+        """Aggregate lifetime results without exposing any individual hand."""
+        with self._database.connection() as connection:
+            row = connection.execute(
+                """SELECT COUNT(*) AS total, COALESCE(SUM(net_chips), 0) AS net_chips,
+                          COALESCE(SUM(net_cash_cents), 0) AS net_cash_cents,
+                          MAX(net_chips) AS biggest_win
+                   FROM poker_hand_players WHERE player_id=?""",
+                (user_id,),
+            ).fetchone()
+        return {
+            "total": row["total"],
+            "summary": {
+                "net_chips": row["net_chips"],
+                "net_cash": row["net_cash_cents"] / 100,
+                "biggest_win": {"net_chips": row["biggest_win"]}
+                if row["biggest_win"] is not None and row["biggest_win"] > 0 else None,
+            },
+        }
+
     def get_lifetime_net_cash(self, user_id: str) -> float:
         """Sum completed hands in cents, independently of wallet transfers or paging."""
         with self._database.connection() as connection:

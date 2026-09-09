@@ -697,6 +697,21 @@ def get_my_statistics(
     return query_statistics(hand_history_manager._database, user.user_id, room_id)
 
 
+@api_router.get("/users/{user_id}/overview")
+def get_user_overview(
+    user_id: str,
+    authorization: Optional[str] = Header(None), token: Optional[str] = Query(None),
+):
+    _verify_user(authorization=authorization, token=token)
+    if not user_manager.get_user(user_id):
+        raise HTTPException(status_code=404, detail="用户不存在")
+    from backend.app.services.player_statistics import query_statistics
+    return {
+        **hand_history_manager.get_user_overview(user_id),
+        "statistics": query_statistics(hand_history_manager._database, user_id),
+    }
+
+
 @api_router.get("/tables/my")
 def get_my_tables(
     limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0),

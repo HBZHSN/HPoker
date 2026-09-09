@@ -90,15 +90,15 @@ function Stats({ token, roomId }) {
   return data ? <StatisticsPanel data={data} /> : <LoadState error={error} reload={reload} />;
 }
 
-function Overview({ token }) {
-  const { data, error, reload } = useHistoryData('/api/hands/my?limit=1', token);
+function Overview({ token, userId }) {
+  const { data, error, reload } = useHistoryData(userId ? `/api/users/${encodeURIComponent(userId)}/overview` : '/api/hands/my?limit=1', token);
   return <div className="space-y-4">
     {!data ? <LoadState error={error} reload={reload} /> : <Summary items={[
       ['累计手数', data.total], ['净筹码', signed(data.summary.net_chips), tone(data.summary.net_chips)],
       ['现金局净额（元）', signed(data.summary.net_cash), tone(data.summary.net_cash)],
       ['最大赢牌', signed(data.summary.biggest_win?.net_chips), 'text-emerald-400'],
     ]} />}
-    <Stats token={token} />
+    {userId ? data && <StatisticsPanel data={data.statistics} /> : <Stats token={token} />}
   </div>;
 }
 
@@ -116,7 +116,8 @@ function TableHistory({ token, onSelect }) {
     </button>)}</div><Pager page={page} total={data.total} size={12} setPage={setPage} /></div>;
 }
 
-export default function PersonalHistory({ currentUser, token, onClose }) {
+export default function PersonalHistory({ currentUser, profileUser = currentUser, token, onClose }) {
+  const isSelf = profileUser.user_id === currentUser.user_id;
   const [tab, setTab] = useState('overview');
   const [table, setTable] = useState(null);
   const dialog = useRef(null);
@@ -139,11 +140,11 @@ export default function PersonalHistory({ currentUser, token, onClose }) {
   }, [onClose]);
   return createPortal(<div className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-6" onClick={onClose}>
     <section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="personal-history-title" onClick={event => event.stopPropagation()} className="w-full max-w-5xl max-h-[92dvh] flex flex-col rounded-3xl border border-amber-500/30 bg-slate-950 text-slate-100 shadow-2xl overflow-hidden">
-      <header className="flex items-center gap-3 p-4 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-amber-950/30 to-slate-950"><span className="text-3xl p-2 bg-slate-900 rounded-2xl">{currentUser.avatar}</span><div className="flex-1 min-w-0"><h2 id="personal-history-title" className="font-black text-lg truncate">{currentUser.nickname} · 个人档案</h2><p className="text-xs text-slate-400 mt-1">历史战绩与牌运统计</p></div><button onClick={onClose} className={button} aria-label="关闭个人历史"><X size={20} /></button></header>
-      <div className="flex gap-2 px-4 sm:px-6 py-3 border-b border-slate-800">{[['overview', '历史总览'], ['tables', '历次牌桌'], ['hands', '逐手记录']].map(([value, label]) => <button key={value} aria-pressed={tab === value} onClick={() => { setTab(value); setTable(null); }} className={`px-4 py-2 rounded-xl text-xs font-bold ${tab === value ? 'bg-amber-400 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>{label}</button>)}</div>
+      <header className="flex items-center gap-3 p-4 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-amber-950/30 to-slate-950"><span className="text-3xl p-2 bg-slate-900 rounded-2xl">{profileUser.avatar || '👤'}</span><div className="flex-1 min-w-0"><h2 id="personal-history-title" className="font-black text-lg truncate">{profileUser.nickname || profileUser.username} · 个人档案</h2><p className="text-xs text-slate-400 mt-1">历史战绩与牌运统计</p></div><button onClick={onClose} className={button} aria-label="关闭个人历史"><X size={20} /></button></header>
+      <div className="flex gap-2 px-4 sm:px-6 py-3 border-b border-slate-800">{(isSelf ? [['overview', '历史总览'], ['tables', '历次牌桌'], ['hands', '逐手记录']] : [['overview', '历史总览']]).map(([value, label]) => <button key={value} aria-pressed={tab === value} onClick={() => { setTab(value); setTable(null); }} className={`px-4 py-2 rounded-xl text-xs font-bold ${tab === value ? 'bg-amber-400 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>{label}</button>)}</div>
       <div className="overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5">
-        {tab === 'overview' && <><div className="flex items-center gap-2 text-amber-200"><History size={18} /><h3 className="font-bold">我的累计表现</h3></div><Overview token={token} /><p className="text-xs text-slate-500">统计包含已记录的现金局与娱乐局，仅计已完成手牌。</p></>}
-        {tab === 'tables' && (!table ? <TableHistory token={token} onSelect={setTable} /> : <>
+        {(!isSelf || tab === 'overview') && <><div className="flex items-center gap-2 text-amber-200"><History size={18} /><h3 className="font-bold">{isSelf ? '我的累计表现' : '累计表现'}</h3></div><Overview token={token} userId={isSelf ? undefined : profileUser.user_id} /><p className="text-xs text-slate-500">统计包含已记录的现金局与娱乐局，仅计已完成手牌。</p></>}
+        {isSelf && tab === 'tables' && (!table ? <TableHistory token={token} onSelect={setTable} /> : <>
           <button className={`${button} inline-flex items-center gap-1`} onClick={() => setTable(null)}><ArrowLeft size={14} />全部牌桌</button>
           <div><h3 className="text-xl font-black break-words">{table.room_name}</h3><p className="text-xs text-slate-500 mt-1">记录范围 {date(table.first_hand_at)} — {date(table.last_hand_at)}</p></div>
           <Summary items={[
@@ -153,7 +154,7 @@ export default function PersonalHistory({ currentUser, token, onClose }) {
           <Stats token={token} roomId={table.room_id} />
           <HandHistoryPanel key={table.room_id} token={token} userId={currentUser.user_id} roomId={table.room_id} />
         </>)}
-        {tab === 'hands' && <HandHistoryPanel token={token} userId={currentUser.user_id} />}
+        {isSelf && tab === 'hands' && <HandHistoryPanel token={token} userId={currentUser.user_id} />}
       </div>
     </section>
   </div>, document.body);
