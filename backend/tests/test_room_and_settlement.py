@@ -397,3 +397,31 @@ def test_in_progress_checkpoint_refunds_current_hand_contributions(tmp_path):
     assert restored.table.street == Street.IDLE
     assert [seat.chips for seat in restored.table.active_seated_players] == [100, 100]
     assert restored.table.pot_manager.total_pot_amount == 0
+
+
+def test_zero_cash_room_stays_play_mode_without_wallet_changes(monkeypatch):
+    room = Room(host_player_id="free-player", room_id="zero-cash", config=RoomConfig(cash_value=0))
+    def unexpected_wallet_change(*args, **kwargs):
+        pytest.fail("Zero-cash room must not change cash wallets")
+    monkeypatch.setattr(room, "_record_wallet_change", unexpected_wallet_change)
+    assert room.money_mode == "play"
+    assert room.sit_down_player("free-player", "Player", 0, is_test=False)
+    assert room.sync_money_mode()
+    assert room.money_mode == "play"
+    assert room.table.active_seated_players[0].wallet_mode == "play"
+
+
+def test_zero_cash_settlement_has_no_payments():
+    report = SettlementEngine.calculate_room_settlement(
+        room_id="zero-cash", room_name="娱乐局", buyin_chips=1000, cash_value=0,
+        player_data_list=[
+            {"player_id": "p1", "player_name": "Winner", "rebuy_count": 1,
+             "total_buyin_chips": 1000, "final_chips": 1500},
+            {"player_id": "p2", "player_name": "Loser", "rebuy_count": 1,
+             "total_buyin_chips": 1000, "final_chips": 500},
+        ],
+    )
+    assert report.chip_to_cash_ratio == 0
+    assert report.is_balanced
+    assert report.transactions == []
+    assert all(record.net_cash == 0 for record in report.player_records)

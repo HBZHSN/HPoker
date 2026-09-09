@@ -485,7 +485,7 @@ class PokerCliController:
             defaults["name"] = name
             for key, label, parser, minimum, maximum in (
                 ("buyin", "买入筹码", int, 10, None),
-                ("cash", "买入现金(元)", float, 0.01, None),
+                ("cash", "买入现金(元，0 为娱乐局)", float, 0, None),
                 ("sb", "小盲注 SB", int, 1, None),
                 ("timeout", "行动时限(秒)", int, 5, 60),
                 ("seats", "座位数", int, 2, 9),
@@ -572,8 +572,8 @@ class PokerCliController:
             raise ValueError("房间名称不能为空")
         if int(options["buyin"]) < 10:
             raise ValueError("买入筹码不能少于 10")
-        if float(options["cash"]) <= 0:
-            raise ValueError("现金金额必须大于 0")
+        if float(options["cash"]) < 0:
+            raise ValueError("现金金额不能小于 0")
         if int(options["sb"]) < 1:
             raise ValueError("小盲注必须至少为 1")
         if not 5 <= int(options["timeout"]) <= 60:

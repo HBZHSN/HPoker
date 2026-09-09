@@ -102,7 +102,7 @@ class Room:
         self._next_test_bot_number = 1
         # Real-money stacks are debited when chips enter the table and credited
         # when chips leave it. Test users and bots never touch this wallet.
-        self.money_mode: str = "real"
+        self.money_mode: str = "play" if config.cash_value == 0 else "real"
         self.money_mode_epoch: int = 0
 
     @contextmanager
@@ -601,7 +601,7 @@ class Room:
         if self.table.street not in (Street.IDLE, Street.HAND_END):
             return False
 
-        desired_mode = "play" if self.has_active_test_players else "real"
+        desired_mode = "play" if self.config.cash_value == 0 or self.has_active_test_players else "real"
         if desired_mode == self.money_mode:
             return True
 
