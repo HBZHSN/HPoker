@@ -453,9 +453,16 @@ export default function App() {
         body: JSON.stringify(config),
       });
       const data = await res.json();
+      if (!res.ok) {
+        alert(data.detail || '创建房间失败');
+        return false;
+      }
       rememberAndEnterRoom(data.room_id);
+      return true;
     } catch (e) {
       console.error("Failed to create room:", e);
+      alert('创建房间失败，请稍后重试');
+      return false;
     }
   };
 

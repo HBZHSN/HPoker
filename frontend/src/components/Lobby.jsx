@@ -80,9 +80,9 @@ export default function Lobby({
     return sortedUsers;
   }, [sortedUsers, userFilter]);
 
-  const handleSubmitCreate = (e) => {
+  const handleSubmitCreate = async (e) => {
     e.preventDefault();
-    onCreateRoom({
+    const ok = await onCreateRoom({
       room_name: roomName,
       buyin_chips: Number(buyinChips),
       cash_value: Number(cashValue),
@@ -91,7 +91,9 @@ export default function Lobby({
       max_seats: Number(maxSeats),
       assistant_win_ratio: Number(assistantWinPct) / 100,
     });
-    setCreateModalOpen(false);
+    if (ok) {
+      setCreateModalOpen(false);
+    }
   };
 
   return (
@@ -551,6 +553,9 @@ export default function Lobby({
                     min="0"
                     required
                   />
+                  {Number(cashValue) > 0 && (
+                    <p className="text-[10px] text-amber-400/80 mt-1">创建现金桌需持有对应余额，不足请联系管理员充值</p>
+                  )}
                 </div>
               </div>
 
