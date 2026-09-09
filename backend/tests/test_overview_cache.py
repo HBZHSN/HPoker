@@ -154,3 +154,22 @@ def test_deferred_departure_includes_previously_departed_player(tmp_path):
     assert manager.hand_history_manager.get_user_overview('u_test1')['total'] == 1
     assert manager.hand_history_manager.get_user_overview('u_test2')['total'] == 1
     assert manager.hand_history_manager.get_user_overview('u_test3')['generated_at'] is None
+
+
+def test_startup_replaces_previous_overview_version(tmp_path):
+    from backend.app.services.hand_history_manager import OVERVIEW_VERSION
+    history = HandHistoryManager(str(tmp_path / 'old-version.sqlite3'))
+    record(history)
+    history.refresh_user_overviews(['u_test1'])
+    with history._database.connection(write=True) as connection:
+        connection.execute(
+            'UPDATE poker_user_overviews SET version=?, overview_json=?',
+            (OVERVIEW_VERSION - 1, json.dumps({'total': 999, 'statistics': {'luck': 99}})),
+        )
+    restarted = HandHistoryManager(history.storage_path)
+    restarted.backfill_user_overviews()
+    updated = restarted.get_user_overview('u_test1')
+    assert updated['total'] == updated['statistics']['hands'] == 1
+    assert updated['statistics']['luck_samples'] == 1
+    with history._database.connection() as connection:
+        assert connection.execute('SELECT version FROM poker_user_overviews').fetchone()[0] == OVERVIEW_VERSION

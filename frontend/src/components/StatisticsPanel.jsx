@@ -16,7 +16,7 @@ const metrics = [
   ['showdown_rate', '摊牌率', '参与摊牌的手数 / 已完成手数'],
 ];
 
-export default function StatisticsPanel({ data, showLuckDetails = true }) {
+export default function StatisticsPanel({ data, showLuckDetails = true, historyLuck = false }) {
   return <>
             <p className="text-xs text-slate-400 mb-3">已完成 {data.hands} 手{data.hands < 30 ? ' · 样本较少' : ''}</p>
             <div className="grid grid-cols-3 gap-2">
@@ -25,7 +25,7 @@ export default function StatisticsPanel({ data, showLuckDetails = true }) {
               </div>)}
             </div>
             <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-950/15 p-3">
-              <div className="flex justify-between items-baseline"><span className="text-sm text-amber-200">综合牌运</span><span className="text-xl font-bold text-amber-300">{data.luck}<span className="text-xs text-slate-500"> / 100</span></span></div>
+              <div className="flex justify-between items-baseline"><span className="text-sm text-amber-200">综合牌运{historyLuck ? ' · 最近100手' : ''}</span><span className="text-xl font-bold text-amber-300">{data.luck}<span className="text-xs text-slate-500"> / 100</span></span></div>
               <div className="relative h-1.5 rounded-full bg-slate-800 my-2"><div className="h-full rounded-full bg-gradient-to-r from-slate-500 to-amber-400" style={{ width: `${data.luck}%` }} /><span className="absolute left-1/2 top-0 h-full w-px bg-white/60" /></div>
               <p className="text-xs text-slate-400">{data.luck_samples ? `${data.luck_samples} 手起手样本 · 50 为中性` : '暂无有效样本 · 暂记中性 50'}</p>
               {showLuckDetails && <div className="mt-3 grid grid-cols-2 gap-2">
@@ -43,9 +43,10 @@ export default function StatisticsPanel({ data, showLuckDetails = true }) {
               <div className="mt-2 space-y-2">
                 {metrics.map(([key, label, help]) => <p key={key}>{label}：{help}。</p>)}
                 <p>3Bet 机会 {data.three_bet_opportunities} 手。无分母时显示 —，当前未结束的手牌不计入。</p>
+                {historyLuck && <p>综合牌运及四维牌运仅统计最近 100 手已完成牌局，不足 100 手按实际手数计算，离桌后更新；其他战绩仍为历史累计。</p>}
                 <p>综合牌运以起手 35%、公共牌 25%、对位 20%、全下 20% 为基础权重；无样本维度显示 50，但不参与总分。50 为中性，越高表示在当前样本规模下更偏好运。</p>
                 {showLuckDetails && <>
-                <p>起手牌运：按全部 1,326 种组合加权的起手强度百分位；包含弃牌和未亮底牌，每手结束后更新。</p>
+                <p>起手牌运：按全部 1,326 种组合加权的起手强度百分位；包含弃牌和未亮底牌。</p>
                 <p>公共牌运：仍在参与时，实际公共牌下对随机对手的牌力减去起手预期；弃牌后的发牌不计入。</p>
                 <p>对位牌运：完整公开摊牌时，实际比牌份额减去面对同人数随机对手的预期份额，反映大牌相撞等对位结果。</p>
                 <p>全下兑现：主池、边池分别比较下注与资格锁定时的理论份额和最终份额；按底池 BB 数的平方根加权，上限 4。退款、河牌后投入不计，双牌面取平均，平局平分；不计奇数筹码和辅助折让。</p>
