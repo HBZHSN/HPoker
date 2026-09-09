@@ -11,6 +11,9 @@ from backend.app.services.room_manager import RoomManager
 from backend.app.services.user_manager import user_manager
 
 
+pytestmark = pytest.mark.usefixtures("funded_room_players")
+
+
 def test_completed_hand_is_persisted_with_each_users_own_cards(tmp_path):
     manager = RoomManager(database_path=str(tmp_path / "hands.sqlite3"))
     room = manager.create_room(

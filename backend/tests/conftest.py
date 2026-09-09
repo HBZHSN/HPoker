@@ -93,3 +93,30 @@ def isolate_persisted_storage():
     for room_id in tuple(room_manager._rooms):
         timeout_manager.cancel_all_timers(room_id)
     _reset_test_database_state()
+
+
+@pytest.fixture
+def funded_room_players(request):
+    """Give legacy room scenarios actual prepaid funds through an admin deposit."""
+    import ast
+    source = Path(request.module.__file__).read_text()
+    ids = {'real1', 'real2', 'real3', 'late-real'}
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'sit_down_player':
+            if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+                ids.add(node.args[0].value)
+    user_manager._users['funding_admin'] = User('funding_admin', 'funding_admin', 'Funding admin', '👤', is_admin=True)
+    for uid in ids:
+        if uid not in user_manager._users:
+            user_manager._users[uid] = User(uid, uid, uid, '👤')
+        user = user_manager._users[uid]
+        if user.is_test_account or uid.startswith('bot_'):
+            continue
+        if balance_manager.available_cents(uid) < 1000000:
+            balance_manager.admin_wallet_change(
+                user_id=uid,
+                amount='10000',
+                kind='deposit',
+                operator_id='funding_admin',
+                request_id=f"fund:{uid}:{id(request)}",
+            )

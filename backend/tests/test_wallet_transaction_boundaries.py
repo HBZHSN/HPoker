@@ -1,3 +1,4 @@
+from backend.tests.wallet_helpers import table_balances, table_entries
 """Regression coverage for wallet funding, rollback, and open-hand recovery."""
 
 import pytest
@@ -29,16 +30,16 @@ def test_late_real_player_in_play_mode_cannot_cash_out_free_chips():
     late_seat = next(seat for seat in room.table.active_seated_players if seat.player_id == "late-real")
     assert late_seat.wallet_mode == "play"
     assert not any(
-        entry.entry_kind == "buyin"
+        entry.entry_kind == "wallet_buyin"
         and entry.participants[0].player_id == "late-real"
-        for entry in balance_manager._entries.values()
+        for entry in table_entries()
     )
 
     assert room.leave_player("late-real")
     assert not any(
-        entry.entry_kind == "cashout"
+        entry.entry_kind == "wallet_cashout"
         and entry.participants[0].player_id == "late-real"
-        for entry in balance_manager._entries.values()
+        for entry in table_entries()
     )
 
 
@@ -54,7 +55,7 @@ def test_abort_refunds_a_departed_player_contribution_once():
     room.cash_out_all_players(reason="repeated")
 
     real2_entries = [
-        entry for entry in balance_manager._entries.values()
+        entry for entry in table_entries()
         if entry.participants[0].player_id == "real2"
     ]
     assert sum(entry.participants[0].net_chips for entry in real2_entries) == 0
@@ -69,14 +70,14 @@ def test_checkpoint_restore_replays_off_table_refund_without_double_credit():
     assert checkpoint["recovery_refunds"]
     before_restore = [
         entry.participants[0].net_chips
-        for entry in balance_manager._entries.values()
+        for entry in table_entries()
         if entry.participants[0].player_id == "real2"
     ]
     assert sorted(before_restore) == [-1000, 990]
 
     restored = Room.from_checkpoint_dict(checkpoint)
     real2_entries = [
-        entry for entry in balance_manager._entries.values()
+        entry for entry in table_entries()
         if entry.participants[0].player_id == "real2"
     ]
     assert restored.historical_players["real2"]["cashed_out_chips"] == 1000
@@ -98,7 +99,7 @@ def test_room_manager_checkpoint_defers_off_table_refund_until_recovery(tmp_path
 
     manager.checkpoint_room(room)
     real2_entries = [
-        entry for entry in balance_manager._entries.values()
+        entry for entry in table_entries()
         if entry.participants[0].player_id == "real2"
     ]
     assert sorted(entry.participants[0].net_chips for entry in real2_entries) == [-1000, 990]
@@ -108,7 +109,7 @@ def test_room_manager_checkpoint_defers_off_table_refund_until_recovery(tmp_path
     )
     assert restored is not None
     real2_entries = [
-        entry for entry in balance_manager._entries.values()
+        entry for entry in table_entries()
         if entry.participants[0].player_id == "real2"
     ]
     assert sorted(entry.participants[0].net_chips for entry in real2_entries) == [-1000, 10, 990]
@@ -126,4 +127,7 @@ def test_wallet_and_seat_mutation_roll_back_together(monkeypatch):
 
     assert room.table.active_seated_players == []
     assert room.historical_players == {}
-    assert balance_manager._entries == {}
+    assert table_entries() == []
+
+
+pytestmark = pytest.mark.usefixtures("funded_room_players")

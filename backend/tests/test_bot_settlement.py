@@ -1,3 +1,4 @@
+from backend.tests.wallet_helpers import table_balances, table_entries
 import pytest
 from fastapi.testclient import TestClient
 
@@ -66,13 +67,13 @@ def test_bot_room_uses_play_money_and_closes_without_balance_pollution():
     room.add_test_bot(seat_index=1)
 
     assert room.money_mode == "play"
-    assert balance_manager.get_user_balances() == []
+    assert table_balances() == []
 
     report = room.end_room(requester_id="host_1", settlement_type="balance")
     assert report is not None
     assert report.settlement_type == "balance"
     assert room.is_ended is True
-    assert balance_manager.get_user_balances() == []
+    assert table_balances() == []
 
 
 def test_bot_room_checkpoint_restoration_preserves_has_bots():
@@ -104,10 +105,10 @@ def test_api_end_room_with_bot_closes_play_money_room():
     room.add_test_bot(seat_index=1)
 
     # A bot room is play-money, so closing it never changes real balances.
-    resp_balance = client.post(f"/api/rooms/{room_id}/end?requester_id=u_test1&settlement_type=balance")
+    resp_balance = client.post(f"/api/rooms/{room_id}/end?settlement_type=balance", headers={"Authorization": f"Bearer {user_manager.get_or_create_token('u_test1')}"})
     assert resp_balance.status_code == 200
     assert room_manager.get_room(room_id) is None
-    assert balance_manager.get_user_balances() == []
+    assert table_balances() == []
 
 
 def test_ws_end_room_with_bot_closes_play_money_room():
@@ -155,7 +156,7 @@ def test_bot_room_immediate_settlement_does_not_pollute_balances():
     assert report.settlement_type == "immediate"
 
     # Verify that in balance_manager, user balances for consolidated debt are NOT affected
-    unsettled = balance_manager.get_user_balances(include_test=False)
+    unsettled = table_balances(include_test=False)
     # The immediate settlement is already settled (status="settled"), not unsettled
     assert len(unsettled) == 0
 
@@ -168,7 +169,7 @@ def test_bot_presence_switches_future_buyins_to_play_money_then_back_to_cash():
     )
     assert room.sit_down_player("real_host", "Alice", 0, is_test=False)
     assert room.sit_down_player("real_guest", "Bob", 1, is_test=False)
-    assert {b.user_id: b.net_cash for b in balance_manager.get_user_balances()} == {
+    assert {b.user_id: b.net_cash for b in table_balances()} == {
         "real_host": -10,
         "real_guest": -10,
     }
@@ -176,18 +177,18 @@ def test_bot_presence_switches_future_buyins_to_play_money_then_back_to_cash():
     bot = room.add_test_bot(2)
     assert bot is not None
     assert room.money_mode == "play"
-    assert balance_manager.get_user_balances() == []
+    assert table_balances() == []
 
     room.table.seats[1].chips = 0
-    entry_count = len(balance_manager._entries)
+    entry_count = len(table_entries())
     assert room.rebuy_player("real_guest")
-    assert len(balance_manager._entries) == entry_count
+    assert len(table_entries()) == entry_count
 
     room.table.seats[0].chips = 150
     room.table.seats[1].chips = 50
     assert room.kick_player(bot["player_id"])
     assert room.money_mode == "real"
-    assert {b.user_id: b.net_cash for b in balance_manager.get_user_balances()} == {
+    assert {b.user_id: b.net_cash for b in table_balances()} == {
         "real_host": -15,
         "real_guest": -5,
     }
@@ -196,7 +197,7 @@ def test_bot_presence_switches_future_buyins_to_play_money_then_back_to_cash():
     room.table.seats[1].chips = 20
     assert room.leave_player("real_host")
     assert room.leave_player("real_guest")
-    assert {b.user_id: b.net_cash for b in balance_manager.get_user_balances()} == {
+    assert {b.user_id: b.net_cash for b in table_balances()} == {
         "real_host": 3,
         "real_guest": -3,
     }
@@ -219,4 +220,7 @@ def test_test_user_join_during_hand_defers_play_money_switch_to_hand_boundary():
     room.table.refund_unsettled_hand()
     assert room.prepare_next_hand()
     assert room.money_mode == "play"
-    assert balance_manager.get_user_balances() == []
+    assert table_balances() == []
+
+
+pytestmark = pytest.mark.usefixtures("funded_room_players")

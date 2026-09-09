@@ -1,3 +1,4 @@
+from backend.tests.wallet_helpers import table_balances, table_entries
 import pytest
 from backend.app.engine.state_machine import ActionType, Street
 from backend.app.models.room import Room, RoomConfig
@@ -183,9 +184,9 @@ def test_player_leave_credits_cash_out_immediately():
     assert room.pending_settlements[0]["reason"] == "leave"
     assert room.pending_settlements[0]["status"] == "credited"
     assert room.pending_settlement_report is None
-    user2_entries = balance_manager.get_user_records("user2")
-    assert [entry["entry_kind"] for entry in user2_entries] == ["cashout", "buyin"]
-    assert balance_manager.get_user_balances()[0].net_cash == -4
+    user2_entries = [e for e in balance_manager.get_user_records("user2") if e["entry_kind"] != "wallet_deposit"]
+    assert [entry["entry_kind"] for entry in user2_entries] == ["wallet_cashout", "wallet_buyin"]
+    assert table_balances()[0].net_cash == -4
 
     report = room.end_room(requester_id="host1", settlement_type="balance")
     records = {record.player_id: record for record in report.player_records}
@@ -194,9 +195,9 @@ def test_player_leave_credits_cash_out_immediately():
     assert records["user2"].final_chips == 60
     assert records["host1"].final_chips == 140
     assert room.pending_settlements[0]["status"] == "credited"
-    assert len(balance_manager._entries) == 4
-    assert all(entry.entry_kind in {"buyin", "cashout"} for entry in balance_manager._entries.values())
-    balances = {item.user_id: item.net_cash for item in balance_manager.get_user_balances()}
+    assert len(table_entries()) == 4
+    assert all(entry.entry_kind in {"wallet_buyin", "wallet_cashout"} for entry in table_entries())
+    balances = {item.user_id: item.net_cash for item in table_balances()}
     assert balances == {"host1": 4.0, "user2": -4.0}
 
 
@@ -214,7 +215,7 @@ def test_room_manager_delete_cash_outs_every_remaining_stack(tmp_path):
 
     assert manager.delete_room(room.room_id, reason="room_disbanded")
 
-    balances = {item.user_id: item.net_cash for item in balance_manager.get_user_balances()}
+    balances = {item.user_id: item.net_cash for item in table_balances()}
     assert balances == {"cash_host": 3.0, "cash_guest": -3.0}
     assert manager.get_room(room.room_id) is None
 
@@ -231,18 +232,18 @@ def test_every_rebuy_debits_balance_and_kick_credits_stack():
     assert room.rebuy_player("rebuy_guest")
 
     before_kick = {
-        item.user_id: item.net_cash for item in balance_manager.get_user_balances()
+        item.user_id: item.net_cash for item in table_balances()
     }
     assert before_kick["rebuy_guest"] == -20
 
     assert room.kick_player("rebuy_guest")
     after_kick = {
-        item.user_id: item.net_cash for item in balance_manager.get_user_balances()
+        item.user_id: item.net_cash for item in table_balances()
     }
     assert after_kick["rebuy_guest"] == -10
     assert [
-        item["entry_kind"] for item in balance_manager.get_user_records("rebuy_guest")
-    ] == ["cashout", "buyin", "buyin"]
+        item["entry_kind"] for item in [e for e in balance_manager.get_user_records("rebuy_guest") if e["entry_kind"] != "wallet_deposit"]
+    ] == ["wallet_cashout", "wallet_buyin", "wallet_buyin"]
 
 
 def test_player_can_buy_in_again_without_losing_previous_cash_out():
@@ -425,3 +426,6 @@ def test_zero_cash_settlement_has_no_payments():
     assert report.is_balanced
     assert report.transactions == []
     assert all(record.net_cash == 0 for record in report.player_records)
+
+
+pytestmark = pytest.mark.usefixtures("funded_room_players")

@@ -10,6 +10,7 @@ from backend.app.services.balance_manager import balance_manager
 from backend.app.services.room_manager import room_manager
 from backend.app.services.timeout_manager import TimeoutManager
 from backend.app.websocket.router import handle_disconnected_player_timeout
+from backend.tests.wallet_helpers import table_balances
 
 
 @pytest.mark.asyncio
@@ -39,7 +40,7 @@ async def test_disconnect_timeout_cashes_out_last_player_and_deletes_room():
     await handle_disconnected_player_timeout(room.room_id, "offline_host")
 
     assert room_manager.get_room(room.room_id) is None
-    balances = balance_manager.get_user_balances()
+    balances = table_balances()
     assert [(item.user_id, item.net_cash) for item in balances] == [
         ("offline_host", 2.0)
     ]
@@ -66,3 +67,6 @@ async def test_all_in_disconnect_waits_for_hand_end_before_cashout():
     assert len(departed) == 1
     assert room.table.seats[0] is None
     assert "allin_host" not in room.pending_auto_leave_ids
+
+
+pytestmark = pytest.mark.usefixtures("funded_room_players")
