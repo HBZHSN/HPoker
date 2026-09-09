@@ -524,6 +524,7 @@ def get_my_balance(
         "avatar": user.avatar,
         "is_test": user.is_test_account,
         "pending_net_cash": summary.net_cash if summary else 0.0,
+        "lifetime_net_cash": hand_history_manager.get_lifetime_net_cash(user_id),
         "pending_net_chips": summary.net_chips if summary else 0,
         "unsettled_games_count": summary.unsettled_games_count if summary else 0,
         "records": records,

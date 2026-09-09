@@ -199,3 +199,53 @@ def test_table_history_and_archived_statistics_require_owner(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         get_my_tables(limit=20, offset=0, authorization=None, token=None)
     assert exc.value.status_code == 401
+
+
+def test_balance_lifetime_profit_survives_transfers_and_restart(tmp_path, monkeypatch):
+    from backend.app.api import endpoints
+    from backend.app.services.balance_manager import BalanceManager
+    from backend.app.services.hand_history_manager import HandHistoryManager
+    from backend.app.services.settlement import SettlementEngine
+
+    path = str(tmp_path / 'lifetime.sqlite3')
+    history = HandHistoryManager(path)
+    ledger = BalanceManager(database_path=path)
+    monkeypatch.setattr(endpoints, 'hand_history_manager', history)
+    monkeypatch.setattr(endpoints, 'balance_manager', ledger)
+    assert history.get_lifetime_net_cash('u_test1') == 0
+    for number, net in enumerate([125, -25, 1], 1):
+        history.record_hand(dict(
+            hand_id=f'lifetime:{number}', room_id='lifetime', room_name='累计',
+            hand_number=number, ended_at=number, money_mode='real',
+            small_blind=1, big_blind=2,
+            players=[dict(player_id='u_test1', player_name='test1',
+                          net_chips=net, net_cash=net / 100),
+                     dict(player_id='u_test2', player_name='test2',
+                          net_chips=-net, net_cash=-net / 100)]))
+    report = SettlementEngine.calculate_room_settlement('lifetime', '累计', 100, 1, [
+        dict(player_id='u_test1', player_name='test1', rebuy_count=1,
+             total_buyin_chips=200, final_chips=301),
+        dict(player_id='u_test2', player_name='test2', rebuy_count=1,
+             total_buyin_chips=200, final_chips=99),
+    ])
+    ledger.record_settlement(report, u_mgr=user_manager)
+    token = user_manager.get_or_create_token('u_test1')
+
+    def balance(include_settled=True):
+        return endpoints.get_my_balance(include_settled=include_settled,
+                                        authorization=None, token=token)
+
+    assert balance()['pending_net_cash'] == 1.01
+    assert balance()['lifetime_net_cash'] == 1.01
+    ledger.settle_batch(operator_id='u_test1', include_test=True)
+    monkeypatch.setattr(endpoints, 'hand_history_manager', HandHistoryManager(path))
+    monkeypatch.setattr(endpoints, 'balance_manager', BalanceManager(database_path=path))
+    after = balance(include_settled=False)
+    assert after['pending_net_cash'] == 0
+    assert after['records'] == []
+    assert after['lifetime_net_cash'] == 1.01
+    assert history.get_lifetime_net_cash('u_test2') == -1.01
+    assert history.get_lifetime_net_cash('outsider') == 0
+    with pytest.raises(HTTPException) as exc:
+        endpoints.get_my_balance(include_settled=True, authorization=None, token=None)
+    assert exc.value.status_code == 401

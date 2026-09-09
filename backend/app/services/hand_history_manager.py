@@ -48,6 +48,15 @@ class HandHistoryManager:
     def clear_all(self) -> int:
         return self._database.clear_hand_histories()
 
+    def get_lifetime_net_cash(self, user_id: str) -> float:
+        """Sum completed hands in cents, independently of wallet transfers or paging."""
+        with self._database.connection() as connection:
+            cents = connection.execute(
+                "SELECT COALESCE(SUM(net_cash_cents), 0) FROM poker_hand_players WHERE player_id=?",
+                (user_id,),
+            ).fetchone()[0]
+        return cents / 100.0
+
     def list_user_tables(self, user_id: str, limit: int = 20, offset: int = 0) -> dict:
         """Group all completed hands by durable room ID, including deleted rooms."""
         with self._database.connection() as connection:

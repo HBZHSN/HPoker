@@ -338,7 +338,16 @@ export default function BalanceCenterModal({
         {activeTab === 'my' && (
           <div className="flex flex-col gap-4">
             {/* My Balance Summary Card */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-amber-500/30 flex flex-col gap-0.5">
+                <span className="text-[11px] text-slate-400 font-medium">生涯总盈亏</span>
+                <div className={`text-2xl font-black ${
+                  (myBalance?.lifetime_net_cash ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+                }`}>
+                  {myBalance?.lifetime_net_cash != null ? `${myBalance.lifetime_net_cash >= 0 ? '+' : ''}¥${myBalance.lifetime_net_cash.toFixed(2)}` : '—'}
+                </div>
+                <span className="text-[10px] text-slate-500">已记录的全部已完成手牌</span>
+              </div>
               <div className="p-3.5 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 flex flex-col gap-0.5">
                 <span className="text-[11px] text-slate-400 font-medium">待结金额</span>
                 <div className={`text-2xl font-black flex items-center gap-1 ${
