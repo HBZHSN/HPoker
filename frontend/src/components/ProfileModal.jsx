@@ -71,9 +71,9 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
-      <div className="relative w-full max-w-md bg-gradient-to-b from-slate-900 via-slate-950 to-black border-2 border-amber-500/50 rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col gap-4">
+      <div className="relative w-full max-w-md max-h-[calc(100dvh-2rem)] bg-gradient-to-b from-slate-900 via-slate-950 to-black border-2 border-amber-500/50 rounded-3xl p-4 sm:p-6 shadow-2xl overflow-hidden flex flex-col gap-4">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
               <User className="w-5 h-5" />
@@ -85,7 +85,8 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
+            aria-label="关闭个人设置"
+            className="min-h-11 min-w-11 flex items-center justify-center p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -93,21 +94,21 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
 
         {/* Notices */}
         {error && (
-          <div className="flex items-center gap-2 p-2.5 bg-red-950/80 border border-red-500/60 rounded-xl text-red-300 text-xs font-bold">
+          <div className="flex shrink-0 items-center gap-2 p-2.5 bg-red-950/80 border border-red-500/60 rounded-xl text-red-300 text-xs font-bold">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="flex items-center gap-2 p-2.5 bg-emerald-950/80 border border-emerald-500/60 rounded-xl text-emerald-300 text-xs font-bold">
+          <div className="flex shrink-0 items-center gap-2 p-2.5 bg-emerald-950/80 border border-emerald-500/60 rounded-xl text-emerald-300 text-xs font-bold">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
             <span>{success}</span>
           </div>
         )}
 
         {/* Form */}
-        <form onSubmit={handleSave} className="flex flex-col gap-3">
+        <form onSubmit={handleSave} className="min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-3 [&>div]:shrink-0">
           {/* Avatar selector */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-bold text-slate-300">头像</label>
