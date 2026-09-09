@@ -80,7 +80,7 @@ class RoomManager:
                 ]
             )
 
-    def checkpoint_room(self, room: Room) -> None:
+    def checkpoint_room(self, room: Room, *, departed_ids=()) -> None:
         """Record a completed hand if needed, then flush a safe checkpoint."""
         with self._storage_lock:
             room_snapshot = room.snapshot_state()
@@ -90,6 +90,12 @@ class RoomManager:
                 if completed_hand:
                     self.hand_history_manager.record_hand(completed_hand)
                 self.save_to_storage()
+                refresh_ids = set(departed_ids)
+                if completed_hand:
+                    seated = {p.player_id for p in room.table.active_seated_players}
+                    refresh_ids.update(p["player_id"] for p in completed_hand["players"]
+                                       if p["player_id"] not in seated)
+                self.hand_history_manager.refresh_user_overviews(refresh_ids)
             except Exception:
                 room.restore_state(room_snapshot)
                 balance_manager.restore_state(wallet_snapshot)
@@ -114,11 +120,20 @@ class RoomManager:
             room_snapshot = room.snapshot_state()
             wallet_snapshot = balance_manager.snapshot_state()
             try:
+                seated_before = {p.player_id for p in room.table.active_seated_players}
                 result = operation(room)
+                seated_after = {p.player_id for p in room.table.active_seated_players}
+                departed_ids = seated_before - seated_after
+                # Deferred all-in departures record the hand inside operation,
+                # before removing seats. Include anyone who left that hand earlier.
+                for record in room.hand_records[len(room_snapshot["hand_records"]):]:
+                    departed_ids.update(p["player_id"] for p in record["players"]
+                                        if p["player_id"] not in seated_after)
                 if checkpoint:
-                    self.checkpoint_room(room)
+                    self.checkpoint_room(room, departed_ids=departed_ids)
                 else:
                     self.save_to_storage()
+                    self.hand_history_manager.refresh_user_overviews(departed_ids)
                 return result
             except Exception:
                 room.restore_state(room_snapshot)
@@ -193,6 +208,7 @@ class RoomManager:
                 room.is_ended = True
                 del self._rooms[room_id]
                 self.save_to_storage()
+                self.hand_history_manager.refresh_user_overviews(room.historical_players)
                 return True
             except Exception:
                 self._rooms[room_id] = room

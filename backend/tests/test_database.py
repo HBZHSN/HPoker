@@ -34,6 +34,7 @@ EXPECTED_TABLES = {
     "settlement_batch_transactions",
     "poker_hands",
     "poker_hand_players",
+    "poker_user_overviews",
 }
 
 
@@ -68,7 +69,7 @@ def test_schema_uses_normalized_tables_constraints_and_foreign_keys(tmp_path):
     assert "cash_value_cents" in ledger_columns
     assert "payload_json" not in ledger_columns
     assert "entry_kind" in ledger_columns
-    assert user_version == 3
+    assert user_version == 4
 
     with pytest.raises(sqlite3.IntegrityError):
         with database.connection(write=True) as connection:

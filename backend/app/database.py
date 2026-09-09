@@ -286,6 +286,13 @@ class SQLiteDatabase:
                         REFERENCES poker_hand_players(hand_id, player_id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS poker_user_overviews (
+                    player_id TEXT PRIMARY KEY,
+                    version INTEGER NOT NULL,
+                    generated_at REAL NOT NULL,
+                    overview_json TEXT NOT NULL
+                );
+
                 INSERT OR IGNORE INTO schema_migrations(version, applied_at)
                     VALUES (1, CAST(strftime('%s', 'now') AS REAL));
                 """
@@ -307,7 +314,11 @@ class SQLiteDatabase:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (3, time.time()),
             )
-            connection.execute("PRAGMA user_version = 3")
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (4, time.time()),
+            )
+            connection.execute("PRAGMA user_version = 4")
 
     @staticmethod
     def _encode(payload: dict) -> str:
@@ -799,4 +810,5 @@ class SQLiteDatabase:
         with self.connection(write=True) as connection:
             count = connection.execute("SELECT COUNT(*) FROM poker_hands").fetchone()[0]
             connection.execute("DELETE FROM poker_hands")
+            connection.execute("DELETE FROM poker_user_overviews")
         return int(count)
