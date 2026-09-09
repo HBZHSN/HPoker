@@ -1,3 +1,4 @@
+import { HandHistoryPanel } from './PersonalHistory';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Wallet,
@@ -15,15 +16,8 @@ import {
   Trash2,
   Calendar,
   Layers,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
 } from 'lucide-react';
-import {
-  getNextNetSortOrder,
-  getNetSortQueryParams,
-  getNetSortTooltip,
-} from '../utils/handSort';
+
 
 export default function BalanceCenterModal({
   isOpen,
@@ -32,6 +26,7 @@ export default function BalanceCenterModal({
   onClose,
 }) {
   const [activeTab, setActiveTab] = useState('my'); // 'my' | 'hands' | 'history' | 'admin'
+  const [historyRevision, setHistoryRevision] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -44,8 +39,6 @@ export default function BalanceCenterModal({
   const [includeTest, setIncludeTest] = useState(false);
   const [settleConfirmOpen, setSettleConfirmOpen] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
-  const [handHistory, setHandHistory] = useState({ hands: [], total: 0, summary: {} });
-  const [netSortOrder, setNetSortOrder] = useState('none'); // 'none' | 'asc' | 'desc'
 
   const fetchMyBalance = useCallback(async () => {
     if (!currentUser?.user_id) return;
@@ -91,33 +84,12 @@ export default function BalanceCenterModal({
     }
   }, [token]);
 
-  const fetchHandHistory = useCallback(async () => {
-    if (!currentUser?.user_id) return;
-    const params = new URLSearchParams();
-    const queryParams = getNetSortQueryParams(netSortOrder);
-    if (queryParams.sort_by) params.set('sort_by', queryParams.sort_by);
-    if (queryParams.order) params.set('order', queryParams.order);
-    try {
-      const res = await fetch(`/api/hands/my?${params.toString()}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        setHandHistory(await res.json());
-      }
-    } catch (e) {
-      console.error('Failed to fetch hand history', e);
-    }
-  }, [currentUser?.user_id, netSortOrder, token]);
-
-  const handleToggleNetSort = () => {
-    setNetSortOrder((prev) => getNextNetSortOrder(prev));
-  };
-
   const refreshAll = useCallback(() => {
+    setHistoryRevision(value => value + 1);
     setLoading(true);
-    Promise.all([fetchMyBalance(), fetchOverview(), fetchBatches(), fetchHandHistory()])
+    Promise.all([fetchMyBalance(), fetchOverview(), fetchBatches()])
       .finally(() => setLoading(false));
-  }, [fetchMyBalance, fetchOverview, fetchBatches, fetchHandHistory]);
+  }, [fetchMyBalance, fetchOverview, fetchBatches]);
 
   useEffect(() => {
     if (isOpen) {
@@ -304,13 +276,7 @@ export default function BalanceCenterModal({
           >
             <Layers className="w-3.5 h-3.5" />
             牌局
-            {handHistory.total > 0 && (
-              <span className={`text-[10px] px-1.5 rounded-full font-black ${
-                activeTab === 'hands' ? 'bg-slate-950 text-amber-300' : 'bg-slate-800 text-slate-400'
-              }`}>
-                {handHistory.total}
-              </span>
-            )}
+
           </button>
 
           <button
@@ -486,96 +452,7 @@ export default function BalanceCenterModal({
         )}
 
         {/* Personal per-hand history. Hole cards belong only to this user. */}
-        {activeTab === 'hands' && (
-          <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
-                <div className="text-[10px] text-emerald-300">最大赢牌</div>
-                <div className="text-lg font-black text-emerald-400">
-                  +{handHistory.summary?.biggest_win?.net_chips || 0}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-red-500/30 bg-red-950/20 p-3">
-                <div className="text-[10px] text-red-300">最大输牌</div>
-                <div className="text-lg font-black text-red-400">
-                  {handHistory.summary?.biggest_loss?.net_chips || 0}
-                </div>
-              </div>
-            </div>
-
-            {handHistory.hands.length === 0 ? (
-              <div className="p-8 rounded-2xl border border-slate-800 bg-slate-950/40 text-center text-slate-400 text-xs">
-                暂无牌局记录
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950/60">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-900 text-slate-400 border-b border-slate-800">
-                    <tr>
-                      <th className="p-3">牌局</th>
-                      <th className="p-3">我的手牌</th>
-                      <th className="p-3">公共牌</th>
-                      <th className="p-3 text-right">投入 / 收回</th>
-                      <th
-                        onClick={handleToggleNetSort}
-                        className={`p-3 text-right cursor-pointer select-none transition group hover:text-white ${
-                          netSortOrder !== 'none' ? 'text-amber-400 font-bold' : ''
-                        }`}
-                        title={getNetSortTooltip(netSortOrder)}
-                      >
-                        <div className="inline-flex items-center justify-end gap-1">
-                          <span>净结果</span>
-                          {netSortOrder === 'asc' && (
-                            <ArrowUp className="w-3.5 h-3.5 text-amber-400 stroke-[2.5]" />
-                          )}
-                          {netSortOrder === 'desc' && (
-                            <ArrowDown className="w-3.5 h-3.5 text-amber-400 stroke-[2.5]" />
-                          )}
-                          {netSortOrder === 'none' && (
-                            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 opacity-40 group-hover:opacity-100 transition" />
-                          )}
-                        </div>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60">
-                    {handHistory.hands.map((hand) => {
-                      const positive = hand.net_chips >= 0;
-                      const cardText = (card) => card.display || `${card.rank_symbol || card.rank}${card.suit_symbol || card.suit}`;
-                      return (
-                        <tr key={hand.hand_id} className="hover:bg-slate-900/40">
-                          <td className="p-3">
-                            <div className="font-bold text-slate-200">{hand.room_name} · #{hand.hand_number}</div>
-                            <div className="mt-0.5 text-[10px] text-slate-500">
-                              {new Date(hand.ended_at * 1000).toLocaleString()}
-                              {hand.money_mode === 'play' && <span className="ml-1 text-purple-300">测试</span>}
-                            </div>
-                          </td>
-                          <td className="p-3 font-black text-amber-300">
-                            {(hand.hole_cards || []).map(cardText).join(' ') || '—'}
-                            <div className="text-[10px] font-normal text-slate-500">{hand.hand_description}</div>
-                          </td>
-                          <td className="p-3 text-slate-300">
-                            {(hand.board || []).map(cardText).join(' ') || '—'}
-                          </td>
-                          <td className="p-3 text-right text-slate-400">
-                            {hand.contributed_chips} / {hand.payout_chips}
-                          </td>
-                          <td className={`p-3 text-right font-black ${positive ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {positive ? '+' : ''}{hand.net_chips}
-                            {hand.money_mode === 'real' && (
-                              <div className="text-[10px]">{positive ? '+' : ''}¥{Number(hand.net_cash || 0).toFixed(2)}</div>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
+        {activeTab === 'hands' && <HandHistoryPanel key={historyRevision} token={token} userId={currentUser?.user_id} />}
 
         {/* Settlement Batches History */}
         {activeTab === 'history' && (
