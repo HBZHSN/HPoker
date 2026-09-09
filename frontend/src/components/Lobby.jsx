@@ -21,6 +21,7 @@ import { filterVisibleLobbyUsers } from '../utils/lobbyUsers';
 export default function Lobby({
   currentUser,
   token,
+  userBalance,
   onUpdateUser,
   onOpenProfile,
   onOpenAdmin,
@@ -82,6 +83,17 @@ export default function Lobby({
 
   const handleSubmitCreate = async (e) => {
     e.preventDefault();
+    const cash = Number(cashValue);
+    if (
+      cash > 0 &&
+      !currentUser?.is_test &&
+      userBalance !== null &&
+      userBalance !== undefined &&
+      cash > Number(userBalance)
+    ) {
+      alert(`可用余额不足（当前可用：¥${Number(userBalance).toFixed(2)}，需要：¥${cash.toFixed(2)}），请联系管理员充值`);
+      return;
+    }
     const ok = await onCreateRoom({
       room_name: roomName,
       buyin_chips: Number(buyinChips),
@@ -135,10 +147,15 @@ export default function Lobby({
             {/* Balance Button */}
             <button
               onClick={onOpenBalance}
-              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1"
+              className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1.5"
+              title="余额中心（充值/提现请联系管理员）"
             >
               <Wallet className="w-3.5 h-3.5" />
-              余额
+              <span>
+                {userBalance !== null && userBalance !== undefined
+                  ? `¥${Number(userBalance).toFixed(2)}`
+                  : '余额'}
+              </span>
             </button>
 
             {/* Edit Profile Button */}
@@ -554,7 +571,19 @@ export default function Lobby({
                     required
                   />
                   {Number(cashValue) > 0 && (
-                    <p className="text-[10px] text-amber-400/80 mt-1">创建现金桌需持有对应余额，不足请联系管理员充值</p>
+                    <div className="mt-1 space-y-0.5">
+                      <p className="text-[10px] text-amber-400/80">
+                        当前可用余额：¥{userBalance !== null && userBalance !== undefined ? Number(userBalance).toFixed(2) : '0.00'}
+                      </p>
+                      {!currentUser?.is_test &&
+                        userBalance !== null &&
+                        userBalance !== undefined &&
+                        Number(cashValue) > Number(userBalance) && (
+                          <p className="text-[10px] text-rose-400 font-bold">
+                            ⚠️ 可用余额不足（需 ¥{Number(cashValue).toFixed(2)}），请联系管理员充值
+                          </p>
+                        )}
+                    </div>
                   )}
                 </div>
               </div>

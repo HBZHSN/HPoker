@@ -440,7 +440,7 @@ async def lobby_websocket_endpoint(
         user, effective_user_id = authenticate_websocket(
             claimed_user_id=user_id,
             token=token,
-            authorization=authorization or websocket.headers.get("authorization"),
+            authorization=authorization or (websocket.headers.get("authorization") if hasattr(websocket, "headers") and websocket.headers else None),
         )
     except AuthenticationError as exc:
         await websocket.accept()
@@ -483,13 +483,15 @@ async def websocket_endpoint(
     user_id: str,
     token: Optional[str] = Query(None),
     spectate: Optional[bool] = Query(False),
-    ):
+):
     if room_id == "lobby":
+        headers = getattr(websocket, "headers", None)
+        auth_header = headers.get("authorization") if headers and hasattr(headers, "get") else None
         await lobby_websocket_endpoint(
             websocket,
             user_id,
             token=token,
-            authorization=websocket.headers.get("authorization"),
+            authorization=auth_header,
         )
         return
 
@@ -501,10 +503,12 @@ async def websocket_endpoint(
         return
 
     try:
+        headers = getattr(websocket, "headers", None)
+        auth_header = headers.get("authorization") if headers and hasattr(headers, "get") else None
         user, effective_user_id = authenticate_websocket(
             claimed_user_id=user_id,
             token=token,
-            authorization=websocket.headers.get("authorization"),
+            authorization=auth_header,
         )
     except AuthenticationError as exc:
         await websocket.accept()

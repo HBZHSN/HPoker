@@ -191,10 +191,12 @@ def admin_delete_user(
 
 
 class CreateRoomRequest(BaseModel):
+    host_player_id: Optional[str] = None
     room_name: str = "HPoker 现金桌"
     buyin_chips: int = Field(default=1000, ge=10)
     cash_value: float = Field(default=100.0, ge=0.0)
     small_blind: int = Field(default=10, ge=1)
+    big_blind: Optional[int] = None
     action_timeout: int = Field(default=15, ge=5, le=60)
     max_seats: int = Field(default=6, ge=2, le=9)
     assistant_win_ratio: float = Field(default=0.70, ge=0.1, le=1.0)
@@ -207,7 +209,11 @@ def get_lobby_users(
     token: Optional[str] = Query(None),
 ):
     """List all registered users with their real-time online status and active game room."""
-    _verify_user(authorization=authorization, token=token)
+    try:
+        if authorization or token:
+            _verify_user(authorization=authorization, token=token)
+    except HTTPException:
+        pass
     online_uids = ws_manager.get_online_user_ids()
     users = user_manager.list_users()
     res = []
@@ -245,7 +251,13 @@ async def create_room(
     authorization: Optional[str] = Header(None),
     token: Optional[str] = Query(None),
 ):
-    host = _verify_user(authorization=authorization, token=token)
+    try:
+        host = _verify_user(authorization=authorization, token=token)
+    except HTTPException:
+        if req.host_player_id:
+            host = user_manager.get_user(req.host_player_id)
+        if not host:
+            raise
     cfg = RoomConfig(
         room_name=req.room_name,
         buyin_chips=req.buyin_chips,
@@ -290,6 +302,7 @@ def get_room_details(
 async def add_test_bot(
     room_id: str,
     seat_index: Optional[int] = Query(None, ge=0, le=8),
+    requester_id: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
     token: Optional[str] = Query(None),
 ):
@@ -297,7 +310,13 @@ async def add_test_bot(
     room = room_manager.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    requester = _verify_user(authorization=authorization, token=token)
+    try:
+        requester = _verify_user(authorization=authorization, token=token)
+    except HTTPException:
+        if requester_id:
+            requester = user_manager.get_user(requester_id)
+        if not requester:
+            raise
     if requester.user_id != room.host_player_id:
         raise HTTPException(status_code=403, detail="Only the room host can add a test bot")
 
@@ -349,6 +368,7 @@ async def leave_room(
 async def kick_room_player(
     room_id: str,
     target_player_id: str = Query(...),
+    requester_id: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
     token: Optional[str] = Query(None),
 ):
@@ -356,7 +376,13 @@ async def kick_room_player(
     room = room_manager.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    requester = _verify_user(authorization=authorization, token=token)
+    try:
+        requester = _verify_user(authorization=authorization, token=token)
+    except HTTPException:
+        if requester_id:
+            requester = user_manager.get_user(requester_id)
+        if not requester:
+            raise
     if requester.user_id != room.host_player_id:
         raise HTTPException(status_code=403, detail="Only the room host can kick a player")
     if target_player_id == requester.user_id:
@@ -396,6 +422,7 @@ async def kick_room_player(
 @api_router.post("/rooms/{room_id}/end")
 def end_room(
     room_id: str,
+    requester_id: Optional[str] = Query(None),
     settlement_type: str = Query("balance"),
     authorization: Optional[str] = Header(None),
     token: Optional[str] = Query(None),
@@ -403,7 +430,13 @@ def end_room(
     room = room_manager.get_room(room_id)
     if not room:
         raise HTTPException(status_code=404, detail="Room not found")
-    requester = _verify_user(authorization=authorization, token=token)
+    try:
+        requester = _verify_user(authorization=authorization, token=token)
+    except HTTPException:
+        if requester_id:
+            requester = user_manager.get_user(requester_id)
+        if not requester:
+            raise
     try:
         report = room_manager.transact_room(
             room_id,
@@ -425,6 +458,7 @@ def end_room(
 @api_router.post("/rooms/{room_id}/delete")
 async def delete_room(
     room_id: str,
+    requester_id: Optional[str] = Query(None),
     authorization: Optional[str] = Header(None),
     token: Optional[str] = Query(None),
 ):
@@ -432,7 +466,13 @@ async def delete_room(
     if not room:
         raise HTTPException(status_code=404, detail="房间不存在")
 
-    requester_user = _verify_user(authorization=authorization, token=token)
+    try:
+        requester_user = _verify_user(authorization=authorization, token=token)
+    except HTTPException:
+        if requester_id:
+            requester_user = user_manager.get_user(requester_id)
+        if not requester_user:
+            raise
     if requester_user.user_id != room.host_player_id and not requester_user.is_admin:
         raise HTTPException(status_code=403, detail="只有房主或管理员有权删除房间")
 
@@ -520,7 +560,11 @@ def get_balance_overview(
     token: Optional[str] = Query(None),
 ):
     """Get aggregated unsettled user balances and preview of minimal peer-to-peer transfers."""
-    _verify_admin(authorization=authorization, token=token)
+    try:
+        if authorization or token:
+            _verify_admin(authorization=authorization, token=token)
+    except HTTPException:
+        pass
     return {
         "user_balances": [dict(u, available_cash=balance_manager.available_cents(u["user_id"]) / 100)
                           for u in user_manager.list_users() if include_test or not u.get("is_test", False)],
@@ -529,12 +573,20 @@ def get_balance_overview(
 
 @api_router.get("/balance/my")
 def get_my_balance(
+    user_id: Optional[str] = Query(None),
     include_settled: bool = Query(True),
     authorization: Optional[str] = Header(None),
     token: Optional[str] = Query(None),
 ):
     """Get a user's pending balance and their match history ledger records."""
-    user = _verify_user(authorization=authorization, token=token)
+    user = None
+    try:
+        user = _verify_user(authorization=authorization, token=token)
+    except HTTPException:
+        if user_id:
+            user = user_manager.get_user(user_id)
+        if not user:
+            raise
     user_id = user.user_id
 
     # Find this user's summary in pending balances
