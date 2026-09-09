@@ -37,8 +37,8 @@ export default function Lobby({
   isStandalone = false,
   pwaAcknowledged = false,
 }) {
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const closeHistory = useCallback(() => setHistoryOpen(false), []);
+  const [historyUser, setHistoryUser] = useState(null);
+  const closeHistory = useCallback(() => setHistoryUser(null), []);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [roomName, setRoomName] = useState('新现金桌');
   const [buyinChips, setBuyinChips] = useState(1000);
@@ -96,7 +96,7 @@ export default function Lobby({
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-[max(24px,env(safe-area-inset-bottom,0px))] md:p-6 lg:p-8 flex flex-col gap-6">
-      {historyOpen && <PersonalHistory currentUser={currentUser} token={token} onClose={closeHistory} />}
+      {historyUser && <PersonalHistory key={historyUser.user_id} currentUser={currentUser} profileUser={historyUser} token={token} onClose={closeHistory} />}
       {/* Top Banner & User Switcher / Auth Control */}
       <header className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900/80 border border-amber-500/30 p-5 rounded-3xl backdrop-blur-md shadow-2xl">
         <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export default function Lobby({
 
         {/* User Profile & Management Controls */}
         <div className="flex items-center gap-2.5 bg-slate-950 px-3.5 py-2 rounded-2xl border border-slate-800">
-          <button onClick={() => setHistoryOpen(true)} aria-label="查看我的历史与统计" title="我的历史与统计" className="text-2xl select-none rounded-xl p-1 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-amber-400">{currentUser?.avatar || '👤'}</button>
+          <button onClick={() => setHistoryUser(currentUser)} aria-label="查看我的历史与统计" title="我的历史与统计" className="text-2xl select-none rounded-xl p-1 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-amber-400">{currentUser?.avatar || '👤'}</button>
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="text-xs md:text-sm font-black text-slate-100">{currentUser?.nickname}</span>
@@ -430,7 +430,6 @@ export default function Lobby({
             ) : (
               displayedUsers.map((u) => {
                 const isSelf = u.user_id === currentUser?.user_id;
-                const AvatarTag = isSelf ? 'button' : 'span';
                 return (
                   <div
                     key={u.user_id}
@@ -441,7 +440,7 @@ export default function Lobby({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <AvatarTag onClick={isSelf ? () => setHistoryOpen(true) : undefined} aria-label={isSelf ? "查看我的历史与统计" : undefined} className="relative select-none text-2xl shrink-0">
+                      <button type="button" onClick={() => setHistoryUser(u)} aria-label={isSelf ? "查看我的历史与统计" : `查看${u.nickname || u.username}的数据总览`} className="relative select-none text-2xl shrink-0 rounded-xl p-1 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-amber-400">
                         {u.avatar || '👤'}
                         <span
                           className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-950 ${
@@ -450,7 +449,7 @@ export default function Lobby({
                               : 'bg-slate-600'
                           }`}
                         />
-                      </AvatarTag>
+                      </button>
 
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">

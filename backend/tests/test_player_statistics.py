@@ -120,3 +120,36 @@ def test_full_luck_public_table_matches_history_and_cache_survives_restart(tmp_p
     with manager._database.connection() as connection:
         assert connection.execute('SELECT COUNT(*) FROM poker_hand_luck').fetchone()[0] == 0
     assert query_statistics(manager._database,'a')['luck'] == 50
+
+
+def test_other_user_overview_aggregates_without_private_records(tmp_path, monkeypatch):
+    from backend.app.api import endpoints
+    from backend.app.services.hand_history_manager import HandHistoryManager
+    from backend.app.services.user_manager import user_manager
+    manager = HandHistoryManager(str(tmp_path / 'overview.sqlite3'))
+    monkeypatch.setattr(endpoints, 'hand_history_manager', manager)
+    for number, net in enumerate((30, -10), 1):
+        record = {**hand(), 'hand_id': f'private:{number}', 'room_id': 'private',
+                  'room_name': 'private table', 'hand_number': number, 'ended_at': number,
+                  'small_blind': 5, 'money_mode': 'real'}
+        record['players'][0].update(player_id='u_test2', net_chips=net, net_cash=net / 10,
+                                    hole_cards=[Card.from_str('As').to_dict()])
+        manager.record_hand(record)
+    _, token = user_manager.authenticate('test1', '123')
+    result = endpoints.get_user_overview('u_test2', authorization=f'Bearer {token}', token=None)
+    assert result['total'] == result['statistics']['hands'] == 2
+    assert result['summary'] == {'net_chips': 20, 'net_cash': 2, 'biggest_win': {'net_chips': 30}}
+    assert not any(key in str(result) for key in (
+        'hole_cards', 'shown_cards', 'hand_id', 'room_id', 'room_name', 'actions', 'private table'))
+    empty = endpoints.get_user_overview('u_test1', authorization=f'Bearer {token}', token=None)
+    assert empty['total'] == 0
+    assert empty['summary'] == {'net_chips': 0, 'net_cash': 0, 'biggest_win': None}
+    with pytest.raises(HTTPException) as exc:
+        endpoints.get_user_overview('u_test2', authorization=None, token=None)
+    assert exc.value.status_code == 401
+    with pytest.raises(HTTPException) as exc:
+        endpoints.get_user_overview('missing', authorization=f'Bearer {token}', token=None)
+    assert exc.value.status_code == 404
+    # Selecting another profile never changes ownership of the private history API.
+    own = endpoints.get_my_statistics(authorization=f'Bearer {token}', token=None, room_id=None)
+    assert own['hands'] == 0
