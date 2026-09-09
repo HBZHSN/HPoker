@@ -134,3 +134,57 @@ def test_legacy_table_refunds_stay_historical(wallet):
     assert wallet.available_cents('real') == 10000
     with pytest.raises(ValueError, match='旧账牌桌'):
         room.sit_down_player('real', 'real', 0)
+
+
+def test_create_room_insufficient_funds_and_ws_stable_spectate(wallet):
+    from backend.app.services.room_manager import room_manager
+    client = TestClient(app)
+
+    # 1. Real user with 0 balance tries to create a cash room -> rejected with 400
+    res = client.post('/api/rooms', json={
+        'room_name': '高额桌',
+        'buyin_chips': 1000,
+        'cash_value': 100,
+        'small_blind': 10,
+        'action_timeout': 15,
+        'max_seats': 6,
+    }, headers={'Authorization': 'Bearer real-token'})
+    assert res.status_code == 400
+    assert '可用余额不足' in res.json()['detail']
+
+    # 2. Real user with 0 balance can create an entertainment (cash_value=0) room
+    play_res = client.post('/api/rooms', json={
+        'room_name': '娱乐桌',
+        'buyin_chips': 1000,
+        'cash_value': 0,
+        'small_blind': 10,
+        'action_timeout': 15,
+        'max_seats': 6,
+    }, headers={'Authorization': 'Bearer real-token'})
+    assert play_res.status_code == 200
+    assert play_res.json()['room_id']
+
+    # 3. Create cash room by admin, real user connects with 0 balance:
+    # Does NOT crash websocket in reconnect loop; receives error and remains spectator
+    admin_room = room_manager.create_room('admin', RoomConfig(buyin_chips=1000, cash_value=100))
+    with client.websocket_connect(f'/ws/{admin_room.room_id}/real?token=real-token') as ws:
+        # User receives state update and personal error message
+        msgs = []
+        for _ in range(5):
+            msg = ws.receive_json()
+            msgs.append(msg)
+            if msg.get('event') == 'ERROR_MESSAGE':
+                break
+        error_msg = next((m for m in msgs if m.get('event') == 'ERROR_MESSAGE'), None)
+        assert error_msg is not None
+        assert '可用余额不足' in error_msg['payload']['message']
+
+        # User is spectator, not seated
+        assert not any(s and s['player_id'] == 'real' for s in admin_room.to_dict()['table']['seats'])
+
+        # Explicit SIT_DOWN also rejected with error message without closing connection
+        ws.send_json({'event': 'SIT_DOWN', 'payload': {'seat_index': 1}})
+        reply = ws.receive_json()
+        assert reply['event'] == 'ERROR_MESSAGE'
+        assert '可用余额不足' in reply['payload']['message']
+

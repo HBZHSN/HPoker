@@ -548,21 +548,25 @@ async def websocket_endpoint(
     avatar = user.avatar if user else "👀"
 
     # Auto-seat player only if room is active, user is an authenticated registered account, and not explicitly spectating
+    auto_seat_error: Optional[str] = None
     if not room.is_ended and user is not None and not spectate:
         is_already_seated = any(s and s.player_id == user_id for s in room.table.seats)
         if not is_already_seated:
             for idx in range(room.config.max_seats):
                 if room.table.seats[idx] is None:
-                    room_manager.transact_room(
-                        room_id,
-                        lambda current_room: current_room.sit_down_player(
-                            user_id,
-                            nickname,
-                            idx,
-                            avatar=avatar,
-                            is_test=user.is_test_account,
-                        ),
-                    )
+                    try:
+                        room_manager.transact_room(
+                            room_id,
+                            lambda current_room: current_room.sit_down_player(
+                                user_id,
+                                nickname,
+                                idx,
+                                avatar=avatar,
+                                is_test=user.is_test_account,
+                            ),
+                        )
+                    except ValueError as exc:
+                        auto_seat_error = str(exc)
                     break
 
     timeout_manager.cancel_empty_room_cleanup(room_id)
@@ -572,6 +576,12 @@ async def websocket_endpoint(
 
     # Initial state sync
     await ws_manager.broadcast_room_state(room)
+
+    if auto_seat_error:
+        await ws_manager.send_personal_message(
+            websocket,
+            make_message(EventType.ERROR_MESSAGE, {"message": auto_seat_error}, room_id=room_id),
+        )
 
     try:
         while True:
@@ -654,19 +664,25 @@ async def websocket_endpoint(
             elif event == EventType.SIT_DOWN:
                 seat_index = payload.get("seat_index")
                 if seat_index is not None and user is not None:
-                    ok = room_manager.transact_room(
-                        room_id,
-                        lambda current_room: current_room.sit_down_player(
-                            user_id,
-                            nickname,
-                            seat_index,
-                            avatar=avatar,
-                            is_test=user.is_test_account,
-                        ),
-                    )
-                    if ok:
-                        await ws_manager.broadcast_sound(room_id, "sit", local_sound_metadata)
-                        await ws_manager.broadcast_room_state(room)
+                    try:
+                        ok = room_manager.transact_room(
+                            room_id,
+                            lambda current_room: current_room.sit_down_player(
+                                user_id,
+                                nickname,
+                                seat_index,
+                                avatar=avatar,
+                                is_test=user.is_test_account,
+                            ),
+                        )
+                        if ok:
+                            await ws_manager.broadcast_sound(room_id, "sit", local_sound_metadata)
+                            await ws_manager.broadcast_room_state(room)
+                    except ValueError as exc:
+                        await ws_manager.send_personal_message(
+                            websocket,
+                            make_message(EventType.ERROR_MESSAGE, {"message": str(exc)}, room_id=room_id),
+                        )
 
             elif event == EventType.STAND_UP:
                 departed = room_manager.transact_room(
@@ -691,13 +707,19 @@ async def websocket_endpoint(
                     )
 
             elif event == EventType.REBUY:
-                ok = room_manager.transact_room(
-                    room_id,
-                    lambda current_room: current_room.rebuy_player(user_id),
-                )
-                if ok:
-                    await ws_manager.broadcast_sound(room_id, "rebuy", local_sound_metadata)
-                    await ws_manager.broadcast_room_state(room)
+                try:
+                    ok = room_manager.transact_room(
+                        room_id,
+                        lambda current_room: current_room.rebuy_player(user_id),
+                    )
+                    if ok:
+                        await ws_manager.broadcast_sound(room_id, "rebuy", local_sound_metadata)
+                        await ws_manager.broadcast_room_state(room)
+                except ValueError as exc:
+                    await ws_manager.send_personal_message(
+                        websocket,
+                        make_message(EventType.ERROR_MESSAGE, {"message": str(exc)}, room_id=room_id),
+                    )
 
             elif event == EventType.START_GAME:
                 # Only room host can trigger start of next hand when idle / hand_end

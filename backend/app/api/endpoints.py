@@ -3,6 +3,7 @@
 import json
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
+from decimal import Decimal
 from typing import List, Optional
 
 from backend.app.services.user_manager import MIN_PASSWORD_LENGTH, user_manager
@@ -254,6 +255,10 @@ async def create_room(
         max_seats=req.max_seats,
         assistant_win_ratio=req.assistant_win_ratio,
     )
+    if cfg.cash_value > 0 and not host.is_test_account:
+        required_cents = int((Decimal(str(cfg.cash_value)) * 100).quantize(Decimal("1")))
+        if balance_manager.available_cents(host.user_id) < required_cents:
+            raise HTTPException(status_code=400, detail="可用余额不足，请联系管理员充值")
     room = room_manager.create_room(host_player_id=host.user_id, config=cfg)
     return room.to_dict()
 
