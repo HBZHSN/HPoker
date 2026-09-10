@@ -6,10 +6,12 @@ import AdminUserModal from './components/AdminUserModal';
 import BalanceCenterModal from './components/BalanceCenterModal';
 import PWAInstallModal from './components/PWAInstallModal';
 import MobilePWAGate from './components/MobilePWAGate';
+import GlobalWatermark from './components/GlobalWatermark';
 import { soundEngine } from './sound/SoundEngine';
 import { ActionSounds } from './sound/ActionSounds';
 import { usePWA } from './utils/usePWA';
 import { normalizeHCoinsMessage } from './utils/hCurrency';
+import { DEFAULT_WATERMARK_CONFIG } from './utils/watermark';
 
 const lastRoomStorageKey = (userId) => `active_room_${userId}`;
 const legacyLastRoomStorageKey = (userId) => `hpoker_active_room_${userId}`;
@@ -75,10 +77,31 @@ export default function AuthenticatedApp({
 
   const pwa = usePWA();
 
+  const [watermarkConfig, setWatermarkConfig] = useState(DEFAULT_WATERMARK_CONFIG);
+
   const wsRef = useRef(null);
   const actionSoundsRef = useRef(null);
   if (!actionSoundsRef.current) actionSoundsRef.current = new ActionSounds(soundEngine);
   const socialBubbleTimersRef = useRef(new Map());
+
+  const fetchWatermarkConfig = useCallback(async () => {
+    try {
+      const response = await fetch('/api/config/watermark', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) return;
+      const config = await response.json();
+      setWatermarkConfig(config);
+    } catch (error) {
+      console.warn('Failed to load global watermark configuration:', error);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchWatermarkConfig();
+    const interval = window.setInterval(fetchWatermarkConfig, 15000);
+    return () => window.clearInterval(interval);
+  }, [fetchWatermarkConfig]);
 
   useEffect(() => {
     setSocialHistory([]);
@@ -496,6 +519,7 @@ export default function AuthenticatedApp({
           onToggleFullscreen={pwa.toggleFullscreen}
           isFullscreen={pwa.isFullscreen}
         />
+        <GlobalWatermark config={watermarkConfig} />
       </>
     );
   }
@@ -506,6 +530,7 @@ export default function AuthenticatedApp({
         activeRoomId && roomData ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'
       }`}
     >
+      <GlobalWatermark config={watermarkConfig} />
       {activeRoomId && roomData ? (
         <PokerTable
           token={token}
