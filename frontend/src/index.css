@@ -51,8 +51,8 @@ body {
   position: absolute;
   inset: -28%;
   display: grid;
-  grid-template-columns: repeat(var(--watermark-density), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--watermark-density), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--watermark-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--watermark-rows), minmax(0, 1fr));
 }
 
 .global-watermark-label {

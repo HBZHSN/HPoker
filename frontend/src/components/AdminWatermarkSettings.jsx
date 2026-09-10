@@ -143,8 +143,8 @@ export default function AdminWatermarkSettings({ token, onUpdated }) {
 
         <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-300">
           <span className="flex items-center justify-between">
-            <span>密度</span>
-            <span className="font-mono text-sky-300">{config.density} × {config.density}</span>
+            <span>密度（横竖屏自适应）</span>
+            <span className="font-mono text-sky-300">基准 {config.density}</span>
           </span>
           <input
             type="range"

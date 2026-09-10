@@ -34,16 +34,37 @@ export function normalizeWatermarkConfig(config = {}) {
   };
 }
 
-export function getWatermarkTileCount(config = {}) {
+export function getWatermarkGridDimensions(config = {}, viewport = {}) {
   const { density } = normalizeWatermarkConfig(config);
-  return density * density;
+  const width = Math.max(1, finiteOr(viewport?.width, 1));
+  const height = Math.max(1, finiteOr(viewport?.height, 1));
+  const aspectRatio = width / height;
+
+  if (aspectRatio >= 1) {
+    return {
+      columns: Math.max(density, Math.ceil(density * aspectRatio)),
+      rows: density,
+    };
+  }
+
+  return {
+    columns: density,
+    rows: Math.max(density, Math.ceil(density / aspectRatio)),
+  };
 }
 
-export function getWatermarkStyle(config = {}) {
+export function getWatermarkTileCount(config = {}, viewport = {}) {
+  const { columns, rows } = getWatermarkGridDimensions(config, viewport);
+  return columns * rows;
+}
+
+export function getWatermarkStyle(config = {}, viewport = {}) {
   const normalized = normalizeWatermarkConfig(config);
+  const { columns, rows } = getWatermarkGridDimensions(normalized, viewport);
   return {
     '--watermark-opacity': normalized.opacity,
-    '--watermark-density': normalized.density,
+    '--watermark-columns': columns,
+    '--watermark-rows': rows,
     '--watermark-tilt': `${normalized.tilt}deg`,
   };
 }

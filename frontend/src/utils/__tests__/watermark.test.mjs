@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   DEFAULT_WATERMARK_CONFIG,
+  getWatermarkGridDimensions,
   getWatermarkStyle,
   getWatermarkTileCount,
   normalizeWatermarkConfig,
@@ -31,7 +32,18 @@ test('watermark grid count and CSS variables follow normalized density', () => {
   assert.equal(getWatermarkTileCount({ density: 3 }), 9);
   assert.deepEqual(getWatermarkStyle({ opacity: 0.4, density: 2, tilt: 12.5 }), {
     '--watermark-opacity': 0.4,
-    '--watermark-density': 2,
+    '--watermark-columns': 2,
+    '--watermark-rows': 2,
     '--watermark-tilt': '12.5deg',
   });
+});
+
+test('watermark density keeps tile proportions consistent in landscape and portrait', () => {
+  const landscape = getWatermarkGridDimensions({ density: 4 }, { width: 16, height: 9 });
+  const portrait = getWatermarkGridDimensions({ density: 4 }, { width: 9, height: 16 });
+
+  assert.deepEqual(landscape, { columns: 8, rows: 4 });
+  assert.deepEqual(portrait, { columns: 4, rows: 8 });
+  assert.equal(getWatermarkTileCount({ density: 4 }, { width: 16, height: 9 }), 32);
+  assert.equal(getWatermarkTileCount({ density: 4 }, { width: 9, height: 16 }), 32);
 });
