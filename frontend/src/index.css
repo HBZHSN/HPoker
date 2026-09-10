@@ -34,6 +34,45 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* The administrator-controlled watermark must remain visible above every app
+   surface, including dialogs. It never captures input or changes layout. */
+.global-watermark-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  isolation: isolate;
+}
+
+.global-watermark-grid {
+  position: absolute;
+  inset: -28%;
+  display: grid;
+  grid-template-columns: repeat(var(--watermark-density), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--watermark-density), minmax(0, 1fr));
+  transform: rotate(var(--watermark-tilt));
+  transform-origin: center;
+}
+
+.global-watermark-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(251 191 36 / var(--watermark-opacity));
+  font-size: clamp(11px, 1.35vw, 22px);
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-align: center;
+  text-shadow: 0 1px 10px rgb(0 0 0 / 0.45), 0 0 2px rgb(251 191 36 / 0.35);
+  white-space: nowrap;
+}
+
 button, a, input, select {
   touch-action: manipulation;
 }
