@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, ArrowLeft, ChevronRight, History } from 'lucide-react';
 import StatisticsPanel from './StatisticsPanel';
 import { getNextNetSortOrder, getNetSortQueryParams, getNetSortTooltip } from '../utils/handSort';
+import { formatHCoins } from '../utils/hCurrency';
 
 const button = 'rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-40';
 const signed = value => `${value > 0 ? '+' : ''}${Number(value || 0).toLocaleString('zh-CN')}`;
@@ -70,8 +71,8 @@ export function HandHistoryPanel({ token, userId, roomId }) {
       {!data.hands.length && <p className="py-12 text-center text-slate-400 text-sm">暂无已完成的牌局记录</p>}
       <div className="space-y-3">{data.hands.map(hand => <article key={hand.hand_id} className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
         <div className="p-4 flex justify-between gap-3 border-b border-slate-800/70">
-          <div className="min-w-0"><h4 className="font-bold text-sm text-slate-100 break-words">{hand.room_name} <span className="text-amber-300">#{hand.hand_number}</span></h4><p className="mt-1 text-[11px] text-slate-500">{date(hand.ended_at)} · {hand.money_mode === 'play' ? '娱乐局' : '现金局'} · {hand.small_blind}/{hand.big_blind}</p></div>
-          <div className={`text-right shrink-0 ${tone(hand.net_chips)}`}><p className="text-xl font-black tabular-nums">{signed(hand.net_chips)}</p><p className="text-[10px]">{hand.money_mode === 'real' ? `${signed(hand.net_cash)} 元` : '筹码'}</p></div>
+          <div className="min-w-0"><h4 className="font-bold text-sm text-slate-100 break-words">{hand.room_name} <span className="text-amber-300">#{hand.hand_number}</span></h4><p className="mt-1 text-[11px] text-slate-500">{date(hand.ended_at)} · {hand.money_mode === 'play' ? '娱乐局' : 'H币局'} · {hand.small_blind}/{hand.big_blind}</p></div>
+          <div className={`text-right shrink-0 ${tone(hand.net_chips)}`}><p className="text-xl font-black tabular-nums">{signed(hand.net_chips)}</p><p className="text-[10px]">{hand.money_mode === 'real' ? formatHCoins(hand.net_cash, { showPlus: true }) : '筹码'}</p></div>
         </div>
         <div className="p-4 grid gap-4 sm:grid-cols-[1fr_1.5fr_1fr]">
           <div><p className="text-[10px] text-slate-500 mb-2">我的手牌</p><Cards cards={hand.hole_cards} /><p className="text-xs text-amber-200 mt-2">{hand.hand_description || '—'}</p></div>
@@ -95,7 +96,7 @@ function Overview({ token, userId }) {
   return <div className="space-y-4">
     {!data ? <LoadState error={error} reload={reload} /> : <Summary items={[
       ['累计手数', data.total], ['净筹码', signed(data.summary.net_chips), tone(data.summary.net_chips)],
-      ['现金局净额（元）', signed(data.summary.net_cash), tone(data.summary.net_cash)],
+      ['H币局净额', formatHCoins(data.summary.net_cash, { showPlus: true }), tone(data.summary.net_cash)],
       ['最大赢牌', signed(data.summary.biggest_win?.net_chips), 'text-emerald-400'],
     ]} />}
     {data && <StatisticsPanel data={data.statistics} historyLuck />}
@@ -112,7 +113,7 @@ function TableHistory({ token, onSelect }) {
       <div className="flex justify-between items-center gap-2"><h3 className="font-bold text-slate-100 truncate">{table.room_name}</h3><ChevronRight size={16} className="text-amber-300 shrink-0" /></div>
       <p className="text-[10px] text-slate-500 mt-1">{date(table.last_hand_at)} · 最近参与</p>
       <div className="flex items-end justify-between gap-2 mt-5"><div><p className="text-[10px] text-slate-500">净筹码</p><p className={`text-2xl font-black tabular-nums ${tone(table.net_chips)}`}>{signed(table.net_chips)}</p></div><span className="text-xs text-slate-400">{table.hands} 手 · 赢 {table.winning_hands} 手</span></div>
-      <p className="text-[11px] text-slate-500 mt-3">最近配置 {table.small_blind}/{table.big_blind} · {table.money_mode === 'play' ? '娱乐局' : '现金局'} <span className="float-right text-amber-200">查看数据与牌运</span></p>
+      <p className="text-[11px] text-slate-500 mt-3">最近配置 {table.small_blind}/{table.big_blind} · {table.money_mode === 'play' ? '娱乐局' : 'H币局'} <span className="float-right text-amber-200">查看数据与牌运</span></p>
     </button>)}</div><Pager page={page} total={data.total} size={12} setPage={setPage} /></div>;
 }
 
@@ -143,12 +144,12 @@ export default function PersonalHistory({ currentUser, profileUser = currentUser
       <header className="flex items-center gap-3 p-4 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-amber-950/30 to-slate-950"><span className="text-3xl p-2 bg-slate-900 rounded-2xl">{profileUser.avatar || '👤'}</span><div className="flex-1 min-w-0"><h2 id="personal-history-title" className="font-black text-lg truncate">{profileUser.nickname || profileUser.username} · 个人档案</h2><p className="text-xs text-slate-400 mt-1">历史战绩与牌运统计</p></div><button onClick={onClose} className={button} aria-label="关闭个人历史"><X size={20} /></button></header>
       <div className="flex gap-2 px-4 sm:px-6 py-3 border-b border-slate-800">{(isSelf ? [['overview', '历史总览'], ['tables', '历次牌桌'], ['hands', '逐手记录']] : [['overview', '历史总览']]).map(([value, label]) => <button key={value} aria-pressed={tab === value} onClick={() => { setTab(value); setTable(null); }} className={`px-4 py-2 rounded-xl text-xs font-bold ${tab === value ? 'bg-amber-400 text-slate-950' : 'bg-slate-900 text-slate-400 hover:text-white'}`}>{label}</button>)}</div>
       <div className="overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5">
-        {(!isSelf || tab === 'overview') && <><div className="flex items-center gap-2 text-amber-200"><History size={18} /><h3 className="font-bold">{isSelf ? '我的累计表现' : '累计表现'}</h3></div><Overview token={token} userId={profileUser.user_id} /><p className="text-xs text-slate-500">统计包含已记录的现金局与娱乐局，离桌后更新，仅计已完成手牌。</p></>}
+        {(!isSelf || tab === 'overview') && <><div className="flex items-center gap-2 text-amber-200"><History size={18} /><h3 className="font-bold">{isSelf ? '我的累计表现' : '累计表现'}</h3></div><Overview token={token} userId={profileUser.user_id} /><p className="text-xs text-slate-500">统计包含已记录的H币局与娱乐局，离桌后更新，仅计已完成手牌。</p></>}
         {isSelf && tab === 'tables' && (!table ? <TableHistory token={token} onSelect={setTable} /> : <>
           <button className={`${button} inline-flex items-center gap-1`} onClick={() => setTable(null)}><ArrowLeft size={14} />全部牌桌</button>
           <div><h3 className="text-xl font-black break-words">{table.room_name}</h3><p className="text-xs text-slate-500 mt-1">记录范围 {date(table.first_hand_at)} — {date(table.last_hand_at)}</p></div>
           <Summary items={[
-            ['净筹码', signed(table.net_chips), tone(table.net_chips)], ['现金局净额（元）', signed(table.net_cash), tone(table.net_cash)],
+            ['净筹码', signed(table.net_chips), tone(table.net_chips)], ['H币局净额', formatHCoins(table.net_cash, { showPlus: true }), tone(table.net_cash)],
             ['累计投入', table.contributed_chips], ['累计收回', table.payout_chips],
           ]} />
           <Stats token={token} roomId={table.room_id} />
