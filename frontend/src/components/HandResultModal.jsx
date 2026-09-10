@@ -10,6 +10,7 @@ import {
   formatReadyButtonLabel,
 } from '../utils/autoReady';
 import { isIgnoredInputTarget, resolveHandEndHotkey } from '../utils/tableShortcuts';
+import { formatHChipAmount } from '../utils/hCurrency';
 import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers, LogOut } from 'lucide-react';
 
 export default function HandResultModal({
@@ -219,7 +220,7 @@ export default function HandResultModal({
                 )}
               </div>
               <p className="text-xs text-slate-400">
-                底池: <strong className="text-amber-300 font-black">${totalPot}</strong>
+                底池: <strong className="text-amber-300 font-black">{formatHChipAmount(totalPot)}</strong>
               </p>
             </div>
           </div>
@@ -333,11 +334,11 @@ export default function HandResultModal({
                           <>
                             <span className="text-xs font-bold text-purple-300">
                               第1次牌型: <strong className="text-white">{res.hand_desc || '—'}</strong>
-                              {res.payout_board_1 > 0 && <span className="text-emerald-400 ml-1">(分池 +${res.payout_board_1})</span>}
+                              {res.payout_board_1 > 0 && <span className="text-emerald-400 ml-1">(分池 {formatHChipAmount(res.payout_board_1, true)})</span>}
                             </span>
                             <span className="text-xs font-bold text-indigo-300">
                               第2次牌型: <strong className="text-white">{res.hand_desc_2 || '—'}</strong>
-                              {res.payout_board_2 > 0 && <span className="text-emerald-400 ml-1">(分池 +${res.payout_board_2})</span>}
+                              {res.payout_board_2 > 0 && <span className="text-emerald-400 ml-1">(分池 {formatHChipAmount(res.payout_board_2, true)})</span>}
                             </span>
                           </>
                         )}
@@ -425,7 +426,7 @@ export default function HandResultModal({
                             : 'text-slate-400'
                         }`}
                       >
-                        {res.net_profit > 0 ? `+$${res.net_profit}` : res.net_profit < 0 ? `-$${Math.abs(res.net_profit)}` : '$0'}
+                        {formatHChipAmount(res.net_profit, true)}
                       </span>
 
                       {/* Assistant Adjustment (Before vs After) */}
@@ -435,13 +436,13 @@ export default function HandResultModal({
                             <span
                               className="bg-purple-950/80 text-purple-300 border border-purple-500/40 rounded px-1.5 py-0.5 shadow-sm"
                             >
-                              原应 {res.original_net_profit > 0 ? `+$${res.original_net_profit}` : res.original_net_profit < 0 ? `-$${Math.abs(res.original_net_profit)}` : '$0'} · 折让 -${Math.abs(res.assistant_adjustment)}
+                              原应 {formatHChipAmount(res.original_net_profit, true)} · 折让 {formatHChipAmount(-Math.abs(res.assistant_adjustment))}
                             </span>
                           ) : (
                             <span
                               className="bg-sky-950/80 text-sky-300 border border-sky-500/40 rounded px-1.5 py-0.5 shadow-sm"
                             >
-                              原应 {res.original_net_profit > 0 ? `+$${res.original_net_profit}` : res.original_net_profit < 0 ? `-$${Math.abs(res.original_net_profit)}` : '$0'} · 补偿 +${res.assistant_adjustment}
+                              原应 {formatHChipAmount(res.original_net_profit, true)} · 补偿 {formatHChipAmount(res.assistant_adjustment, true)}
                             </span>
                           )}
                         </div>
@@ -454,7 +455,7 @@ export default function HandResultModal({
                           </span>
                         )}
                         <span className={`text-[11px] font-medium ${res.chips === 0 ? 'text-red-400 font-bold' : 'text-slate-400'}`}>
-                          筹码: ${res.chips}
+                          筹码: {formatHChipAmount(res.chips)}
                         </span>
                       </div>
                     </div>
@@ -593,7 +594,7 @@ export default function HandResultModal({
                 className="flex-shrink-0 px-3.5 py-2 sm:px-6 sm:py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap animate-pulse"
               >
                 <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                <span>补码 (${buyinChips})</span>
+                <span>补码 ({formatHChipAmount(buyinChips)})</span>
               </button>
             ) : selfSeat ? (
               <button

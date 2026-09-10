@@ -9,6 +9,7 @@ import MobilePWAGate from './components/MobilePWAGate';
 import { soundEngine } from './sound/SoundEngine';
 import { ActionSounds } from './sound/ActionSounds';
 import { usePWA } from './utils/usePWA';
+import { normalizeHCoinsMessage } from './utils/hCurrency';
 
 const lastRoomStorageKey = (userId) => `active_room_${userId}`;
 const legacyLastRoomStorageKey = (userId) => `hpoker_active_room_${userId}`;
@@ -21,7 +22,7 @@ export default function AuthenticatedApp({
 }) {
   // Dynamically set page title when authenticated
   useEffect(() => {
-    document.title = 'HPoker 德州扑克在线现金局';
+    document.title = 'HPoker 德州扑克在线牌局';
     return () => {
       document.title = '系统登录';
     };
@@ -345,10 +346,11 @@ export default function AuthenticatedApp({
               fetchLobbyData();
             }
           } else if (msg.event === 'ERROR_MESSAGE') {
-            if (msg.payload?.message && msg.payload.message !== 'Room not found') {
-              alert(msg.payload.message);
+            const errorMessage = msg.payload?.message;
+            if (errorMessage && errorMessage !== 'Room not found') {
+              alert(normalizeHCoinsMessage(errorMessage));
             }
-            if (msg.payload?.message === 'Room not found' && activeRoomId) {
+            if (errorMessage === 'Room not found' && activeRoomId) {
               terminalClose = true;
               handleLeaveRoom({ notifyServer: false });
             }
@@ -420,7 +422,7 @@ export default function AuthenticatedApp({
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.detail || '创建房间失败');
+        alert(normalizeHCoinsMessage(data.detail, '创建房间失败'));
         return false;
       }
       rememberAndEnterRoom(data.room_id);

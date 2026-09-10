@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   PlusCircle,
   Users,
-  DollarSign,
+  Coins,
   Clock,
   ShieldCheck,
   Play,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import PersonalHistory from './PersonalHistory';
 import { filterVisibleLobbyUsers } from '../utils/lobbyUsers';
+import { formatHCoins, getDefaultRoomName } from '../utils/hCurrency';
 
 export default function Lobby({
   currentUser,
@@ -41,14 +42,19 @@ export default function Lobby({
   const [historyUser, setHistoryUser] = useState(null);
   const closeHistory = useCallback(() => setHistoryUser(null), []);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [roomName, setRoomName] = useState('新现金桌');
+  const defaultRoomName = getDefaultRoomName(currentUser);
+  const [roomName, setRoomName] = useState(() => defaultRoomName);
   const [buyinChips, setBuyinChips] = useState(1000);
-  const [cashValue, setCashValue] = useState(100);
+  const [hCoinValue, setHCoinValue] = useState(100);
   const [smallBlind, setSmallBlind] = useState(10);
   const [actionTimeout, setActionTimeout] = useState(15);
   const [maxSeats, setMaxSeats] = useState(6);
   const [assistantWinPct, setAssistantWinPct] = useState(70);
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'online'
+
+  useEffect(() => {
+    if (createModalOpen) setRoomName(defaultRoomName);
+  }, [createModalOpen, defaultRoomName]);
 
   const visibleUsers = useMemo(() => filterVisibleLobbyUsers(users), [users]);
 
@@ -83,21 +89,21 @@ export default function Lobby({
 
   const handleSubmitCreate = async (e) => {
     e.preventDefault();
-    const cash = Number(cashValue);
+    const hCoins = Number(hCoinValue);
     if (
-      cash > 0 &&
+      hCoins > 0 &&
       !currentUser?.is_test &&
       userBalance !== null &&
       userBalance !== undefined &&
-      cash > Number(userBalance)
+      hCoins > Number(userBalance)
     ) {
-      alert(`可用余额不足（当前可用：¥${Number(userBalance).toFixed(2)}，需要：¥${cash.toFixed(2)}），请联系管理员充值`);
+      alert(`H币不足（当前可用：${formatHCoins(userBalance)}，需要：${formatHCoins(hCoins)}）`);
       return;
     }
     const ok = await onCreateRoom({
       room_name: roomName,
       buyin_chips: Number(buyinChips),
-      cash_value: Number(cashValue),
+      cash_value: Number(hCoinValue),
       small_blind: Number(smallBlind),
       action_timeout: Number(actionTimeout),
       max_seats: Number(maxSeats),
@@ -148,13 +154,13 @@ export default function Lobby({
             <button
               onClick={onOpenBalance}
               className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer flex items-center gap-1.5"
-              title="余额中心（充值/提现请联系管理员）"
+              title="H币中心"
             >
               <Wallet className="w-3.5 h-3.5" />
               <span>
                 {userBalance !== null && userBalance !== undefined
-                  ? `¥${Number(userBalance).toFixed(2)}`
-                  : '余额'}
+                  ? formatHCoins(userBalance)
+                  : 'H币'}
               </span>
             </button>
 
@@ -307,7 +313,7 @@ export default function Lobby({
                             </span>
                           )}
                           <span className="text-xs bg-amber-950/80 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
-                            ${r.small_blind}/${r.big_blind}
+                            H币{r.small_blind}/H币{r.big_blind}
                           </span>
                         </div>
 
@@ -315,8 +321,8 @@ export default function Lobby({
                           <span className="text-[11px] text-slate-500 font-mono">ID: {r.room_id}</span>
                           <span className="text-slate-600">·</span>
                           <span className="flex items-center gap-1 text-slate-300">
-                            <DollarSign className="w-3.5 h-3.5 text-amber-400" />
-                            买入: ${r.buyin_chips} = ¥{r.cash_value}
+                            <Coins className="w-3.5 h-3.5 text-amber-400" />
+                            买入: {r.buyin_chips}筹码 = {formatHCoins(r.cash_value)}
                           </span>
                           <span className="text-slate-600">·</span>
                           <span className="flex items-center gap-1 text-sky-300">
@@ -561,26 +567,26 @@ export default function Lobby({
                   />
                 </div>
                 <div>
-                  <label className="text-slate-400 font-semibold block mb-1">现金 (¥，0 为娱乐局)</label>
+                  <label className="text-slate-400 font-semibold block mb-1">H币（0 为娱乐局）</label>
                   <input
                     type="number"
-                    value={cashValue}
-                    onChange={(e) => setCashValue(e.target.value)}
+                    value={hCoinValue}
+                    onChange={(e) => setHCoinValue(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white outline-none focus:border-amber-400"
                     min="0"
                     required
                   />
-                  {Number(cashValue) > 0 && (
+                  {Number(hCoinValue) > 0 && (
                     <div className="mt-1 space-y-0.5">
                       <p className="text-[10px] text-amber-400/80">
-                        当前可用余额：¥{userBalance !== null && userBalance !== undefined ? Number(userBalance).toFixed(2) : '0.00'}
+                        可用H币：{userBalance !== null && userBalance !== undefined ? formatHCoins(userBalance) : formatHCoins(0)}
                       </p>
                       {!currentUser?.is_test &&
                         userBalance !== null &&
                         userBalance !== undefined &&
-                        Number(cashValue) > Number(userBalance) && (
+                        Number(hCoinValue) > Number(userBalance) && (
                           <p className="text-[10px] text-rose-400 font-bold">
-                            ⚠️ 可用余额不足（需 ¥{Number(cashValue).toFixed(2)}），请联系管理员充值
+                            ⚠️ H币不足（需要 {formatHCoins(hCoinValue)}）
                           </p>
                         )}
                     </div>
