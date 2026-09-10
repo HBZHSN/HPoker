@@ -27,8 +27,8 @@ export function normalizeHCoinsMessage(message, fallback = '请求失败') {
   const text = typeof message === 'string' ? message.trim() : '';
   if (!text) return fallback;
   if (
-    /余额不足|可用余额不足|资金不足|现金不足|insufficient\s+(?:balance|funds|cash)/i.test(text) ||
-    /请联系管理员(?:充值|重置)/.test(text)
+    /\u4f59\u989d\u4e0d\u8db3|\u53ef\u7528\u4f59\u989d\u4e0d\u8db3|\u8d44\u91d1\u4e0d\u8db3|\u73b0\u91d1\u4e0d\u8db3|insufficient\s+(?:balance|funds|cash)/i.test(text) ||
+    /\u8bf7\u8054\u7cfb\u7ba1\u7406\u5458(?:\u5145\u503c|\u91cd\u7f6e)/.test(text)
   ) {
     return `${H_COIN_LABEL}不足`;
   }

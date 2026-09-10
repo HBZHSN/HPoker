@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import CardView from './CardView';
 import { sortCardsLowToHigh } from '../utils/cards';
 import { formatVpip, formatTimeCards, getVpipTooltip, getTimeCardsTooltip } from '../utils/playerStats';
+import { formatHChipAmount } from '../utils/hCurrency';
 import { Bot, Crown, RefreshCw, UserPlus, Clock, UserX, BarChart2 } from 'lucide-react';
 
 export default function PlayerSeat({
@@ -143,7 +144,7 @@ export default function PlayerSeat({
           )
         ) : payoutInfo ? (
           <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 z-30 bg-gradient-to-r from-emerald-950 via-teal-900 to-emerald-950 text-emerald-300 border border-emerald-400 px-2 md:px-3 py-0.5 rounded-full text-[10px] md:text-xs font-black shadow-glow-cyan animate-bounce whitespace-nowrap">
-            +${payoutInfo.amount}
+            {formatHChipAmount(payoutInfo.amount, true)}
           </div>
         ) : isWaitingNextHand ? (
           <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] md:text-[10px] font-bold shadow-md z-30 whitespace-nowrap border border-slate-700 bg-slate-900/95 text-slate-400">
@@ -151,7 +152,7 @@ export default function PlayerSeat({
           </div>
         ) : seatData.current_round_bet > 0 && !seatData.last_action ? (
           <div className="absolute -top-8 md:-top-9.5 left-1/2 -translate-x-1/2 px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-base font-black shadow-md z-30 whitespace-nowrap border border-amber-500/50 bg-slate-950/95 text-amber-300">
-            ${seatData.current_round_bet}
+            {formatHChipAmount(seatData.current_round_bet)}
           </div>
         ) : seatData.last_action ? (
           <div
@@ -320,8 +321,7 @@ export default function PlayerSeat({
 
           {/* Chips in Bold Font */}
           <div className="flex items-center gap-0.5 text-amber-300 font-black text-[11px] md:text-xs leading-none mb-0.5">
-            <span className="text-[9px] text-amber-400 font-bold">$</span>
-            <span>{seatData.chips.toLocaleString()}</span>
+            <span>{formatHChipAmount(seatData.chips)}</span>
           </div>
 
           {/* Integrated Turn Progress Bar (Bottom Rim of Avatar Card) */}

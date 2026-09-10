@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Flame, Clock, X } from 'lucide-react';
+import { formatHChipAmount } from '../utils/hCurrency';
 
 export default function AllInConfirmModal({
   isOpen,
@@ -61,7 +62,7 @@ export default function AllInConfirmModal({
             确认全下
           </h3>
           <div className="text-2xl font-black text-amber-300 mt-1 tracking-tight">
-            ${amount}
+            {formatHChipAmount(amount)}
           </div>
           <p className="text-xs text-slate-400 mt-0.5 font-medium">
             投入全部筹码
