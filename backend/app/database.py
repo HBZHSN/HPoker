@@ -115,6 +115,23 @@ class SQLiteDatabase:
                     singleton_id, text_content, opacity, density, tilt, updated_at
                 ) VALUES (1, 'HPoker', 0.12, 4, -20, CAST(strftime('%s', 'now') AS REAL));
 
+                CREATE TABLE IF NOT EXISTS default_room_config (
+                    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                    buyin_chips INTEGER NOT NULL CHECK (buyin_chips >= 10),
+                    cash_value REAL NOT NULL CHECK (cash_value >= 0),
+                    small_blind INTEGER NOT NULL CHECK (small_blind >= 1),
+                    action_timeout INTEGER NOT NULL CHECK (action_timeout >= 5 AND action_timeout <= 60),
+                    max_seats INTEGER NOT NULL CHECK (max_seats >= 2 AND max_seats <= 9),
+                    assistant_win_ratio REAL NOT NULL CHECK (assistant_win_ratio >= 0.1 AND assistant_win_ratio <= 1),
+                    updated_at REAL NOT NULL,
+                    updated_by TEXT
+                );
+                INSERT OR IGNORE INTO default_room_config(
+                    singleton_id, buyin_chips, cash_value, small_blind,
+                    action_timeout, max_seats, assistant_win_ratio, updated_at
+                ) VALUES (1, 1000, 100.0, 10, 15, 6, 0.70,
+                          CAST(strftime('%s', 'now') AS REAL));
+
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
                     username TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -336,7 +353,11 @@ class SQLiteDatabase:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (5, time.time()),
             )
-            connection.execute("PRAGMA user_version = 5")
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (6, time.time()),
+            )
+            connection.execute("PRAGMA user_version = 6")
 
     @staticmethod
     def _encode(payload: dict) -> str:
@@ -393,6 +414,58 @@ class SQLiteDatabase:
             row = connection.execute(
                 """SELECT text_content, opacity, density, tilt, updated_at, updated_by
                    FROM global_watermark WHERE singleton_id = 1"""
+            ).fetchone()
+        return dict(row)
+
+    def load_room_defaults(self) -> Optional[dict]:
+        """Load the singleton defaults used for new room creation."""
+        with self.connection() as connection:
+            row = connection.execute(
+                """SELECT buyin_chips, cash_value, small_blind, action_timeout,
+                          max_seats, assistant_win_ratio, updated_at, updated_by
+                   FROM default_room_config WHERE singleton_id = 1"""
+            ).fetchone()
+        return dict(row) if row else None
+
+    def save_room_defaults(
+        self,
+        config: dict,
+        *,
+        updated_by: Optional[str] = None,
+    ) -> dict:
+        """Atomically replace the singleton defaults for new rooms."""
+        now = time.time()
+        with self.connection(write=True) as connection:
+            connection.execute(
+                """INSERT INTO default_room_config(
+                       singleton_id, buyin_chips, cash_value, small_blind,
+                       action_timeout, max_seats, assistant_win_ratio,
+                       updated_at, updated_by
+                   ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(singleton_id) DO UPDATE SET
+                       buyin_chips = excluded.buyin_chips,
+                       cash_value = excluded.cash_value,
+                       small_blind = excluded.small_blind,
+                       action_timeout = excluded.action_timeout,
+                       max_seats = excluded.max_seats,
+                       assistant_win_ratio = excluded.assistant_win_ratio,
+                       updated_at = excluded.updated_at,
+                       updated_by = excluded.updated_by""",
+                (
+                    config["buyin_chips"],
+                    config["cash_value"],
+                    config["small_blind"],
+                    config["action_timeout"],
+                    config["max_seats"],
+                    config["assistant_win_ratio"],
+                    now,
+                    updated_by,
+                ),
+            )
+            row = connection.execute(
+                """SELECT buyin_chips, cash_value, small_blind, action_timeout,
+                          max_seats, assistant_win_ratio, updated_at, updated_by
+                   FROM default_room_config WHERE singleton_id = 1"""
             ).fetchone()
         return dict(row)
 

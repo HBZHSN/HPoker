@@ -10,26 +10,27 @@ import time
 import uuid
 
 from backend.app.engine.state_machine import Street, TableStateMachine
+from backend.app.models.room_defaults import DEFAULT_ROOM_CONFIG
 from backend.app.services.settlement import SettlementReport, SettlementEngine
 
 
 @dataclass
 class RoomConfig:
     room_name: str = "HPoker 现金桌"
-    buyin_chips: int = 1000
-    cash_value: float = 100.0        # e.g., 100 RMB for 1000 chips (0.1 RMB/chip)
-    small_blind: int = 10
+    buyin_chips: int = DEFAULT_ROOM_CONFIG["buyin_chips"]
+    cash_value: float = DEFAULT_ROOM_CONFIG["cash_value"]
+    small_blind: int = DEFAULT_ROOM_CONFIG["small_blind"]
     # Kept as a compatibility input for older callers. The room rule is always
     # derived from the configured small blind in __post_init__.
     big_blind: Optional[int] = field(default=None, repr=False)
-    action_timeout: int = 15          # Seconds to act
-    max_seats: int = 6
+    action_timeout: int = DEFAULT_ROOM_CONFIG["action_timeout"]  # Seconds to act
+    max_seats: int = DEFAULT_ROOM_CONFIG["max_seats"]
     time_card_duration: int = 30      # Seconds added per time card
     initial_time_cards: int = 3      # Starting time cards per player
     max_time_cards: int = 5          # Maximum time cards per player
     time_card_replenish_interval: int = 900  # 15 minutes replenishment interval (in seconds)
     hands_per_time_card: int = 15     # Reward 1 time card every 15 hands played
-    assistant_win_ratio: float = 0.70  # Ratio of positive profit retained when using equity assistant (0.1 to 1.0)
+    assistant_win_ratio: float = DEFAULT_ROOM_CONFIG["assistant_win_ratio"]  # Ratio of positive profit retained when using equity assistant (0.1 to 1.0)
 
     def __post_init__(self) -> None:
         if self.small_blind < 1:

@@ -36,6 +36,7 @@ EXPECTED_TABLES = {
     "poker_hand_players",
     "poker_user_overviews",
     "global_watermark",
+    "default_room_config",
 }
 
 
@@ -70,7 +71,7 @@ def test_schema_uses_normalized_tables_constraints_and_foreign_keys(tmp_path):
     assert "cash_value_cents" in ledger_columns
     assert "payload_json" not in ledger_columns
     assert "entry_kind" in ledger_columns
-    assert user_version == 5
+    assert user_version == 6
 
     with pytest.raises(sqlite3.IntegrityError):
         with database.connection(write=True) as connection:
