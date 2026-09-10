@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Award, ArrowRight, Copy, Check, X, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { Award, ArrowRight, Copy, Check, X, TrendingUp, TrendingDown } from 'lucide-react';
+import { formatHCoins, formatHChipAmount } from '../utils/hCurrency';
 
 export default function SettlementModal({
   report,
@@ -13,20 +14,19 @@ export default function SettlementModal({
 
   const copySettlementText = () => {
     let text = `【${report.room_name} - 结算清单】\n`;
-    text += `模式: ${isBalanceMode ? '计入余额' : '实时转账'}\n`;
-    text += `买入: ${report.buyin_chips}筹码 = ¥${report.cash_value}\n\n`;
+    text += `模式: ${isBalanceMode ? '计入H币' : '实时H币转账'}\n`;
+    text += `买入: ${report.buyin_chips}筹码 = ${formatHCoins(report.cash_value)}\n\n`;
     text += `--- 玩家战绩 ---\n`;
     report.player_records.forEach((r, idx) => {
-      const sign = r.net_cash >= 0 ? '+' : '';
-      text += `${idx + 1}. ${r.player_name}: 买入x${r.rebuy_count} (${r.total_buyin_chips}筹码) -> 余额${r.final_chips}筹码 | 净输赢: ${sign}¥${r.net_cash.toFixed(2)}\n`;
+      text += `${idx + 1}. ${r.player_name}: 买入x${r.rebuy_count} (${r.total_buyin_chips}筹码) -> 剩余${r.final_chips}筹码 | 净输赢: ${formatHCoins(r.net_cash, { showPlus: true })}\n`;
     });
 
-    text += `\n--- 转账明细 ---\n`;
+    text += `\n--- H币转账明细 ---\n`;
     if (report.transactions.length === 0) {
       text += `无需转账。\n`;
     } else {
       report.transactions.forEach((t, idx) => {
-        text += `${idx + 1}. ${t.from_player_name} -> ${t.to_player_name}: ¥${t.amount_cash.toFixed(2)} (${t.amount_chips} 筹码)\n`;
+        text += `${idx + 1}. ${t.from_player_name} -> ${t.to_player_name}: ${formatHCoins(t.amount_cash)} (${t.amount_chips} 筹码)\n`;
       });
     }
 
@@ -52,7 +52,7 @@ export default function SettlementModal({
                     ? 'bg-amber-950 text-amber-300 border-amber-500/50'
                     : 'bg-emerald-950 text-emerald-300 border-emerald-500/50'
                 }`}>
-                  {isBalanceMode ? '计入余额' : '实时转账'}
+                  {isBalanceMode ? '计入H币' : '实时H币转账'}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
@@ -79,7 +79,7 @@ export default function SettlementModal({
                   <th className="p-2.5 text-center">买入次数</th>
                   <th className="p-2.5 text-right">总买入筹码</th>
                   <th className="p-2.5 text-right">剩余筹码</th>
-                  <th className="p-2.5 text-right">净输赢 (¥)</th>
+                  <th className="p-2.5 text-right">净输赢 (H币)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-medium">
@@ -114,7 +114,7 @@ export default function SettlementModal({
                       <td className={`p-2.5 text-right font-black ${isProfit ? 'text-emerald-400' : 'text-red-400'}`}>
                         <div className="flex items-center justify-end gap-1">
                           {isProfit ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                          {isProfit ? '+' : ''}¥{r.net_cash.toFixed(2)}
+                          {formatHCoins(r.net_cash, { showPlus: true })}
                         </div>
                       </td>
                     </tr>
@@ -129,7 +129,7 @@ export default function SettlementModal({
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-              转账明细
+              H币转账明细
             </h3>
             <span className="text-[11px] text-slate-400">
               {report.transactions.length} 笔
@@ -160,10 +160,10 @@ export default function SettlementModal({
 
                   <div className="flex flex-col items-end">
                     <div className="text-sm font-black text-amber-400">
-                      ¥{t.amount_cash.toFixed(2)}
+                      {formatHCoins(t.amount_cash)}
                     </div>
                     <div className="text-[10px] text-slate-400 font-medium">
-                      ({t.amount_chips} 筹码)
+                      ({formatHChipAmount(t.amount_chips)})
                     </div>
                   </div>
                 </div>

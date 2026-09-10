@@ -1,20 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, RotateCcw, Info } from 'lucide-react';
 import { HandHistoryPanel } from './PersonalHistory';
-
-const money = (value, showPlus = false) => {
-  const num = Number(value || 0);
-  const formatted = Math.abs(num).toFixed(2);
-  if (num > 0) return `${showPlus ? '+' : ''}¥${formatted}`;
-  if (num < 0) return `-¥${formatted}`;
-  return '¥0.00';
-};
+import { formatHCoins, normalizeHCoinsMessage } from '../utils/hCurrency';
 
 const labels = {
-  wallet_deposit: '管理员充值',
-  wallet_withdraw: '管理员提现',
-  wallet_buyin: '买入扣款',
-  wallet_cashout: '离桌兑回',
+  wallet_deposit: '管理员发放H币',
+  wallet_withdraw: '管理员回收H币',
+  wallet_buyin: '买入扣除H币',
+  wallet_cashout: '离桌返还H币',
   wallet_mode_change: '模式切换',
 };
 
@@ -34,7 +27,7 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
   const request = useCallback(async (url, options = {}) => {
     const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } });
     const data = await res.json();
-    if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '请求失败');
+    if (!res.ok) throw new Error(normalizeHCoinsMessage(data.detail, '请求失败'));
     return data;
   }, [token]);
 
@@ -72,7 +65,7 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
       pending.current = null;
       setAmount('');
       await refresh();
-      setSuccess(kind === 'deposit' ? '充值成功' : '提现成功');
+      setSuccess(kind === 'deposit' ? 'H币增加成功' : 'H币扣除成功');
     } catch (e) { setError(e.message); }
     finally { submitting.current = false; setBusy(false); }
   };
@@ -82,9 +75,9 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-3">
-      <div role="dialog" aria-modal="true" aria-label="余额" className="w-full max-w-4xl max-h-[92dvh] overflow-y-auto rounded-3xl border border-amber-500/40 bg-slate-950 p-5 text-slate-200 space-y-5">
+      <div role="dialog" aria-modal="true" aria-label="H币中心" className="w-full max-w-4xl max-h-[92dvh] overflow-y-auto rounded-3xl border border-amber-500/40 bg-slate-950 p-5 text-slate-200 space-y-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-black">余额</h2>
+          <h2 className="text-lg font-black">H币中心</h2>
           <div className="flex gap-3">
             <button aria-label="刷新" onClick={refresh}><RotateCcw size={18} /></button>
             <button aria-label="关闭" onClick={onClose}><X /></button>
@@ -95,7 +88,7 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
           {[
             ['my', '我的'],
             ['hands', '牌局'],
-            ...(currentUser?.is_admin ? [['admin', '资金管理']] : []),
+            ...(currentUser?.is_admin ? [['admin', 'H币管理']] : []),
           ].map(([id, name]) => (
             <button
               key={id}
@@ -116,9 +109,9 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
           <>
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                <p className="text-xs font-bold text-slate-400">可用余额</p>
+                <p className="text-xs font-bold text-slate-400">可用H币</p>
                 <p className="text-2xl text-amber-300 font-black mt-1">
-                  {balance ? money(balance.available_cash) : '—'}
+                  {balance ? formatHCoins(balance.available_cash) : '—'}
                 </p>
               </div>
               <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
@@ -130,17 +123,17 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
                       ? 'text-rose-400'
                       : 'text-slate-200'
                 }`}>
-                  {balance ? money(balance.lifetime_net_cash, true) : '—'}
+                  {balance ? formatHCoins(balance.lifetime_net_cash, { showPlus: true }) : '—'}
                 </p>
               </div>
             </div>
 
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-bold text-amber-300 flex items-center gap-2">
               <Info className="w-4 h-4 flex-shrink-0" />
-              <span>充值、提现请联系管理员</span>
+              <span>H币不足时无法买入或补码</span>
             </div>
 
-            <h3 className="font-bold text-sm text-slate-300">资金流水</h3>
+            <h3 className="font-bold text-sm text-slate-300">H币流水</h3>
             <div className="space-y-2 max-h-72 overflow-y-auto">
               {balance?.records?.length ? (
                 balance.records.map(rec => {
@@ -148,11 +141,11 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
                   return (
                     <div key={rec.entry_id} className="flex justify-between items-center gap-3 rounded-xl bg-slate-900 border border-slate-800/80 p-3 text-sm">
                       <div>
-                        <p className="font-bold text-slate-200">{labels[rec.entry_kind] || '历史账单'}{rec.room_name && ` · ${rec.room_name}`}</p>
+                        <p className="font-bold text-slate-200">{labels[rec.entry_kind] || '历史记录'}{rec.room_name && ` · ${rec.room_name}`}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{new Date(rec.created_at * 1000).toLocaleString()}</p>
                       </div>
                       <span className={`whitespace-nowrap font-black ${net > 0 ? 'text-emerald-400' : net < 0 ? 'text-rose-400' : 'text-slate-400'}`}>
-                        {money(net, true)}
+                        {formatHCoins(net, { showPlus: true })}
                       </span>
                     </div>
                   );
@@ -180,7 +173,7 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
                 <option value="">选择用户</option>
                 {users.map(u => (
                   <option key={u.user_id} value={u.user_id}>
-                    {u.nickname} · {u.user_id} · {money(u.available_cash)}
+                    {u.nickname} · {u.user_id} · {formatHCoins(u.available_cash)}
                   </option>
                 ))}
               </select>
@@ -191,17 +184,17 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
                 onChange={e => setKind(e.target.value)}
                 className={field}
               >
-                <option value="deposit">充值</option>
-                <option value="withdraw">提现</option>
+                <option value="deposit">增加H币</option>
+                <option value="withdraw">扣除H币</option>
               </select>
               <input
-                aria-label="金额"
+                aria-label="H币数量"
                 required
                 type="number"
                 min="0.01"
                 max="100000000"
                 step="0.01"
-                placeholder="金额（元）"
+                placeholder="H币数量"
                 value={amount}
                 disabled={busy}
                 onChange={e => setAmount(e.target.value)}
@@ -211,12 +204,12 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
                 disabled={busy}
                 className="rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 p-3 font-black shadow-glow-gold transition disabled:opacity-50 cursor-pointer"
               >
-                {busy ? '处理中…' : kind === 'deposit' ? '确认充值' : '确认提现'}
+                {busy ? '处理中…' : kind === 'deposit' ? '确认增加H币' : '确认扣除H币'}
               </button>
             </form>
 
             <div className="space-y-1.5 max-h-60 overflow-y-auto">
-              <p className="text-xs font-bold text-slate-400 mb-1">用户余额列表（点击快捷选中）</p>
+              <p className="text-xs font-bold text-slate-400 mb-1">用户H币列表（点击快捷选中）</p>
               {users.map(u => (
                 <div
                   key={u.user_id}
@@ -226,7 +219,7 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
                   }`}
                 >
                   <span className="font-bold">{u.avatar} {u.nickname} <span className="text-xs text-slate-500 font-normal">({u.username || u.user_id})</span></span>
-                  <span className="font-black text-amber-300">{money(u.available_cash)}</span>
+                  <span className="font-black text-amber-300">{formatHCoins(u.available_cash)}</span>
                 </div>
               ))}
             </div>

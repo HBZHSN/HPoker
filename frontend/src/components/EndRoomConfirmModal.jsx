@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, CheckCircle2, DollarSign, X, AlertCircle, Bot } from 'lucide-react';
+import { Award, CheckCircle2, X, AlertCircle, Bot } from 'lucide-react';
 
 export default function EndRoomConfirmModal({
   isOpen,
@@ -72,7 +72,7 @@ export default function EndRoomConfirmModal({
                 {!hasBots && settlementType === 'balance' && <CheckCircle2 className="w-4 h-4" />}
               </div>
               <span className={`text-sm font-black ${hasBots ? 'text-slate-400 line-through' : 'text-white'}`}>
-                计入余额
+                计入H币
               </span>
             </div>
             {hasBots && (
@@ -101,7 +101,7 @@ export default function EndRoomConfirmModal({
               >
                 {settlementType === 'immediate' && <CheckCircle2 className="w-4 h-4" />}
               </div>
-              <span className="text-sm font-black text-white">实时转账</span>
+              <span className="text-sm font-black text-white">实时H币转账</span>
             </div>
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function EndRoomConfirmModal({
         {hasBots && (
           <div className="flex items-start gap-2.5 px-3.5 py-3 bg-amber-950/30 border border-amber-500/40 rounded-xl text-amber-300 text-xs leading-relaxed">
             <Bot className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-            <span className="font-bold text-amber-200">含机器人，仅可实时转账</span>
+            <span className="font-bold text-amber-200">含机器人，仅可实时H币转账</span>
           </div>
         )}
 
