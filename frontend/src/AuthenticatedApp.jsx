@@ -604,6 +604,7 @@ export default function AuthenticatedApp({
           adminUser={currentUser}
           token={token}
           onClose={() => setAdminOpen(false)}
+          onWatermarkUpdated={setWatermarkConfig}
         />
       )}
 
