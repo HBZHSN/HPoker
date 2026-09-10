@@ -10,13 +10,14 @@ import {
   Loader2,
   BarChart3,
   Target,
-  DollarSign,
+  Coins,
   AlertCircle,
   CheckCircle2,
   Eye,
 } from 'lucide-react';
 import { preflopChenScore } from '../utils/equityCalculator';
 import { evaluateHand } from '../utils/pokerEvaluator';
+import { formatHChipAmount } from '../utils/hCurrency';
 
 const STAGE_NAMES = {
   PREFLOP: '翻牌前',
@@ -457,7 +458,7 @@ export default function EquityDrawer({
                   <div className="flex items-center justify-between">
                     <div className={`flex items-center gap-2 text-xs font-bold
                       ${potOdds.decision === 'call' ? 'text-emerald-300' : 'text-red-300'}`}>
-                      <DollarSign className="w-3.5 h-3.5" /> 底池赔率
+                      <Coins className="w-3.5 h-3.5" /> 底池赔率
                     </div>
                     <div className={`flex items-center gap-1 font-black text-sm
                       ${potOdds.decision === 'call' ? 'text-emerald-300' : 'text-red-300'}`}>
@@ -471,11 +472,11 @@ export default function EquityDrawer({
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-slate-900/60 rounded-lg px-3 py-2">
                       <div className="text-slate-500 text-[10px]">底池</div>
-                      <div className="text-amber-300 font-black">{potOdds.pot_size}</div>
+                      <div className="text-amber-300 font-black">{formatHChipAmount(potOdds.pot_size)}</div>
                     </div>
                     <div className="bg-slate-900/60 rounded-lg px-3 py-2">
                       <div className="text-slate-500 text-[10px]">需跟注</div>
-                      <div className="text-amber-300 font-black">{potOdds.to_call}</div>
+                      <div className="text-amber-300 font-black">{formatHChipAmount(potOdds.to_call)}</div>
                     </div>
                   </div>
 
