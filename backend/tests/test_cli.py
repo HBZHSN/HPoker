@@ -803,6 +803,41 @@ async def test_textual_settlement_page_has_own_title_and_actions():
 class TestPokerApiClient:
     """Tests for REST API client."""
 
+    async def test_room_defaults_are_fetched_and_omitted_create_fields_stay_omitted(self):
+        client = PokerApiClient("http://localhost:8000")
+        client.auth_token = "tk_defaults"
+        try:
+            with patch("httpx.AsyncClient.get") as mock_get:
+                mock_get.return_value.status_code = 200
+                mock_get.return_value.json = MagicMock(return_value={
+                    "buyin_chips": 2200,
+                    "cash_value": 330,
+                    "small_blind": 22,
+                    "action_timeout": 35,
+                    "max_seats": 8,
+                    "assistant_win_ratio": 0.8,
+                })
+                mock_get.return_value.raise_for_status = MagicMock()
+
+                defaults = await client.get_room_defaults()
+
+            assert defaults["small_blind"] == 22
+            assert mock_get.call_args[0][0] == "/api/config/room-defaults"
+            assert mock_get.call_args[1]["headers"] == {
+                "Authorization": "Bearer tk_defaults"
+            }
+
+            with patch("httpx.AsyncClient.post") as mock_post:
+                mock_post.return_value.status_code = 200
+                mock_post.return_value.json = MagicMock(return_value={"room_id": "rm_1"})
+                mock_post.return_value.raise_for_status = MagicMock()
+
+                await client.create_room(room_name="新房间")
+
+            assert mock_post.call_args[1]["json"] == {"room_name": "新房间"}
+        finally:
+            await client.close()
+
     async def test_api_client_operations(self):
         from fastapi.testclient import TestClient
         from backend.main import app
