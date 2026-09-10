@@ -31,6 +31,7 @@ from backend.app.services.room_manager import room_manager
 from backend.app.services.hand_history_manager import hand_history_manager
 from backend.app.services.timeout_manager import timeout_manager
 from backend.app.services.user_manager import user_manager
+from backend.app.services.watermark_manager import watermark_manager
 
 
 def _dedicated_test_users() -> dict[str, User]:
@@ -74,6 +75,7 @@ def _reset_test_database_state() -> None:
     user_manager._users = _dedicated_test_users()
     user_manager._tokens = {}
     user_manager.save_to_storage()
+    watermark_manager.reset_to_defaults()
 
 
 @pytest.fixture(autouse=True)
@@ -83,6 +85,7 @@ def isolate_persisted_storage():
         room_manager.storage_path,
         balance_manager.storage_path,
         user_manager.storage_path,
+        watermark_manager.storage_path,
     }
     assert configured_paths == {str(TEST_DATABASE_PATH)}
     assert str(PRODUCTION_DATABASE_PATH) not in configured_paths
