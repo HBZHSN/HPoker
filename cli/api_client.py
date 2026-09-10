@@ -106,24 +106,41 @@ class PokerApiClient:
             return rooms
         return [room for room in rooms if not room.get("is_ended", False)]
 
+    async def get_room_defaults(self) -> Dict[str, Any]:
+        """Fetch the administrator-managed defaults for new rooms."""
+
+        response = await self.client.get(
+            "/api/config/room-defaults",
+            headers=self._auth_headers(),
+        )
+        self._raise_for_status(response)
+        payload = response.json()
+        return payload if isinstance(payload, dict) else {}
+
     async def create_room(
         self,
-        room_name: str = "HPoker 现金桌",
-        buyin_chips: int = 1000,
-        cash_value: float = 100.0,
-        small_blind: int = 10,
-        action_timeout: int = 15,
-        max_seats: int = 6,
+        room_name: Optional[str] = None,
+        buyin_chips: Optional[int] = None,
+        cash_value: Optional[float] = None,
+        small_blind: Optional[int] = None,
+        action_timeout: Optional[int] = None,
+        max_seats: Optional[int] = None,
+        assistant_win_ratio: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Create a new poker room."""
+        """Create a new poker room, letting the server fill omitted defaults."""
 
         payload = {
-            "room_name": room_name,
-            "buyin_chips": buyin_chips,
-            "cash_value": cash_value,
-            "small_blind": small_blind,
-            "action_timeout": action_timeout,
-            "max_seats": max_seats,
+            key: value
+            for key, value in {
+                "room_name": room_name,
+                "buyin_chips": buyin_chips,
+                "cash_value": cash_value,
+                "small_blind": small_blind,
+                "action_timeout": action_timeout,
+                "max_seats": max_seats,
+                "assistant_win_ratio": assistant_win_ratio,
+            }.items()
+            if value is not None
         }
         response = await self.client.post(
             "/api/rooms",

@@ -29,6 +29,7 @@ from cli.commands import (
 from cli.ui_renderer import Colors, PokerUiRenderer
 from cli.tui import TerminalTui
 from cli.ws_client import PokerWsClient
+from backend.app.models.room_defaults import RoomDefaultConfig
 
 
 class PokerCliController:
@@ -459,15 +460,27 @@ class PokerCliController:
 
         if not self.current_user:
             return
+        defaults_loaded = True
+        try:
+            server_defaults = await self.api.get_room_defaults()
+            room_defaults = RoomDefaultConfig.from_dict(server_defaults).to_dict()
+        except Exception:
+            # Keep the CLI usable against older servers that predate the
+            # defaults endpoint; the server still remains the authority for
+            # the actual values used to create the room.
+            defaults_loaded = False
+            room_defaults = RoomDefaultConfig.default().to_dict()
         options = list(args or [])
         defaults: Dict[str, Any] = {
             "name": f"{self.current_user.get('nickname', '玩家')}的局",
-            "buyin": 1000,
-            "cash": 100.0,
-            "sb": 10,
-            "timeout": 15,
-            "seats": 6,
+            "buyin": room_defaults["buyin_chips"],
+            "cash": room_defaults["cash_value"],
+            "sb": room_defaults["small_blind"],
+            "timeout": room_defaults["action_timeout"],
+            "seats": room_defaults["max_seats"],
         }
+        displayed_defaults = dict(defaults)
+        supplied: Dict[str, Any] = {}
 
         if options:
             try:
@@ -503,14 +516,24 @@ class PokerCliController:
 
         try:
             self._validate_create_options(defaults)
-            room_data = await self.api.create_room(
-                room_name=str(defaults["name"]),
-                buyin_chips=int(defaults["buyin"]),
-                cash_value=float(defaults["cash"]),
-                small_blind=int(defaults["sb"]),
-                action_timeout=int(defaults["timeout"]),
-                max_seats=int(defaults["seats"]),
-            )
+            if not defaults_loaded and not options:
+                supplied = {
+                    key: defaults[key]
+                    for key in ("buyin", "cash", "sb", "timeout", "seats")
+                    if defaults[key] != displayed_defaults[key]
+                }
+            create_args: Dict[str, Any] = {"room_name": str(defaults["name"])}
+            field_mapping = {
+                "buyin": ("buyin_chips", int),
+                "cash": ("cash_value", float),
+                "sb": ("small_blind", int),
+                "timeout": ("action_timeout", int),
+                "seats": ("max_seats", int),
+            }
+            for key, (request_field, converter) in field_mapping.items():
+                if defaults_loaded or key in supplied:
+                    create_args[request_field] = converter(defaults[key])
+            room_data = await self.api.create_room(**create_args)
             room_id = room_data.get("room_id", "")
             self._output(self.renderer.c(f"✓ 房间创建成功！ID: {room_id}", Colors.BRIGHT_GREEN + Colors.BOLD))
             if room_id:
