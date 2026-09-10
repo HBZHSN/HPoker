@@ -36,6 +36,7 @@ import {
 } from '../utils/tableShortcuts';
 import AllInConfirmModal from './AllInConfirmModal';
 import { isMobile } from '../utils/pwa';
+import { formatHChipAmount } from '../utils/hCurrency';
 import {
   isPresetAllIn,
   shouldRequireAllInConfirmation,
@@ -655,17 +656,17 @@ export default function ActionBar({
       case 'CHECK':
         return '过牌';
       case 'CALL':
-        return `跟注 $${amt}`;
+        return `跟注 ${formatHChipAmount(amt)}`;
       case 'BET':
-        return `下注 $${amt}`;
+        return `下注 ${formatHChipAmount(amt)}`;
       case 'RAISE':
-        return `加注至 $${amt}`;
+        return `加注至 ${formatHChipAmount(amt)}`;
       case 'ALL_IN':
-        return `全下 $${amt}`;
+        return `全下 ${formatHChipAmount(amt)}`;
       case 'POST_SB':
-        return `小盲 $${amt}`;
+        return `小盲 ${formatHChipAmount(amt)}`;
       case 'POST_BB':
-        return `大盲 $${amt}`;
+        return `大盲 ${formatHChipAmount(amt)}`;
       default:
         return act;
     }
@@ -798,12 +799,12 @@ export default function ActionBar({
             </div>
             <div className="flex items-center justify-between text-slate-300">
               <span className="text-[11px] text-slate-500">当前底池</span>
-              <span className="font-black text-amber-400">${totalPot}</span>
+                <span className="font-black text-amber-400">{formatHChipAmount(totalPot)}</span>
             </div>
             {currentRoundHighestBet > 0 && (
               <div className="flex items-center justify-between text-slate-300">
                 <span className="text-[11px] text-slate-500">本轮最高注</span>
-                <span className="font-bold text-sky-400">${currentRoundHighestBet}</span>
+                <span className="font-bold text-sky-400">{formatHChipAmount(currentRoundHighestBet)}</span>
               </div>
             )}
           </div>
@@ -847,7 +848,7 @@ export default function ActionBar({
               className="px-2.5 py-1 lg:px-3.5 lg:py-1.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 text-[11px] lg:text-xs font-black rounded-lg lg:rounded-xl shadow-lg transition active:scale-95 cursor-pointer flex items-center gap-1"
             >
               <RefreshCw className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
-              补码 (${buyinChips})
+              补码 ({formatHChipAmount(buyinChips)})
             </button>
           )}
         </div>
@@ -868,7 +869,7 @@ export default function ActionBar({
             <div className="flex items-baseline gap-1">
               <span className="text-[11px] lg:text-xs text-slate-400 font-bold">筹码</span>
               <span className={`text-sm lg:text-lg font-black ${selfSeat.chips === 0 ? 'text-red-400' : 'text-amber-400'}`}>
-                ${selfSeat.chips}
+                {formatHChipAmount(selfSeat.chips)}
               </span>
             </div>
             <div className="flex items-center gap-1.5 mt-0.5">
@@ -928,8 +929,8 @@ export default function ActionBar({
                 preAction === PRE_ACTIONS.CHECK_FOLD
                   ? '过牌/弃牌'
                   : preAction === PRE_ACTIONS.CHECK_CALL
-                  ? `过牌/跟注${preCallCost > 0 ? ` $${preCallDisplayAmt}` : ''}`
-                  : `加注至 $${currentAmount}`
+                  ? `过牌/跟注${preCallCost > 0 ? ` ${formatHChipAmount(preCallDisplayAmt)}` : ''}`
+                  : `加注至 ${formatHChipAmount(currentAmount)}`
               }
             </span>
             <button
@@ -1021,7 +1022,7 @@ export default function ActionBar({
                 className="poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer"
               >
                 <span className="text-sm sm:text-base font-black tracking-wide truncate max-w-full">
-                  跟注 ${legalActions?.call_amount || 0}
+                  跟注 {formatHChipAmount(legalActions?.call_amount || 0)}
                 </span>
                 <span className="text-[10px] sm:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
               </button>
@@ -1044,7 +1045,7 @@ export default function ActionBar({
                   ✓
                 </span>
                 <span className="text-xs sm:text-sm font-black tracking-wide truncate">
-                  过/跟{preCallCost > 0 ? ` $${preCallDisplayAmt}` : ''}
+                  过/跟{preCallCost > 0 ? ` ${formatHChipAmount(preCallDisplayAmt)}` : ''}
                 </span>
               </div>
               <span className={`text-[10px] font-medium ${
@@ -1080,14 +1081,14 @@ export default function ActionBar({
                 <>
                   <span className="text-sm sm:text-base font-black tracking-wide text-amber-200 whitespace-nowrap flex items-center gap-1 truncate max-w-full">
                     <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                    全下 ${legalActions?.all_in_amount || currentAmount}
+                    全下 {formatHChipAmount(legalActions?.all_in_amount || currentAmount)}
                   </span>
                   <span className="text-[10px] text-purple-300/90 font-medium">[R]</span>
                 </>
               ) : (
                 <>
                   <span className="text-sm sm:text-base font-black tracking-wide text-amber-200 whitespace-nowrap truncate max-w-full">
-                    {legalActions?.can_bet ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`}
+                    {legalActions?.can_bet ? `下注 ${formatHChipAmount(currentAmount)}` : `加注至 ${formatHChipAmount(currentAmount)}`}
                   </span>
                   <span className="text-[10px] text-amber-300/80 font-medium">[R]</span>
                 </>
@@ -1114,8 +1115,8 @@ export default function ActionBar({
                 </span>
                 <span className="text-xs sm:text-sm font-black tracking-wide whitespace-nowrap truncate">
                   {isAllIn
-                    ? `全下 $${maxVal}`
-                    : (effectiveHighestBet === 0 ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`)}
+                    ? `全下 ${formatHChipAmount(maxVal)}`
+                    : (effectiveHighestBet === 0 ? `下注 ${formatHChipAmount(currentAmount)}` : `加注至 ${formatHChipAmount(currentAmount)}`)}
                 </span>
               </div>
               <span className={`text-[10px] font-medium ${
@@ -1136,7 +1137,7 @@ export default function ActionBar({
           )}
         </div>
 
-        {/* Sizing Slider Row: [-] [===Slider===] [+] [$Amount Card] */}
+        {/* Sizing Slider Row: [-] [===Slider===] [+] [H币 amount card] */}
         <div className="poker-sizing-row flex items-center gap-1.5 sm:gap-2 bg-slate-950/80 border border-slate-800/80 rounded-xl px-2 py-1.5 shadow-inner">
           <button
             type="button"
@@ -1185,7 +1186,7 @@ export default function ActionBar({
           {/* Amount Badge: display only current bet amount */}
           <div className="flex items-center justify-center bg-slate-900/95 px-3 py-1.5 sm:py-2 rounded-xl border border-amber-500/50 min-w-[76px] sm:min-w-[88px] flex-shrink-0 shadow-inner">
             <div className="flex items-center text-amber-400 font-black text-sm sm:text-base leading-tight">
-              <span className="mr-0.5">$</span>
+              <span className="mr-0.5">H币</span>
               <input
                 type="number"
                 min={sizingMin}
@@ -1248,7 +1249,7 @@ export default function ActionBar({
                 <span className={`text-[11px] sm:text-[12px] font-black ${
                   preset.isMax ? 'text-amber-400' : isSelected ? 'text-amber-300' : 'text-amber-400/90'
                 }`}>
-                  ${amount}
+                  {formatHChipAmount(amount)}
                 </span>
               </button>
             );
@@ -1284,8 +1285,8 @@ export default function ActionBar({
                   preAction === PRE_ACTIONS.CHECK_FOLD
                     ? '过牌/弃牌'
                     : preAction === PRE_ACTIONS.CHECK_CALL
-                    ? `过牌/跟注${preCallCost > 0 ? ` $${preCallDisplayAmt}` : ''}`
-                    : `加注至 $${currentAmount}`
+                    ? `过牌/跟注${preCallCost > 0 ? ` ${formatHChipAmount(preCallDisplayAmt)}` : ''}`
+                    : `加注至 ${formatHChipAmount(currentAmount)}`
                 }</span>
                 <span className="text-amber-400 font-extrabold">✕</span>
               </button>
@@ -1366,7 +1367,7 @@ export default function ActionBar({
                   className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
                 >
                   <span className="text-sm lg:text-base font-black tracking-wide">
-                    跟注 ${legalActions?.call_amount || 0}
+                    跟注 {formatHChipAmount(legalActions?.call_amount || 0)}
                   </span>
                   <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
                 </button>
@@ -1389,7 +1390,7 @@ export default function ActionBar({
                     ✓
                   </span>
                   <span className="text-sm lg:text-base font-black tracking-wide">
-                    过牌 / 跟注{preCallCost > 0 ? ` $${preCallDisplayAmt}` : ''}
+                    过牌 / 跟注{preCallCost > 0 ? ` ${formatHChipAmount(preCallDisplayAmt)}` : ''}
                   </span>
                 </div>
                 <span className={`text-[10px] lg:text-[11px] font-medium ${
@@ -1426,7 +1427,7 @@ export default function ActionBar({
                     : (effectiveHighestBet === 0 ? '预设下注' : '预设加注')}
                 </span>
                 <span className={`font-black ${isAllIn ? 'text-purple-300 animate-pulse' : 'text-amber-300'}`}>
-                  ${currentAmount}
+                  {formatHChipAmount(currentAmount)}
                 </span>
               </div>
               <input
@@ -1458,9 +1459,9 @@ export default function ActionBar({
                 aria-valuetext={`下注 ${currentAmount} 筹码`}
               />
               <div className="flex items-center justify-between text-[9px] lg:text-[10px] text-slate-500 font-semibold px-0.5">
-                <span>${sizingMin}</span>
+                <span>{formatHChipAmount(sizingMin)}</span>
                 <span className={isAllIn ? 'text-purple-400 font-bold' : ''}>
-                  {isAllIn ? '全下' : `$${sizingMax}`}
+                  {isAllIn ? '全下' : formatHChipAmount(sizingMax)}
                 </span>
               </div>
             </div>
@@ -1481,7 +1482,7 @@ export default function ActionBar({
                   <>
                     <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap flex items-center gap-1">
                       <Flame className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-400 fill-amber-400" />
-                      全下 ${legalActions?.all_in_amount || currentAmount}
+                      全下 {formatHChipAmount(legalActions?.all_in_amount || currentAmount)}
                     </span>
                     <span className="text-[10px] lg:text-[11px] text-purple-300/90 font-medium">
                       [R]
@@ -1490,7 +1491,7 @@ export default function ActionBar({
                 ) : (
                   <>
                     <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap">
-                      {legalActions?.can_bet ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`}
+                      {legalActions?.can_bet ? `下注 ${formatHChipAmount(currentAmount)}` : `加注至 ${formatHChipAmount(currentAmount)}`}
                     </span>
                     <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">
                       [R]
@@ -1519,8 +1520,8 @@ export default function ActionBar({
                   </span>
                   <span className="text-sm lg:text-base font-black tracking-wide whitespace-nowrap">
                     {isAllIn
-                      ? `全下 $${maxVal}`
-                      : (effectiveHighestBet === 0 ? `下注 $${currentAmount}` : `加注至 $${currentAmount}`)}
+                      ? `全下 ${formatHChipAmount(maxVal)}`
+                      : (effectiveHighestBet === 0 ? `下注 ${formatHChipAmount(currentAmount)}` : `加注至 ${formatHChipAmount(currentAmount)}`)}
                   </span>
                 </div>
                 <span className={`text-[10px] lg:text-[11px] font-medium ${
@@ -1558,7 +1559,7 @@ export default function ActionBar({
                 -1BB
               </button>
               <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 lg:px-2.5 rounded-lg border border-amber-500/40">
-                <span className="text-amber-400 font-black text-xs lg:text-sm">$</span>
+                <span className="text-amber-400 font-black text-xs lg:text-sm">H币</span>
                 <input
                   type="number"
                   min={sizingMin}
@@ -1631,7 +1632,7 @@ export default function ActionBar({
                       preset.isMax ? 'text-amber-400' : isSelected ? 'text-amber-300' : 'text-amber-400/90'
                     }`}
                   >
-                    ${amount}
+                    {formatHChipAmount(amount)}
                   </span>
                 </button>
               );
@@ -1673,7 +1674,7 @@ export default function ActionBar({
                     </span>
                   </div>
                   <span className={`text-[10px] lg:text-[11px] font-black ${isSelected ? 'text-amber-300' : 'text-slate-400'}`}>
-                    ${rawAmount}
+                    {formatHChipAmount(rawAmount)}
                   </span>
                 </button>
               );

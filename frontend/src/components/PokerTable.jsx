@@ -12,6 +12,7 @@ import { getRitStageDescription, buildBoardSlots } from '../utils/communityBoard
 import { soundEngine } from '../sound/SoundEngine';
 import { isIgnoredInputTarget, resolveHandEndHotkey } from '../utils/tableShortcuts';
 import { resolveSeatBubblePlacement } from '../utils/socialNotifications';
+import { formatHCoins, formatHChipAmount, getDefaultRoomName } from '../utils/hCurrency';
 import {
   Volume2,
   VolumeX,
@@ -83,6 +84,9 @@ export default function PokerTable({
 
   const table = room?.table;
   const isHost = room?.host_player_id === currentUser?.user_id;
+  const roomName = room?.config?.room_name || getDefaultRoomName(
+    room?.host_player_id === currentUser?.user_id ? currentUser : null
+  );
 
   // Reset handResultDismissed on new hand
   useEffect(() => {
@@ -195,7 +199,7 @@ export default function PokerTable({
       alert('全下牌局请等待本手结束');
       return;
     }
-    if (window.confirm('确定要站起并转为观战模式吗？在桌筹码将退回您的余额。')) {
+    if (window.confirm('确定要站起并转为观战模式吗？在桌筹码将退回您的H币。')) {
       onStandUpToSpectate?.();
     }
   };
@@ -358,7 +362,7 @@ export default function PokerTable({
   };
 
   const handleDeleteRoom = () => {
-    if (window.confirm('确定解散房间吗？所有在桌筹码将自动兑回余额。')) {
+    if (window.confirm('确定解散房间吗？所有在桌筹码将自动兑回H币。')) {
       onSendWsEvent('DELETE_ROOM', {});
     }
   };
@@ -461,9 +465,9 @@ export default function PokerTable({
           </button>
 
           <div className="poker-mobile-room-title">
-            <strong>{room?.config?.room_name || 'HPoker 现金桌'}</strong>
+            <strong>{roomName}</strong>
             <span>
-              盲注 ${room?.config?.small_blind || 10}/${room?.config?.big_blind || 20} · 底池 ${table?.total_pot || 0}
+              盲注 {formatHChipAmount(room?.config?.small_blind || 10)}/{formatHChipAmount(room?.config?.big_blind || 20)} · 底池 {formatHChipAmount(table?.total_pot || 0)}
             </span>
           </div>
 
@@ -537,10 +541,10 @@ export default function PokerTable({
             <button
               onClick={onOpenBalance}
               className="flex items-center gap-1 px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-300 rounded-xl text-xs font-bold border border-amber-500/40 transition active:scale-95 cursor-pointer shadow"
-              title="查看余额与资金记录"
+              title="查看H币与记录"
             >
               <Wallet className="w-3.5 h-3.5 text-amber-400" />
-              <span>余额</span>
+              <span>H币</span>
             </button>
           )}
 
@@ -627,10 +631,10 @@ export default function PokerTable({
           <div className="poker-table-room-summary flex flex-col">
             <div className="flex items-center gap-2">
               <h1 className="text-sm md:text-base font-black text-amber-400 tracking-wide">
-                {room?.config?.room_name || 'HPoker 现金桌'}
+                {roomName}
               </h1>
               <span className="poker-table-room-blinds text-[11px] bg-amber-950/90 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/40 font-bold">
-                盲注: ${room?.config?.small_blind}/${room?.config?.big_blind}
+                盲注: {formatHChipAmount(room?.config?.small_blind)}/{formatHChipAmount(room?.config?.big_blind)}
               </span>
               {room?.config?.assistant_win_ratio !== undefined && room?.config?.assistant_win_ratio < 1.0 && (
                 <span
@@ -641,7 +645,7 @@ export default function PokerTable({
               )}
             </div>
             <span className="poker-table-room-buyin text-[11px] text-slate-400">
-              买入: ${room?.config?.buyin_chips} = ¥{room?.config?.cash_value} · 超时: {room?.config?.action_timeout}s
+              买入: {room?.config?.buyin_chips}筹码 = {formatHCoins(room?.config?.cash_value)} · 超时: {room?.config?.action_timeout}s
             </span>
           </div>
         </div>
@@ -709,7 +713,7 @@ export default function PokerTable({
               className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-glow-gold transition active:scale-95 cursor-pointer animate-pulse"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Re-buy (${room?.config?.buyin_chips})
+              Re-buy ({formatHChipAmount(room?.config?.buyin_chips)})
             </button>
           )}
 
@@ -766,7 +770,7 @@ export default function PokerTable({
             <div className="poker-mobile-room-panel__header">
               <div>
                 <span>房间信息</span>
-                <strong>{room?.config?.room_name || 'HPoker 现金桌'}</strong>
+                <strong>{roomName}</strong>
               </div>
               <button
                 type="button"
@@ -779,9 +783,9 @@ export default function PokerTable({
 
             <div className="poker-mobile-room-panel__content">
               <section className="poker-mobile-room-config" aria-label="房间配置">
-                <div><span>盲注</span><strong>${room?.config?.small_blind}/${room?.config?.big_blind}</strong></div>
-                <div><span>买入</span><strong>${room?.config?.buyin_chips}</strong></div>
-                <div><span>现金</span><strong>¥{room?.config?.cash_value}</strong></div>
+                <div><span>盲注</span><strong>{formatHChipAmount(room?.config?.small_blind)}/{formatHChipAmount(room?.config?.big_blind)}</strong></div>
+                <div><span>买入</span><strong>{room?.config?.buyin_chips}筹码</strong></div>
+                <div><span>H币</span><strong>{formatHCoins(room?.config?.cash_value)}</strong></div>
                 <div><span>操作时间</span><strong>{room?.config?.action_timeout}s</strong></div>
                 <div><span>座位</span><strong>{(table?.seats || []).filter(Boolean).length}/{maxSeats}</strong></div>
                 <div>
@@ -801,9 +805,9 @@ export default function PokerTable({
                 >
                   <span className="flex items-center gap-2">
                     <Wallet className="w-4 h-4 text-amber-400" />
-                    余额中心
+                    H币中心
                   </span>
-                  <span className="text-[10px] text-amber-400/80">充值/提现请联系管理员</span>
+                  <span className="text-[10px] text-amber-400/80">H币不足时无法买入或补码</span>
                 </button>
               )}
 
@@ -829,7 +833,7 @@ export default function PokerTable({
               <section className="poker-mobile-room-actions" aria-label="房间操作">
                 {canRebuy && (
                   <button type="button" onClick={() => { setIsRoomPanelOpen(false); handleRebuy(); }}>
-                    <RefreshCw aria-hidden="true" /> 补码 ${room?.config?.buyin_chips}
+                    <RefreshCw aria-hidden="true" /> 补码 {formatHChipAmount(room?.config?.buyin_chips)}
                   </button>
                 )}
                 {isHost && !room?.is_ended && (
@@ -959,7 +963,7 @@ export default function PokerTable({
                     </span>
                     <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                     <span className="text-base md:text-xl font-black text-amber-300 tracking-wide">
-                      底池: ${table?.total_pot || 0}
+                      底池: {formatHChipAmount(table?.total_pot || 0)}
                     </span>
                   </div>
 
@@ -972,7 +976,7 @@ export default function PokerTable({
                           key={i}
                           className="text-xs font-bold bg-amber-950/80 text-amber-300 px-2.5 py-0.5 rounded-md border border-amber-500/30 shadow"
                         >
-                          {p.name}: ${p.amount}
+                          {p.name}: {formatHChipAmount(p.amount)}
                         </span>
                       ))}
                     </div>
@@ -1016,7 +1020,7 @@ export default function PokerTable({
                         className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs md:text-sm font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer animate-pulse"
                       >
                         <RefreshCw className="w-4 h-4" />
-                        补码 (${room?.config?.buyin_chips || 1000})
+                        补码 ({formatHChipAmount(room?.config?.buyin_chips || 1000)})
                       </button>
                     ) : isHost ? (
                       <button
@@ -1071,7 +1075,7 @@ export default function PokerTable({
                         </span>
                         {table?.total_pot ? (
                           <span className="text-xs md:text-sm font-bold text-amber-300/90 bg-amber-950/60 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
-                            底池 ${table.total_pot}
+                            底池 {formatHChipAmount(table.total_pot)}
                           </span>
                         ) : null}
                       </div>
