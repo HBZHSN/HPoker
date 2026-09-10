@@ -18,6 +18,7 @@ import {
 import PersonalHistory from './PersonalHistory';
 import { filterVisibleLobbyUsers } from '../utils/lobbyUsers';
 import { formatHCoins, getDefaultRoomName } from '../utils/hCurrency';
+import { DEFAULT_ROOM_CONFIG, normalizeRoomDefaults } from '../utils/roomDefaults';
 
 export default function Lobby({
   currentUser,
@@ -30,6 +31,7 @@ export default function Lobby({
   onLogout,
   rooms = [],
   users = [],
+  roomDefaults = DEFAULT_ROOM_CONFIG,
   onCreateRoom,
   onDeleteRoom,
   onJoinRoom,
@@ -43,18 +45,29 @@ export default function Lobby({
   const closeHistory = useCallback(() => setHistoryUser(null), []);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const defaultRoomName = getDefaultRoomName(currentUser);
+  const normalizedRoomDefaults = useMemo(
+    () => normalizeRoomDefaults(roomDefaults),
+    [roomDefaults],
+  );
   const [roomName, setRoomName] = useState(() => defaultRoomName);
-  const [buyinChips, setBuyinChips] = useState(1000);
-  const [hCoinValue, setHCoinValue] = useState(100);
-  const [smallBlind, setSmallBlind] = useState(10);
-  const [actionTimeout, setActionTimeout] = useState(15);
-  const [maxSeats, setMaxSeats] = useState(6);
-  const [assistantWinPct, setAssistantWinPct] = useState(70);
+  const [buyinChips, setBuyinChips] = useState(() => normalizedRoomDefaults.buyin_chips);
+  const [hCoinValue, setHCoinValue] = useState(() => normalizedRoomDefaults.cash_value);
+  const [smallBlind, setSmallBlind] = useState(() => normalizedRoomDefaults.small_blind);
+  const [actionTimeout, setActionTimeout] = useState(() => normalizedRoomDefaults.action_timeout);
+  const [maxSeats, setMaxSeats] = useState(() => normalizedRoomDefaults.max_seats);
+  const [assistantWinPct, setAssistantWinPct] = useState(() => normalizedRoomDefaults.assistant_win_pct);
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'online'
 
   useEffect(() => {
-    if (createModalOpen) setRoomName(defaultRoomName);
-  }, [createModalOpen, defaultRoomName]);
+    if (!createModalOpen) return;
+    setRoomName(defaultRoomName);
+    setBuyinChips(normalizedRoomDefaults.buyin_chips);
+    setHCoinValue(normalizedRoomDefaults.cash_value);
+    setSmallBlind(normalizedRoomDefaults.small_blind);
+    setActionTimeout(normalizedRoomDefaults.action_timeout);
+    setMaxSeats(normalizedRoomDefaults.max_seats);
+    setAssistantWinPct(normalizedRoomDefaults.assistant_win_pct);
+  }, [createModalOpen, defaultRoomName, normalizedRoomDefaults]);
 
   const visibleUsers = useMemo(() => filterVisibleLobbyUsers(users), [users]);
 

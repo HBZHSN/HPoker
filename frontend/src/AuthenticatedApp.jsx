@@ -12,6 +12,7 @@ import { ActionSounds } from './sound/ActionSounds';
 import { usePWA } from './utils/usePWA';
 import { normalizeHCoinsMessage } from './utils/hCurrency';
 import { DEFAULT_WATERMARK_CONFIG } from './utils/watermark';
+import { DEFAULT_ROOM_CONFIG, normalizeRoomDefaults } from './utils/roomDefaults';
 
 const lastRoomStorageKey = (userId) => `active_room_${userId}`;
 const legacyLastRoomStorageKey = (userId) => `hpoker_active_room_${userId}`;
@@ -78,6 +79,7 @@ export default function AuthenticatedApp({
   const pwa = usePWA();
 
   const [watermarkConfig, setWatermarkConfig] = useState(DEFAULT_WATERMARK_CONFIG);
+  const [roomDefaults, setRoomDefaults] = useState(DEFAULT_ROOM_CONFIG);
 
   const wsRef = useRef(null);
   const actionSoundsRef = useRef(null);
@@ -102,6 +104,25 @@ export default function AuthenticatedApp({
     const interval = window.setInterval(fetchWatermarkConfig, 15000);
     return () => window.clearInterval(interval);
   }, [fetchWatermarkConfig]);
+
+  const fetchRoomDefaults = useCallback(async () => {
+    try {
+      const response = await fetch('/api/config/room-defaults', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) return;
+      const config = await response.json();
+      setRoomDefaults(normalizeRoomDefaults(config));
+    } catch (error) {
+      console.warn('Failed to load default room configuration:', error);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchRoomDefaults();
+    const interval = window.setInterval(fetchRoomDefaults, 15000);
+    return () => window.clearInterval(interval);
+  }, [fetchRoomDefaults]);
 
   useEffect(() => {
     setSocialHistory([]);
@@ -573,6 +594,7 @@ export default function AuthenticatedApp({
           onLogout={onLogout}
           rooms={rooms}
           users={lobbyUsers}
+          roomDefaults={roomDefaults}
           onRefreshLobby={fetchLobbyData}
           onCreateRoom={handleCreateRoom}
           onDeleteRoom={handleDeleteRoom}
@@ -605,6 +627,7 @@ export default function AuthenticatedApp({
           token={token}
           onClose={() => setAdminOpen(false)}
           onWatermarkUpdated={setWatermarkConfig}
+          onRoomDefaultsUpdated={setRoomDefaults}
         />
       )}
 
