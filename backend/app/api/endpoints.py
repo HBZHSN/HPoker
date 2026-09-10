@@ -20,6 +20,16 @@ from backend.app.websocket.connection_manager import ws_manager
 from backend.app.websocket.protocol import EventType, make_message
 from backend.app.models.room import RoomConfig
 from backend.app.models.user import User
+from backend.app.models.watermark import (
+    MAX_WATERMARK_DENSITY,
+    MAX_WATERMARK_OPACITY,
+    MAX_WATERMARK_TEXT_LENGTH,
+    MAX_WATERMARK_TILT,
+    MIN_WATERMARK_DENSITY,
+    MIN_WATERMARK_OPACITY,
+    MIN_WATERMARK_TILT,
+)
+from backend.app.services.watermark_manager import watermark_manager
 
 api_router = APIRouter()
 
@@ -188,6 +198,43 @@ def admin_delete_user(
         raise HTTPException(status_code=403, detail=str(pe))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
+
+
+class WatermarkUpdateRequest(BaseModel):
+    text: str = Field(..., max_length=MAX_WATERMARK_TEXT_LENGTH)
+    opacity: float = Field(
+        ..., ge=MIN_WATERMARK_OPACITY, le=MAX_WATERMARK_OPACITY
+    )
+    density: int = Field(
+        ..., ge=MIN_WATERMARK_DENSITY, le=MAX_WATERMARK_DENSITY
+    )
+    tilt: float = Field(..., ge=MIN_WATERMARK_TILT, le=MAX_WATERMARK_TILT)
+
+
+@api_router.get("/config/watermark")
+def get_watermark_config():
+    """Return the currently active global watermark values."""
+    return watermark_manager.get_config().to_dict()
+
+
+@api_router.put("/admin/config/watermark")
+def update_watermark_config(
+    req: WatermarkUpdateRequest,
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    """Update the global watermark; only an authenticated admin may do so."""
+    admin = _verify_admin(authorization=authorization, token=token)
+    try:
+        return watermark_manager.update_config(
+            text=req.text,
+            opacity=req.opacity,
+            density=req.density,
+            tilt=req.tilt,
+            updated_by=admin.user_id,
+        ).to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class CreateRoomRequest(BaseModel):
