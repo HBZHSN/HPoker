@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, UserPlus, KeyRound, Trash2, Edit3, X, CheckCircle2, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { AVATAR_OPTIONS } from '../utils/avatarOptions';
+import AdminWatermarkSettings from './AdminWatermarkSettings';
 
-export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
+export default function AdminUserModal({ isOpen, adminUser, token, onClose, onWatermarkUpdated }) {
   if (!isOpen || !adminUser || !adminUser.is_admin) return null;
 
   const [users, setUsers] = useState([]);
@@ -382,6 +383,11 @@ export default function AdminUserModal({ isOpen, adminUser, token, onClose }) {
             </tbody>
           </table>
         </div>
+
+        <AdminWatermarkSettings
+          token={token}
+          onUpdated={onWatermarkUpdated}
+        />
 
         {/* Settlement Data Reset Panel */}
         <div className="p-3 bg-slate-900/90 border border-red-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
