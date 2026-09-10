@@ -19,6 +19,16 @@ from backend.app.services.authentication import (
 from backend.app.websocket.connection_manager import ws_manager
 from backend.app.websocket.protocol import EventType, make_message
 from backend.app.models.room import RoomConfig
+from backend.app.models.room_defaults import (
+    MAX_ACTION_TIMEOUT,
+    MAX_ASSISTANT_WIN_RATIO,
+    MAX_MAX_SEATS,
+    MIN_ACTION_TIMEOUT,
+    MIN_ASSISTANT_WIN_RATIO,
+    MIN_BUYIN_CHIPS,
+    MIN_MAX_SEATS,
+    MIN_SMALL_BLIND,
+)
 from backend.app.models.user import User
 from backend.app.models.watermark import (
     MAX_WATERMARK_DENSITY,
@@ -30,6 +40,7 @@ from backend.app.models.watermark import (
     MIN_WATERMARK_TILT,
 )
 from backend.app.services.watermark_manager import watermark_manager
+from backend.app.services.room_defaults_manager import room_defaults_manager
 
 api_router = APIRouter()
 
@@ -237,16 +248,63 @@ def update_watermark_config(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+class RoomDefaultsUpdateRequest(BaseModel):
+    buyin_chips: int = Field(..., ge=MIN_BUYIN_CHIPS)
+    cash_value: float = Field(..., ge=0.0)
+    small_blind: int = Field(..., ge=MIN_SMALL_BLIND)
+    action_timeout: int = Field(
+        ..., ge=MIN_ACTION_TIMEOUT, le=MAX_ACTION_TIMEOUT
+    )
+    max_seats: int = Field(..., ge=MIN_MAX_SEATS, le=MAX_MAX_SEATS)
+    assistant_win_ratio: float = Field(
+        ..., ge=MIN_ASSISTANT_WIN_RATIO, le=MAX_ASSISTANT_WIN_RATIO
+    )
+
+
+@api_router.get("/config/room-defaults")
+def get_room_defaults_config():
+    """Return the defaults applied to fields omitted when creating a room."""
+    return room_defaults_manager.get_config().to_dict()
+
+
+@api_router.put("/admin/config/room-defaults")
+def update_room_defaults_config(
+    req: RoomDefaultsUpdateRequest,
+    authorization: Optional[str] = Header(None),
+    token: Optional[str] = Query(None),
+):
+    """Update new-room defaults; only an authenticated admin may do so."""
+    admin = _verify_admin(authorization=authorization, token=token)
+    try:
+        return room_defaults_manager.update_config(
+            buyin_chips=req.buyin_chips,
+            cash_value=req.cash_value,
+            small_blind=req.small_blind,
+            action_timeout=req.action_timeout,
+            max_seats=req.max_seats,
+            assistant_win_ratio=req.assistant_win_ratio,
+            updated_by=admin.user_id,
+        ).to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 class CreateRoomRequest(BaseModel):
     host_player_id: Optional[str] = None
-    room_name: str = "HPoker 现金桌"
-    buyin_chips: int = Field(default=1000, ge=10)
-    cash_value: float = Field(default=100.0, ge=0.0)
-    small_blind: int = Field(default=10, ge=1)
+    room_name: Optional[str] = None
+    buyin_chips: Optional[int] = Field(default=None, ge=MIN_BUYIN_CHIPS)
+    cash_value: Optional[float] = Field(default=None, ge=0.0)
+    small_blind: Optional[int] = Field(default=None, ge=MIN_SMALL_BLIND)
     big_blind: Optional[int] = None
-    action_timeout: int = Field(default=15, ge=5, le=60)
-    max_seats: int = Field(default=6, ge=2, le=9)
-    assistant_win_ratio: float = Field(default=0.70, ge=0.1, le=1.0)
+    action_timeout: Optional[int] = Field(
+        default=None, ge=MIN_ACTION_TIMEOUT, le=MAX_ACTION_TIMEOUT
+    )
+    max_seats: Optional[int] = Field(
+        default=None, ge=MIN_MAX_SEATS, le=MAX_MAX_SEATS
+    )
+    assistant_win_ratio: Optional[float] = Field(
+        default=None, ge=MIN_ASSISTANT_WIN_RATIO, le=MAX_ASSISTANT_WIN_RATIO
+    )
 
 
 @api_router.get("/lobby/users")
@@ -305,14 +363,35 @@ async def create_room(
             host = user_manager.get_user(req.host_player_id)
         if not host:
             raise
+    defaults = room_defaults_manager.get_config()
     cfg = RoomConfig(
-        room_name=req.room_name,
-        buyin_chips=req.buyin_chips,
-        cash_value=req.cash_value,
-        small_blind=req.small_blind,
-        action_timeout=req.action_timeout,
-        max_seats=req.max_seats,
-        assistant_win_ratio=req.assistant_win_ratio,
+        room_name=req.room_name if req.room_name is not None else "HPoker 现金桌",
+        buyin_chips=(
+            req.buyin_chips
+            if req.buyin_chips is not None
+            else defaults.buyin_chips
+        ),
+        cash_value=(
+            req.cash_value if req.cash_value is not None else defaults.cash_value
+        ),
+        small_blind=(
+            req.small_blind
+            if req.small_blind is not None
+            else defaults.small_blind
+        ),
+        action_timeout=(
+            req.action_timeout
+            if req.action_timeout is not None
+            else defaults.action_timeout
+        ),
+        max_seats=(
+            req.max_seats if req.max_seats is not None else defaults.max_seats
+        ),
+        assistant_win_ratio=(
+            req.assistant_win_ratio
+            if req.assistant_win_ratio is not None
+            else defaults.assistant_win_ratio
+        ),
     )
     if cfg.cash_value > 0 and not host.is_test_account:
         required_cents = int((Decimal(str(cfg.cash_value)) * 100).quantize(Decimal("1")))
