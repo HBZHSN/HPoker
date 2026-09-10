@@ -101,6 +101,20 @@ class SQLiteDatabase:
                     applied_at REAL NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS global_watermark (
+                    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                    text_content TEXT NOT NULL
+                        CHECK (length(text_content) <= 200),
+                    opacity REAL NOT NULL CHECK (opacity >= 0 AND opacity <= 1),
+                    density INTEGER NOT NULL CHECK (density >= 1 AND density <= 8),
+                    tilt REAL NOT NULL CHECK (tilt >= -45 AND tilt <= 45),
+                    updated_at REAL NOT NULL,
+                    updated_by TEXT
+                );
+                INSERT OR IGNORE INTO global_watermark(
+                    singleton_id, text_content, opacity, density, tilt, updated_at
+                ) VALUES (1, 'HPoker', 0.12, 4, -20, CAST(strftime('%s', 'now') AS REAL));
+
                 CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
                     username TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -318,7 +332,11 @@ class SQLiteDatabase:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (4, time.time()),
             )
-            connection.execute("PRAGMA user_version = 4")
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (5, time.time()),
+            )
+            connection.execute("PRAGMA user_version = 5")
 
     @staticmethod
     def _encode(payload: dict) -> str:
@@ -337,6 +355,46 @@ class SQLiteDatabase:
                 "INSERT OR IGNORE INTO data_migrations(name, applied_at) VALUES (?, ?)",
                 (name, time.time()),
             )
+
+    def load_watermark(self) -> Optional[dict]:
+        """Load the singleton global watermark row, if it exists."""
+        with self.connection() as connection:
+            row = connection.execute(
+                """SELECT text_content, opacity, density, tilt, updated_at, updated_by
+                   FROM global_watermark WHERE singleton_id = 1"""
+            ).fetchone()
+        return dict(row) if row else None
+
+    def save_watermark(self, config: dict, *, updated_by: Optional[str] = None) -> dict:
+        """Atomically replace the singleton global watermark row."""
+        now = time.time()
+        with self.connection(write=True) as connection:
+            connection.execute(
+                """INSERT INTO global_watermark(
+                       singleton_id, text_content, opacity, density, tilt,
+                       updated_at, updated_by
+                   ) VALUES (1, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(singleton_id) DO UPDATE SET
+                       text_content = excluded.text_content,
+                       opacity = excluded.opacity,
+                       density = excluded.density,
+                       tilt = excluded.tilt,
+                       updated_at = excluded.updated_at,
+                       updated_by = excluded.updated_by""",
+                (
+                    config["text"],
+                    config["opacity"],
+                    config["density"],
+                    config["tilt"],
+                    now,
+                    updated_by,
+                ),
+            )
+            row = connection.execute(
+                """SELECT text_content, opacity, density, tilt, updated_at, updated_by
+                   FROM global_watermark WHERE singleton_id = 1"""
+            ).fetchone()
+        return dict(row)
 
     def load_users(self) -> tuple[list[dict], dict[str, str]]:
         with self.connection() as connection:
