@@ -53,8 +53,6 @@ body {
   display: grid;
   grid-template-columns: repeat(var(--watermark-density), minmax(0, 1fr));
   grid-template-rows: repeat(var(--watermark-density), minmax(0, 1fr));
-  transform: rotate(var(--watermark-tilt));
-  transform-origin: center;
 }
 
 .global-watermark-label {
@@ -62,14 +60,22 @@ body {
   align-items: center;
   justify-content: center;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.global-watermark-text {
+  display: block;
   color: rgb(251 191 36 / var(--watermark-opacity));
-  font-size: clamp(11px, 1.35vw, 22px);
-  font-weight: 900;
+  font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: clamp(12px, 1.35vw, 22px);
+  font-weight: 700;
   letter-spacing: 0.16em;
   line-height: 1.2;
   text-align: center;
-  text-shadow: 0 1px 10px rgb(0 0 0 / 0.45), 0 0 2px rgb(251 191 36 / 0.35);
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+  transform: rotate(var(--watermark-tilt));
+  transform-origin: center;
   white-space: nowrap;
 }
 

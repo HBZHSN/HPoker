@@ -14,7 +14,7 @@ export default function GlobalWatermark({ config }) {
       <div className="global-watermark-grid" style={getWatermarkStyle(normalized)}>
         {Array.from({ length: getWatermarkTileCount(normalized) }, (_, index) => (
           <span className="global-watermark-label" key={`${normalized.text}-${index}`}>
-            {normalized.text}
+            <span className="global-watermark-text">{normalized.text}</span>
           </span>
         ))}
       </div>
