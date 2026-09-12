@@ -522,91 +522,97 @@ export default function AuthenticatedApp({
 
   if (requiresMobilePWAGate) {
     return (
-      <>
-        <MobilePWAGate
-          isIOS={pwa.isIOS}
-          isInAppBrowser={pwa.isInAppBrowser}
-          hasNativePrompt={pwa.hasNativePrompt}
-          onInstallNative={pwa.promptInstall}
-          onOpenInstallModal={pwa.openInstallModal}
-          onContinue={pwa.isInAppBrowser ? null : handlePwaContinue}
-        />
-        <PWAInstallModal
-          isOpen={pwa.isModalOpen}
-          onClose={pwa.closeInstallModal}
-          onInstallNative={pwa.promptInstall}
-          hasNativePrompt={pwa.hasNativePrompt}
-          guideType={pwa.guideType}
-          onToggleFullscreen={pwa.toggleFullscreen}
-          isFullscreen={pwa.isFullscreen}
-        />
+      <div className="relative isolate w-full h-full min-h-screen bg-[#080b11] text-slate-100 flex flex-col font-sans">
         <GlobalWatermark config={watermarkConfig} />
-      </>
+        <div className="relative z-10 flex-1 flex flex-col">
+          <MobilePWAGate
+            isIOS={pwa.isIOS}
+            isInAppBrowser={pwa.isInAppBrowser}
+            hasNativePrompt={pwa.hasNativePrompt}
+            onInstallNative={pwa.promptInstall}
+            onOpenInstallModal={pwa.openInstallModal}
+            onContinue={pwa.isInAppBrowser ? null : handlePwaContinue}
+          />
+          <PWAInstallModal
+            isOpen={pwa.isModalOpen}
+            onClose={pwa.closeInstallModal}
+            onInstallNative={pwa.promptInstall}
+            hasNativePrompt={pwa.hasNativePrompt}
+            guideType={pwa.guideType}
+            onToggleFullscreen={pwa.toggleFullscreen}
+            isFullscreen={pwa.isFullscreen}
+          />
+        </div>
+      </div>
     );
   }
 
   return (
     <div
-      className={`w-full h-full bg-[#080b11] text-slate-100 flex flex-col font-sans ${
-        activeRoomId && roomData ? 'overflow-hidden' : 'overflow-y-auto overscroll-contain'
+      className={`relative isolate w-full h-full text-slate-100 flex flex-col font-sans ${
+        activeRoomId && roomData
+          ? 'overflow-hidden bg-gradient-to-b from-[#080b11] via-[#040507] to-[#020304]'
+          : 'overflow-y-auto overscroll-contain bg-[#080b11]'
       }`}
     >
       <GlobalWatermark config={watermarkConfig} />
-      {activeRoomId && roomData ? (
-        <PokerTable
-          token={token}
-          room={roomData}
-          currentUser={currentUser}
-          socialHistory={socialHistory}
-          seatSocialBubbles={seatSocialBubbles}
-          spectatorSocialBubbles={spectatorSocialBubbles}
-          onSendWsEvent={sendWsEvent}
-          onLeaveRoom={handleLeaveRoom}
-          onStandUpToSpectate={handleStandUpToSpectate}
-          onToggleFullscreen={pwa.toggleFullscreen}
-          isFullscreen={pwa.isFullscreen}
-          onOpenBalance={() => setBalanceOpen(true)}
-        />
-      ) : activeRoomId ? (
-        <div className="w-full h-full min-h-screen bg-[#080b11] flex flex-col items-center justify-center gap-4 text-center p-6">
-          <div className="w-10 h-10 rounded-full border-4 border-slate-700 border-t-amber-400 animate-spin" />
-          <div>
-            <div className="text-sm font-black text-amber-300">
-              {connectionStatus === 'retrying' ? '正在重新连接牌桌' : '正在恢复上次牌桌'}
+      <div className="relative z-10 flex-1 flex flex-col min-h-0">
+        {activeRoomId && roomData ? (
+          <PokerTable
+            token={token}
+            room={roomData}
+            currentUser={currentUser}
+            socialHistory={socialHistory}
+            seatSocialBubbles={seatSocialBubbles}
+            spectatorSocialBubbles={spectatorSocialBubbles}
+            onSendWsEvent={sendWsEvent}
+            onLeaveRoom={handleLeaveRoom}
+            onStandUpToSpectate={handleStandUpToSpectate}
+            onToggleFullscreen={pwa.toggleFullscreen}
+            isFullscreen={pwa.isFullscreen}
+            onOpenBalance={() => setBalanceOpen(true)}
+          />
+        ) : activeRoomId ? (
+          <div className="w-full h-full min-h-screen bg-transparent flex flex-col items-center justify-center gap-4 text-center p-6">
+            <div className="w-10 h-10 rounded-full border-4 border-slate-700 border-t-amber-400 animate-spin" />
+            <div>
+              <div className="text-sm font-black text-amber-300">
+                {connectionStatus === 'retrying' ? '正在重新连接牌桌' : '正在恢复上次牌桌'}
+              </div>
             </div>
+            <button
+              onClick={handleLeaveRoom}
+              className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-300"
+            >
+              返回大厅
+            </button>
           </div>
-          <button
-            onClick={handleLeaveRoom}
-            className="px-4 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-300"
-          >
-            返回大厅
-          </button>
-        </div>
-      ) : (
-        <Lobby
-          currentUser={currentUser}
-          token={token}
-          userBalance={userBalance}
-          onUpdateUser={onUpdateUser}
-          onOpenProfile={() => setProfileOpen(true)}
-          onOpenAdmin={() => setAdminOpen(true)}
-          onOpenBalance={() => setBalanceOpen(true)}
-          onLogout={onLogout}
-          rooms={rooms}
-          users={lobbyUsers}
-          roomDefaults={roomDefaults}
-          onRefreshLobby={fetchLobbyData}
-          onCreateRoom={handleCreateRoom}
-          onDeleteRoom={handleDeleteRoom}
-          onJoinRoom={handleJoinRoom}
-          onInstallApp={pwa.promptInstall}
-          onToggleFullscreen={pwa.toggleFullscreen}
-          isFullscreen={pwa.isFullscreen}
-          isStandalone={pwa.isStandalone}
-          isInstallable={pwa.isInstallable}
-          pwaAcknowledged={pwaGateDismissed}
-        />
-      )}
+        ) : (
+          <Lobby
+            currentUser={currentUser}
+            token={token}
+            userBalance={userBalance}
+            onUpdateUser={onUpdateUser}
+            onOpenProfile={() => setProfileOpen(true)}
+            onOpenAdmin={() => setAdminOpen(true)}
+            onOpenBalance={() => setBalanceOpen(true)}
+            onLogout={onLogout}
+            rooms={rooms}
+            users={lobbyUsers}
+            roomDefaults={roomDefaults}
+            onRefreshLobby={fetchLobbyData}
+            onCreateRoom={handleCreateRoom}
+            onDeleteRoom={handleDeleteRoom}
+            onJoinRoom={handleJoinRoom}
+            onInstallApp={pwa.promptInstall}
+            onToggleFullscreen={pwa.toggleFullscreen}
+            isFullscreen={pwa.isFullscreen}
+            isStandalone={pwa.isStandalone}
+            isInstallable={pwa.isInstallable}
+            pwaAcknowledged={pwaGateDismissed}
+          />
+        )}
+      </div>
 
       {/* User Profile Modal */}
       {profileOpen && (

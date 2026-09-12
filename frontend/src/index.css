@@ -34,17 +34,17 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The administrator-controlled watermark must remain visible above every app
-   surface, including dialogs. It never captures input or changes layout. */
+/* The administrator-controlled watermark displays on the background behind
+   application surfaces, cards, action controls, and dialogs. It never captures
+   input or changes layout. */
 .global-watermark-layer {
   position: fixed;
   inset: 0;
-  z-index: 2147483647;
+  z-index: 0;
   overflow: hidden;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
-  isolation: isolate;
 }
 
 .global-watermark-grid {
@@ -91,7 +91,7 @@ button, a, input, select {
   min-height: 100%;
   min-height: var(--app-height, 100vh);
   max-height: none;
-  background-color: #080b11;
+  background-color: transparent;
 }
 
 .poker-table-mobile-header,
@@ -287,7 +287,7 @@ button, a, input, select {
     max-height: none;
     margin: 0;
     padding: 0;
-    background-color: #080b11;
+    background-color: transparent;
   }
 
   .poker-table-header {
