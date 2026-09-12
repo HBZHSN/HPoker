@@ -326,7 +326,7 @@ export default function Lobby({
                             </span>
                           )}
                           <span className="text-xs bg-amber-950/80 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30 shrink-0">
-                            H币{r.small_blind}/H币{r.big_blind}
+                            盲注 {r.small_blind}/{r.big_blind}
                           </span>
                         </div>
 

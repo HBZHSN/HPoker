@@ -1137,7 +1137,7 @@ export default function ActionBar({
           )}
         </div>
 
-        {/* Sizing Slider Row: [-] [===Slider===] [+] [H币 amount card] */}
+        {/* Sizing Slider Row: [-] [===Slider===] [+] [筹码 amount card] */}
         <div className="poker-sizing-row flex items-center gap-1.5 sm:gap-2 bg-slate-950/80 border border-slate-800/80 rounded-xl px-2 py-1.5 shadow-inner">
           <button
             type="button"
@@ -1186,7 +1186,7 @@ export default function ActionBar({
           {/* Amount Badge: display only current bet amount */}
           <div className="flex items-center justify-center bg-slate-900/95 px-3 py-1.5 sm:py-2 rounded-xl border border-amber-500/50 min-w-[76px] sm:min-w-[88px] flex-shrink-0 shadow-inner">
             <div className="flex items-center text-amber-400 font-black text-sm sm:text-base leading-tight">
-              <span className="mr-0.5">H币</span>
+              <span className="mr-0.5">筹码</span>
               <input
                 type="number"
                 min={sizingMin}
@@ -1559,7 +1559,7 @@ export default function ActionBar({
                 -1BB
               </button>
               <div className="flex items-center gap-1 bg-slate-950 px-2 py-0.5 lg:px-2.5 rounded-lg border border-amber-500/40">
-                <span className="text-amber-400 font-black text-xs lg:text-sm">H币</span>
+                <span className="text-amber-400 font-black text-xs lg:text-sm">筹码</span>
                 <input
                   type="number"
                   min={sizingMin}

@@ -14,9 +14,16 @@ export function formatHCoins(value, { showPlus = false, decimals = 2 } = {}) {
   return `${H_COIN_LABEL}${amount}`;
 }
 
-export function formatHChipAmount(value, showPlus = false) {
-  return formatHCoins(value, { showPlus, decimals: 0 });
+export function formatChipAmount(value, showPlus = false) {
+  const number = finiteNumber(value);
+  const rounded = Math.round(number);
+  const formatted = Math.abs(rounded).toLocaleString('zh-CN');
+  if (rounded > 0) return `${showPlus ? '+' : ''}${formatted}`;
+  if (rounded < 0) return `-${formatted}`;
+  return formatted;
 }
+
+export const formatHChipAmount = formatChipAmount;
 
 export function getDefaultRoomName(user) {
   const name = user?.nickname?.trim() || user?.username?.trim() || '房主';

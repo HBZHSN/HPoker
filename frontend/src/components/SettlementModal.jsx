@@ -163,7 +163,7 @@ export default function SettlementModal({
                       {formatHCoins(t.amount_cash)}
                     </div>
                     <div className="text-[10px] text-slate-400 font-medium">
-                      ({formatHChipAmount(t.amount_chips)})
+                      ({formatHChipAmount(t.amount_chips)} 筹码)
                     </div>
                   </div>
                 </div>

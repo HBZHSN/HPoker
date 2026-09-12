@@ -785,7 +785,7 @@ export default function PokerTable({
               <section className="poker-mobile-room-config" aria-label="房间配置">
                 <div><span>盲注</span><strong>{formatHChipAmount(room?.config?.small_blind)}/{formatHChipAmount(room?.config?.big_blind)}</strong></div>
                 <div><span>买入</span><strong>{room?.config?.buyin_chips}筹码</strong></div>
-                <div><span>H币</span><strong>{formatHCoins(room?.config?.cash_value)}</strong></div>
+                <div><span>对应H币</span><strong>{formatHCoins(room?.config?.cash_value)}</strong></div>
                 <div><span>操作时间</span><strong>{room?.config?.action_timeout}s</strong></div>
                 <div><span>座位</span><strong>{(table?.seats || []).filter(Boolean).length}/{maxSeats}</strong></div>
                 <div>

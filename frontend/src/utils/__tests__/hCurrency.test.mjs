@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   formatHCoins,
+  formatChipAmount,
   formatHChipAmount,
   getDefaultRoomName,
   normalizeHCoinsMessage,
@@ -12,7 +13,14 @@ test('formats H币 with signs and configurable precision', () => {
   assert.equal(formatHCoins(12.3, { showPlus: true }), '+H币12.30');
   assert.equal(formatHCoins(-4.5), '-H币4.50');
   assert.equal(formatHCoins(0), 'H币0.00');
-  assert.equal(formatHChipAmount(1200), 'H币1200');
+});
+
+test('formats chips as numeric amounts without H币 label', () => {
+  assert.equal(formatChipAmount(1200), '1,200');
+  assert.equal(formatHChipAmount(1200), '1,200');
+  assert.equal(formatChipAmount(1200, true), '+1,200');
+  assert.equal(formatChipAmount(-450), '-450');
+  assert.equal(formatChipAmount(0), '0');
 });
 
 test('builds a room name from the host identity', () => {
