@@ -60,7 +60,6 @@ const buildSeatPositions = (seatCount) => {
 export default function PokerTable({
   room,
   currentUser,
-  token,
   socialHistory = [],
   seatSocialBubbles = {},
   spectatorSocialBubbles = [],
@@ -449,7 +448,7 @@ export default function PokerTable({
 
   return (
     <div className="poker-table-root relative w-full h-full min-h-full overflow-hidden flex flex-col justify-between bg-transparent">
-      {statsPlayer && <PlayerStatsModal key={`${room.room_id}:${statsPlayer.player_id}`} player={statsPlayer} roomId={room.room_id} currentUserId={currentUser?.user_id} token={token} handNumber={table?.hand_number} street={table?.street} onClose={closeStats} />}
+      {statsPlayer && <PlayerStatsModal key={`${room.room_id}:${statsPlayer.player_id}`} player={statsPlayer} currentUserId={currentUser?.user_id} data={room.player_statistics?.[statsPlayer.player_id]} onClose={closeStats} />}
       {/* Top Navigation Bar */}
       <header className="poker-table-header flex items-center justify-between px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md z-30 flex-shrink-0">
         <div className="poker-table-mobile-header">

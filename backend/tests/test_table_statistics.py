@@ -158,3 +158,38 @@ def test_background_computation_leaves_event_loop_and_snapshot_reads_available(t
         await asyncio.wait_for(task, 1)
 
     asyncio.run(scenario())
+
+
+def test_websocket_preloads_public_stats_for_self_opponent_and_spectator(tmp_path, monkeypatch):
+    from backend.app.models.room import RoomConfig
+    from backend.app.services import hand_history_manager as history_module
+    from backend.app.services.room_manager import RoomManager
+    from backend.app.websocket.connection_manager import ConnectionManager
+    manager = RoomManager(str(tmp_path / 'push.sqlite3'))
+    room = manager.create_room('u_test1', RoomConfig(), room_id='table')
+    for i in range(2):
+        room.sit_down_player(f'u_test{i + 1}', str(i), i, is_test=True)
+    history = manager.hand_history_manager
+    record(history)
+    history.refresh_table_statistics('table')
+    monkeypatch.setattr(history_module, 'hand_history_manager', history)
+    monkeypatch.setattr(player_statistics, 'query_statistics', lambda *_: pytest.fail('broadcast computed stats'))
+    sent = []
+
+    class Socket:
+        async def send_text(self, message):
+            sent.append(json.loads(message))
+
+    ws = ConnectionManager()
+    for viewer in ('u_test1', 'u_test2', 'spectator'):
+        socket = Socket()
+        ws.room_connections.setdefault('table', set()).add(socket)
+        ws.socket_info[socket] = ('table', viewer)
+    asyncio.run(ws.broadcast_room_state(room, checkpoint=False))
+    assert len(sent) == 3
+    for message in sent:
+        assert message['event'] == 'ROOM_STATE'
+        stats = message['payload']['player_statistics']
+        assert set(stats) == {'u_test1', 'u_test2'}
+        assert all(item['hands'] == 1 and not item['updating'] for item in stats.values())
+        assert not any(key in json.dumps(stats) for key in ('hole_cards', 'shown_cards', 'actions', 'As', 'Kh'))

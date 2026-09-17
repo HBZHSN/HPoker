@@ -559,7 +559,6 @@ export default function AuthenticatedApp({
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
         {activeRoomId && roomData ? (
           <PokerTable
-            token={token}
             room={roomData}
             currentUser={currentUser}
             socialHistory={socialHistory}
