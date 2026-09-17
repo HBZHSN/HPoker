@@ -4,7 +4,7 @@ from backend.app.engine.card import Card
 from backend.app.engine.evaluator import evaluate_hand
 from backend.app.services.comprehensive_luck import (
     DECK, WEIGHTS, score, shares, starting_table, starting_values, fixed_equity,
-    hand_luck, aggregate_luck, action_snapshots, all_in_samples,
+    hand_luck, aggregate_luck, action_snapshots, all_in_samples, random_equity, STRAIGHTS,
 )
 
 
@@ -28,7 +28,7 @@ def make_hand(board=('2c','3d','7h','9s','Kd'), second=()):
 def test_fast_simulation_evaluator_matches_engine():
     rng = random.Random(29)
     for size in (5, 6, 7):
-        for _ in range(500):
+        for _ in range(2000):
             hand = rng.sample(DECK, size)
             assert score(hand) == evaluate_hand(hand).score_vector
     for value in [('As','2s','3s','4s','5s','Kh','Kd'),
@@ -37,6 +37,42 @@ def test_fast_simulation_evaluator_matches_engine():
                   ('As','Ah','Ks','Kh','Qs','Qh','2c'),
                   ('As','Ah','Ad','Ac','Ks','Kh','2c')]:
         assert score(cards(*value)) == evaluate_hand(cards(*value)).score_vector
+
+
+def test_all_rank_masks_and_edge_case_categories():
+    from backend.app.engine.evaluator import _check_straight
+    for mask, top in enumerate(STRAIGHTS):
+        ranks = [rank + 2 for rank in range(13) if mask & (1 << rank)]
+        assert top == (_check_straight(ranks) or 0)
+    for category, hand in enumerate([
+        'As Kd 9h 7c 4s 3d 2h', 'As Ah Kd 9h 7c 4s 2h',
+        'As Ah Kd Kh 9h 4s 2h', 'As Ah Ad Kd 9h 4s 2h',
+        'As 2h 3d 4c 5h Kd Qh', 'As Js 9s 7s 4s 3d 2h',
+        'As Ah Ad Kd Kh Ks 2h', 'As Ah Ad Ac Kd Kh 2h',
+        'As 2s 3s 4s 5s Kd Kh', 'As Ks Qs Js Ts 2d 2h',
+    ], 1):
+        holding = cards(*hand.split())
+        assert score(holding)[0] == category
+        assert score(holding) == evaluate_hand(holding).score_vector
+
+
+@pytest.mark.parametrize('board,random_expected,fixed_expected', [
+    ('', (.8639322916666666, .73828125, .3157552083333333),
+     (.6866861979166666, .16520182291666666, .14811197916666666)),
+    ('2s 7h 9d', (.84375, .7194010416666666, .306640625),
+     (.8349609375, .0771484375, .087890625)),
+    ('2s 7h 9d Jc', (.8541666666666666, .7337239583333334, .27734375),
+     (.9047619047619048, .047619047619047616, .047619047619047616)),
+    ('2s 7h 9d Jc Qc', (.8522135416666666, .74609375, .2981770833333333), (0., 0., 1.)),
+])
+def test_optimized_simulations_preserve_original_samples_exactly(board, random_expected, fixed_expected):
+    # Golden values recorded from the original Card/Counter implementation.
+    hero = cards('As', 'Ah')
+    board = cards(*board.split())
+    random_equity.cache_clear()
+    fixed_equity.cache_clear()
+    assert tuple(random_equity(hero, board, n) for n in (1, 2, 8)) == random_expected
+    assert fixed_equity((hero, cards('Ks', 'Kh'), cards('Qs', 'Qh')), board) == fixed_expected
 
 
 def test_starting_calibration_combo_weighting_and_neutrality():

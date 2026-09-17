@@ -4,7 +4,6 @@ Monte Carlo estimates use a local seeded RNG for reproducible analysis only.
 Live dealing remains secrets-based. Scores describe selected observed samples,
 not a causal separation of skill and luck or a prediction of the next hand.
 """
-from collections import Counter
 from functools import lru_cache
 from itertools import combinations
 from pathlib import Path
@@ -20,39 +19,54 @@ VERSION = 1
 WEIGHTS = {'starting': .35, 'board': .25, 'matchup': .20, 'all_in': .20}
 STREETS = {'PREFLOP': 0, 'FLOP': 3, 'TURN': 4, 'RIVER': 5}
 DECK = tuple(Card(r, s) for s in Suit for r in Rank)
+CARD_CODES = {card: index for index, card in enumerate(DECK)}
+# 13 rank bits cover every possible rank set. These tiny tables replace sorting
+# and repeated straight searches inside tens of thousands of simulations.
+RANKS = tuple(tuple(r + 2 for r in range(12, -1, -1) if mask & (1 << r))
+              for mask in range(1 << 13))
+STRAIGHTS = tuple(next((top + 2 for top in range(12, 3, -1)
+                       if mask & (31 << (top - 4)) == 31 << (top - 4)),
+                      5 if mask & 0x100f == 0x100f else 0)
+                  for mask in range(1 << 13))
 
 
 def score(cards):
-    """Allocation-light 5–7 card comparison, differential-tested against engine."""
-    counts = Counter(c.rank.value for c in cards)
-    ranks = sorted(counts, reverse=True)
-    def straight(values):
-        values = set(values)
-        if 14 in values:
-            values.add(1)
-        return next((r for r in range(14, 4, -1) if all(r-i in values for i in range(5))), 0)
-    flush = next((sorted((c.rank.value for c in cards if c.suit == s), reverse=True)
-                  for s in Suit if sum(c.suit == s for c in cards) >= 5), None)
-    if flush and (top := straight(flush)):
+    """5–7 card comparison, with the same score vector as the showdown engine."""
+    return _score(tuple(CARD_CODES[c] for c in cards))
+
+
+def _score(cards):
+    """Integer-card hot path: accumulate rank multiplicities and suits once."""
+    once = twice = trips = fours = 0
+    suits = [0, 0, 0, 0]
+    for card in cards:
+        bit = 1 << (card % 13)
+        fours |= trips & bit
+        trips |= twice & bit
+        twice |= once & bit
+        once |= bit
+        suits[card // 13] |= bit
+    flush = next((mask for mask in suits if mask.bit_count() >= 5), 0)
+    if flush and (top := STRAIGHTS[flush]):
         return (10 if top == 14 else 9, top)
-    fours = [r for r in ranks if counts[r] == 4]
-    trips = [r for r in ranks if counts[r] >= 3]
     if fours:
-        return (8, fours[0], next(r for r in ranks if r != fours[0]))
-    if trips and (pairs := [r for r in ranks if r != trips[0] and counts[r] >= 2]):
-        return (7, trips[0], pairs[0])
+        return (8, fours.bit_length() + 1, (once ^ fours).bit_length() + 1)
+    trip = 1 << (trips.bit_length() - 1) if trips else 0
+    if trip and (pairs := twice ^ trip):
+        return (7, trip.bit_length() + 1, pairs.bit_length() + 1)
     if flush:
-        return (6, *flush[:5])
-    if top := straight(ranks):
+        return (6, *RANKS[flush][:5])
+    if top := STRAIGHTS[once]:
         return (5, top)
-    if trips:
-        return (4, trips[0], *[r for r in ranks if r != trips[0]][:2])
-    pairs = [r for r in ranks if counts[r] >= 2]
+    if trip:
+        return (4, trip.bit_length() + 1, *RANKS[once ^ trip][:2])
+    pairs = RANKS[twice]
     if len(pairs) >= 2:
-        return (3, *pairs[:2], next(r for r in ranks if r not in pairs[:2]))
+        kickers = once ^ (1 << (pairs[0] - 2)) ^ (1 << (pairs[1] - 2))
+        return (3, *pairs[:2], kickers.bit_length() + 1)
     if pairs:
-        return (2, pairs[0], *[r for r in ranks if r != pairs[0]][:3])
-    return (1, *ranks[:5])
+        return (2, pairs[0], *RANKS[once ^ twice][:3])
+    return (1, *RANKS[once][:5])
 
 
 def rng_for(value):
@@ -64,7 +78,12 @@ def parse(cards):
 
 
 def shares(holdings, board):
-    scores = [score(h + board) for h in holdings]
+    return _shares(tuple(tuple(CARD_CODES[c] for c in h) for h in holdings),
+                   tuple(CARD_CODES[c] for c in board))
+
+
+def _shares(holdings, board):
+    scores = [_score(h + board) for h in holdings]
     best = max(scores)
     winners = scores.count(best)
     return tuple(1 / winners if s == best else 0 for s in scores)
@@ -72,15 +91,26 @@ def shares(holdings, board):
 
 @lru_cache(maxsize=8192)
 def random_equity(hero, board=(), opponents=1, iterations=768):
-    remaining = [c for c in DECK if c not in hero + board]
     rng = rng_for((hero, board, opponents, iterations))
+    hero = tuple(CARD_CODES[c] for c in hero)
+    board = tuple(CARD_CODES[c] for c in board)
+    remaining = [c for c in range(52) if c not in hero + board]
+    # River hero strength is constant for every sampled opposing hand.
+    river_score = _score(hero + board) if len(board) == 5 else None
     total = 0.0
     for _ in range(iterations):
         draw = rng.sample(remaining, 5 - len(board) + 2 * opponents)
         completed = board + tuple(draw[:5-len(board)])
         other = draw[5-len(board):]
-        holdings = (hero,) + tuple(tuple(other[i:i+2]) for i in range(0, len(other), 2))
-        total += shares(holdings, completed)[0]
+        hero_score = river_score if river_score is not None else _score(hero + completed)
+        winners = 1
+        for i in range(0, len(other), 2):
+            opponent_score = _score(tuple(other[i:i+2]) + completed)
+            if opponent_score > hero_score:
+                break  # A loss contributes zero; no need to rank remaining opponents.
+            winners += opponent_score == hero_score
+        else:
+            total += 1 / winners
     return total / iterations
 
 
@@ -102,19 +132,22 @@ def starting_values(hero):
 @lru_cache(maxsize=4096)
 def fixed_equity(holdings, board, blockers=()):
     """Exact turn/river, deterministic 2048-runout estimate on earlier streets."""
+    rng = rng_for((holdings, board, blockers))
+    holdings = tuple(tuple(CARD_CODES[c] for c in h) for h in holdings)
+    board = tuple(CARD_CODES[c] for c in board)
+    blockers = tuple(CARD_CODES[c] for c in blockers)
     known = set(board + blockers + tuple(c for h in holdings for c in h))
-    remaining = [c for c in DECK if c not in known]
+    remaining = [c for c in range(52) if c not in known]
     missing = 5 - len(board)
     if missing <= 1:
         runouts = combinations(remaining, missing)
     else:
-        rng = rng_for((holdings, board, blockers))
         runouts = (tuple(rng.sample(remaining, missing)) for _ in range(2048))
     total = [0.0] * len(holdings)
     count = 0
     for runout in runouts:
         count += 1
-        for i, value in enumerate(shares(holdings, board + tuple(runout))):
+        for i, value in enumerate(_shares(holdings, board + tuple(runout))):
             total[i] += value
     return tuple(value / count for value in total)
 
