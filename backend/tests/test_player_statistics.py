@@ -77,11 +77,14 @@ def test_statistics_endpoints_scope_and_history_owner(monkeypatch):
     from backend.app.services.room_manager import room_manager
     from backend.app.services.user_manager import user_manager
     from backend.app.services import player_statistics
+    from backend.app.api import endpoints
     calls = []
     monkeypatch.setattr(player_statistics, 'query_statistics',
                         lambda db, pid, room_id=None: calls.append((pid, room_id)) or {'hands': 0})
     monkeypatch.setattr(room_manager, 'get_room', lambda rid: SimpleNamespace(
         table=SimpleNamespace(active_seated_players=[SimpleNamespace(player_id='u_test2')])) if rid == 'table' else None)
+    monkeypatch.setattr(endpoints.hand_history_manager, 'get_table_statistics',
+                        lambda rid, ids: calls.append((ids[0], rid)) or {ids[0]: {'hands': 0}})
     assert get_table_player_statistics('table', 'u_test2') == {'hands': 0}
     assert calls[-1] == ('u_test2', 'table')
     with pytest.raises(HTTPException):

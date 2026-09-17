@@ -126,14 +126,19 @@ class ConnectionManager:
         except Exception as e:
             logger.warning(f"Failed to send personal message: {e}")
 
-    async def broadcast_room_state(self, room: Room) -> None:
+    async def broadcast_room_state(self, room: Room, *, checkpoint: bool = True) -> None:
         """Broadcast customized room snapshots to each connected client in the room."""
         # Every state-changing WebSocket route finishes with a broadcast,
         # including automated timeout and bot actions.
         from backend.app.services.room_manager import room_manager
-        room_manager.checkpoint_room(room)
+        from backend.app.services.hand_history_manager import hand_history_manager
+        if checkpoint:
+            room_manager.checkpoint_room(room)
 
         room_id = room.room_id
+        statistics = hand_history_manager.get_table_statistics(
+            room_id, [p.player_id for p in room.table.active_seated_players],
+        )
         sockets = self.room_connections.get(room_id, set())
         for ws in list(sockets):
             info = self.socket_info.get(ws)
@@ -141,6 +146,7 @@ class ConnectionManager:
                 continue
             _, user_id = info
             state_data = room.to_dict(viewer_player_id=user_id)
+            state_data['player_statistics'] = statistics
             msg = make_message(EventType.ROOM_STATE, state_data, room_id=room_id)
             try:
                 await ws.send_text(json.dumps(msg))

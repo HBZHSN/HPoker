@@ -324,6 +324,14 @@ class SQLiteDatabase:
                     overview_json TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS poker_table_statistics (
+                    room_id TEXT PRIMARY KEY,
+                    revision TEXT NOT NULL,
+                    computed_revision TEXT,
+                    version INTEGER NOT NULL DEFAULT 0,
+                    statistics_json TEXT NOT NULL DEFAULT '{}'
+                );
+
                 INSERT OR IGNORE INTO schema_migrations(version, applied_at)
                     VALUES (1, CAST(strftime('%s', 'now') AS REAL));
                 """
@@ -856,6 +864,14 @@ class SQLiteDatabase:
                     int(bool(player.get("is_winner", False))),
                 ) for player in hand.get("players", [])],
             )
+            # Invalidate in the same transaction as the immutable hand. A random
+            # revision also prevents an old worker publishing after clear/recreate.
+            connection.execute(
+                """INSERT INTO poker_table_statistics(room_id, revision)
+                   VALUES (?, lower(hex(randomblob(16))))
+                   ON CONFLICT(room_id) DO UPDATE SET revision=excluded.revision""",
+                (hand["room_id"],),
+            )
         return True
 
     def query_user_hand_history(
@@ -942,4 +958,5 @@ class SQLiteDatabase:
             count = connection.execute("SELECT COUNT(*) FROM poker_hands").fetchone()[0]
             connection.execute("DELETE FROM poker_hands")
             connection.execute("DELETE FROM poker_user_overviews")
+            connection.execute("DELETE FROM poker_table_statistics")
         return int(count)

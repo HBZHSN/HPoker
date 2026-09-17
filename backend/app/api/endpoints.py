@@ -913,5 +913,4 @@ def get_table_player_statistics(room_id: str, player_id: str):
         raise HTTPException(status_code=404, detail="房间不存在")
     if not any(p.player_id == player_id for p in room.table.active_seated_players):
         raise HTTPException(status_code=404, detail="玩家已离开座位")
-    from backend.app.services.player_statistics import query_statistics
-    return query_statistics(hand_history_manager._database, player_id, room_id)
+    return hand_history_manager.get_table_statistics(room_id, [player_id])[player_id]

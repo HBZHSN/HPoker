@@ -1,6 +1,7 @@
 """Main FastAPI Application Entrypoint."""
 
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi.concurrency import run_in_threadpool
 from fastapi import FastAPI
@@ -10,12 +11,21 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.api.endpoints import api_router
 from backend.app.websocket.router import ws_router
 from backend.app.services.hand_history_manager import hand_history_manager
+from backend.app.services.table_statistics import refresh_active_table_statistics, maintain_table_statistics
 
 
 @asynccontextmanager
 async def lifespan(app):
     await run_in_threadpool(hand_history_manager.backfill_user_overviews)
-    yield
+    await run_in_threadpool(hand_history_manager.seed_table_statistics)
+    await refresh_active_table_statistics()
+    stop = asyncio.Event()
+    worker = asyncio.create_task(maintain_table_statistics(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        await worker
 
 app = FastAPI(
     title="Portal Application Service",

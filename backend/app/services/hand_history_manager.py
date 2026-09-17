@@ -9,6 +9,7 @@ import time
 from backend.app.database import SQLiteDatabase
 
 OVERVIEW_VERSION = 2
+TABLE_STATISTICS_VERSION = 1
 
 
 class HandHistoryManager:
@@ -51,6 +52,49 @@ class HandHistoryManager:
 
     def clear_all(self) -> int:
         return self._database.clear_hand_histories()
+
+    def seed_table_statistics(self) -> None:
+        """Give pre-upgrade hands a revision; never invalidate existing snapshots."""
+        with self._database.connection(write=True) as connection:
+            connection.execute("""INSERT OR IGNORE INTO poker_table_statistics(room_id, revision)
+                SELECT room_id, lower(hex(randomblob(16))) FROM poker_hands GROUP BY room_id""")
+
+    def get_table_statistics(self, room_id: str, player_ids) -> dict:
+        """Constant-size snapshot read: no history scan or equity calculation."""
+        from backend.app.services.player_statistics import summarize
+        from backend.app.services.comprehensive_luck import aggregate_luck
+        with self._database.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM poker_table_statistics WHERE room_id=?", (room_id,),
+            ).fetchone()
+        valid = row is not None and row['version'] == TABLE_STATISTICS_VERSION
+        statistics = json.loads(row['statistics_json']) if valid else {}
+        updating = row is not None and (not valid or row['revision'] != row['computed_revision'])
+        empty = {**summarize([], ''), **aggregate_luck([])}
+        return {pid: {**statistics.get(pid, empty), 'updating': updating} for pid in player_ids}
+
+    def refresh_table_statistics(self, room_id: str) -> bool:
+        """Worker-only computation; publish one complete room snapshot atomically."""
+        from backend.app.services.player_statistics import query_statistics
+        with self._database.connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM poker_table_statistics WHERE room_id=?", (room_id,),
+            ).fetchone()
+            if row is None or (row['version'] == TABLE_STATISTICS_VERSION
+                               and row['revision'] == row['computed_revision']):
+                return False
+            players = [p[0] for p in connection.execute("""SELECT DISTINCT p.player_id
+                FROM poker_hand_players p JOIN poker_hands h ON h.hand_id=p.hand_id
+                WHERE h.room_id=?""", (room_id,))]
+        # Do not hold a database lock while doing CPU-heavy simulation.
+        statistics = {pid: query_statistics(self._database, pid, room_id) for pid in players}
+        with self._database.connection(write=True) as connection:
+            updated = connection.execute("""UPDATE poker_table_statistics SET
+                statistics_json=?, computed_revision=?, version=?
+                WHERE room_id=? AND revision=?""",
+                (json.dumps(statistics), row['revision'], TABLE_STATISTICS_VERSION,
+                 room_id, row['revision']))
+        return updated.rowcount == 1
 
     def get_user_overview(self, user_id: str) -> dict:
         """Read a departure snapshot; a cache miss never scans hand history."""
