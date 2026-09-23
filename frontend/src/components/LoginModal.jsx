@@ -105,7 +105,10 @@ export default function LoginModal({ onLoginSuccess }) {
 
           <div className="flex items-center justify-between py-0.5">
             <label
-              onClick={() => setRememberLogin(!rememberLogin)}
+              onClick={() => {
+                if (rememberLogin) removeRememberedUsername();
+                setRememberLogin(!rememberLogin);
+              }}
               className="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer select-none"
             >
               {rememberLogin ? (

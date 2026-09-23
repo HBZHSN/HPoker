@@ -118,6 +118,9 @@ export function setStoredAuth(user, token, remember = true, storage) {
   if (remember) {
     s.setItem('auth_token', token);
     s.setItem('auth_user', JSON.stringify(user));
+  } else {
+    s.removeItem('auth_token');
+    s.removeItem('auth_user');
   }
   clearLegacyAuthStorage(s);
 }

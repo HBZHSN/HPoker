@@ -85,6 +85,10 @@ test('authStorage: setStoredAuth and clearAuthStorage cleans legacy storage', ()
   assert.equal(store.has('hpoker_token'), false);
   assert.equal(store.has('hpoker_user'), false);
 
+  setStoredAuth(user, 'temporary', false);
+  assert.equal(store.has('auth_token'), false);
+  assert.equal(store.has('auth_user'), false);
+
   clearAuthStorage('u_test');
   assert.equal(store.has('auth_token'), false);
   assert.equal(store.has('auth_user'), false);
