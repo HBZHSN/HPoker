@@ -78,6 +78,7 @@ export default function PokerTable({
   const [leaveRequested, setLeaveRequested] = useState(false);
   const [isEquityOpen, setIsEquityOpen] = useState(false);
   const [jevDecision, setJevDecision] = useState(null);
+  const [jevStatus, setJevStatus] = useState(null);
   const [showSpectatorList, setShowSpectatorList] = useState(false);
   const [isRoomPanelOpen, setIsRoomPanelOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -338,6 +339,7 @@ export default function PokerTable({
   };
 
   const handleToggleEquity = useCallback(() => {
+    setJevStatus(null);
     setIsEquityOpen((prev) => !prev);
   }, []);
 
@@ -459,6 +461,7 @@ export default function PokerTable({
               <EquityTrigger
                 isOpen={isEquityOpen}
                 onToggle={handleToggleEquity}
+                status={isEquityOpen && isMyTurn ? jevStatus : null}
               />
             )}
             <button
@@ -876,6 +879,7 @@ export default function PokerTable({
           decisionKey={jevDecisionKey}
           isMyTurn={Boolean(isMyTurn && table?.legal_actions?.can_fold)}
           onResult={setJevDecision}
+          onStatus={setJevStatus}
           toCall={Math.max(
             0,
             (table?.current_round_highest_bet || 0) -

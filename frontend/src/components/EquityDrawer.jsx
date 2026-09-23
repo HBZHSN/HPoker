@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BarChart3, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { AlertCircle, BarChart3, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { formatChipAmount } from '../utils/hCurrency';
 import CardView from './CardView';
 
-export function EquityTrigger({ isOpen = false, onToggle }) {
+export function EquityTrigger({ isOpen = false, onToggle, status }) {
+  const Icon = status === 'loading' ? Loader2 : status === 'error' ? AlertCircle : BarChart3;
+  const label = status === 'loading' ? '计算中' : status === 'error' ? '获取失败' : 'Jev 建议';
   return (
-    <button onClick={onToggle} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 cursor-pointer shadow ' + (isOpen ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white border-purple-300' : 'bg-gradient-to-r from-purple-950/80 to-indigo-950/80 text-purple-200 border-purple-500/50')}>
-      <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
-      <span>Jev 建议</span>
+    <button onClick={onToggle} aria-label={label} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 cursor-pointer shadow ' + (isOpen ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white border-purple-300' : 'bg-gradient-to-r from-purple-950/80 to-indigo-950/80 text-purple-200 border-purple-500/50')}>
+      <Icon className={'w-3.5 h-3.5 text-amber-400 ' + (status === 'loading' ? 'animate-spin' : '')} />
+      <span>{label}</span>
       {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
     </button>
   );
@@ -116,7 +118,7 @@ function JevRequestDetails({ request }) {
   </div>;
 }
 
-export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionKey, isMyTurn, toCall, onResult }) {
+export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionKey, isMyTurn, toCall, onResult, onStatus }) {
   const [result, setResult] = useState(null);
   const [usesPerCoin, setUsesPerCoin] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -150,6 +152,7 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
     setResult(null);
     setLoading(true);
     setError('');
+    onStatus?.('loading');
     fetch('/api/rooms/' + encodeURIComponent(roomId) + '/jev-decision', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token },
@@ -165,20 +168,20 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
           loadedDecisionKey.current = decisionKey;
           setResult(data);
           onResult?.({ decisionKey, probabilities: data.probabilities });
+          onStatus?.(null);
         }
       })
-      .catch((cause) => { if (cause.name !== 'AbortError') setError(cause.message); })
+      .catch((cause) => { if (cause.name !== 'AbortError') { setError(cause.message); onStatus?.('error'); } })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [isOpen, isMyTurn, decisionKey, roomId, token, onResult]);
+  }, [isOpen, isMyTurn, decisionKey, roomId, token, onResult, onStatus]);
 
   if (!isOpen) return null;
   const wasCheck = result?.request?.state?.legal_actions?.can_check ?? (toCall === 0);
 
   return (
     <>
-      <button className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} aria-label="关闭 Jev 建议" />
-      <aside className="poker-table-equity fixed inset-y-0 left-0 w-[320px] max-w-[85vw] z-50 lg:static lg:inset-auto lg:h-full lg:w-72 xl:w-80 2xl:w-[350px] lg:z-20 lg:flex-shrink-0 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 border-r border-purple-500/40 shadow-2xl overflow-y-auto flex flex-col select-none">
+      <aside className="poker-table-equity hidden lg:flex lg:static lg:h-full lg:w-72 xl:w-80 2xl:w-[350px] lg:z-20 lg:flex-shrink-0 bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900 border-r border-purple-500/40 shadow-2xl overflow-y-auto flex-col select-none">
         <div className="flex items-center justify-between px-4 py-3 bg-purple-900/60 border-b border-purple-500/30">
           <span className="flex items-center gap-2 text-sm font-black text-purple-100"><BarChart3 size={16} /> Jev 行动建议</span>
           <button onClick={onClose} className="text-purple-200 hover:text-white px-2" aria-label="收起建议">✕</button>

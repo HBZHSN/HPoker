@@ -22,6 +22,13 @@ test('Jev probabilities highlight only the best current action', async () => {
     assert.equal((active.match(/ring-purple-300/g) || []).length, 2);
     assert.doesNotMatch(render({ jevProbabilities: null }), /70\.0%|ring-purple-300/);
     assert.doesNotMatch(render({ isMyTurn: false }), /70\.0%|ring-purple-300/);
+
+    const { default: EquityDrawer, EquityTrigger } = await vite.ssrLoadModule('/src/components/EquityDrawer.jsx');
+    const drawer = renderToStaticMarkup(React.createElement(EquityDrawer, { isOpen: true, isMyTurn: true }));
+    assert.match(drawer, /poker-table-equity hidden lg:flex/);
+    assert.doesNotMatch(drawer, /bg-black\/60/);
+    assert.match(renderToStaticMarkup(React.createElement(EquityTrigger, { isOpen: true, status: 'loading' })), /计算中/);
+    assert.match(renderToStaticMarkup(React.createElement(EquityTrigger, { isOpen: true, status: 'error' })), /获取失败/);
   } finally {
     await vite.close();
   }
