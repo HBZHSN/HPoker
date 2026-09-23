@@ -104,7 +104,6 @@ def test_room_defaults_api_is_admin_only_for_updates():
         small_blind=18,
         action_timeout=25,
         max_seats=7,
-        assistant_win_ratio=0.9,
     )
     assert get_room_defaults_config() == RoomDefaultConfig.default().to_dict()
 
@@ -121,7 +120,8 @@ def test_room_defaults_api_is_admin_only_for_updates():
 
     expected = request.model_dump() | {
         "big_blind": 36,
-        "assistant_win_pct": 90,
+        "assistant_win_ratio": 1.0,
+        "assistant_win_pct": 100,
     }
     assert update_room_defaults_config(
         req=request,
@@ -158,7 +158,7 @@ async def test_create_room_uses_saved_defaults_only_when_fields_are_omitted():
         assert default_config["big_blind"] == 44
         assert default_config["action_timeout"] == 35
         assert default_config["max_seats"] == 8
-        assert default_config["assistant_win_ratio"] == 0.8
+        assert default_config["assistant_win_ratio"] == 1.0
 
         explicit_response = await client.post(
             "/api/rooms",
@@ -181,4 +181,4 @@ async def test_create_room_uses_saved_defaults_only_when_fields_are_omitted():
         assert explicit_config["big_blind"] == 18
         assert explicit_config["action_timeout"] == 10
         assert explicit_config["max_seats"] == 3
-        assert explicit_config["assistant_win_ratio"] == 0.6
+        assert explicit_config["assistant_win_ratio"] == 1.0

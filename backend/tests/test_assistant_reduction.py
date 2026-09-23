@@ -11,11 +11,11 @@ def cards(card_strings: str) -> list[Card]:
 
 
 def test_room_config_assistant_win_ratio():
-    # Default is 0.70
+    # New rooms no longer reduce assistant users' winnings.
     cfg = RoomConfig()
-    assert cfg.assistant_win_ratio == 0.70
-    assert cfg.to_dict()["assistant_win_ratio"] == 0.70
-    assert cfg.to_dict()["assistant_win_pct"] == 70
+    assert cfg.assistant_win_ratio == 1.0
+    assert cfg.to_dict()["assistant_win_ratio"] == 1.0
+    assert cfg.to_dict()["assistant_win_pct"] == 100
 
     # Custom valid ratio
     cfg2 = RoomConfig(assistant_win_ratio=0.85)

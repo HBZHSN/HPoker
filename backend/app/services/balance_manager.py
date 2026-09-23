@@ -286,6 +286,34 @@ class BalanceManager:
             for p in entry.participants if p.player_id == user_id
         )
 
+    def record_jev_fee(self, *, decision_id: str, payer_id: str, admin_id: str,
+                       fee_cents: int, room_id: str, room_name: str) -> None:
+        """Move one Jev fee between wallets; this path permits a negative payer balance."""
+        if fee_cents <= 0 or payer_id == admin_id or decision_id in self._entries:
+            return
+        payer = user_manager.get_user(payer_id)
+        admin = user_manager.get_user(admin_id)
+        if not payer or not admin or not admin.is_admin:
+            raise ValueError("Jev 收款管理员不存在")
+        participants = [
+            ParticipantRecord(user.user_id, user.username, user.nickname, user.avatar,
+                              user.is_test_account, 0, 0, 0, 0, cents / 100)
+            for user, cents in ((payer, -fee_cents), (admin, fee_cents))
+        ]
+        entry = LedgerEntry(
+            entry_id=decision_id, room_id=room_id, room_name=room_name,
+            settlement_type="balance", status="settled", created_at=time.time(),
+            is_test_game=False, participants=participants, transactions=[],
+            chip_to_cash_ratio=0, buyin_chips=0, cash_value=fee_cents / 100,
+            entry_kind="wallet_jev", settled_at=time.time(), settled_by=admin_id,
+        )
+        self._entries[decision_id] = entry
+        try:
+            self.save_to_storage()
+        except Exception:
+            self._entries.pop(decision_id, None)
+            raise
+
     def admin_wallet_change(self, *, user_id: str, amount: str, kind: str,
                             operator_id: str, request_id: str, u_mgr=None) -> LedgerEntry:
         mgr = u_mgr or user_manager

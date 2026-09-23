@@ -125,7 +125,6 @@ class PokerApiClient:
         small_blind: Optional[int] = None,
         action_timeout: Optional[int] = None,
         max_seats: Optional[int] = None,
-        assistant_win_ratio: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Create a new poker room, letting the server fill omitted defaults."""
 
@@ -138,7 +137,6 @@ class PokerApiClient:
                 "small_blind": small_blind,
                 "action_timeout": action_timeout,
                 "max_seats": max_seats,
-                "assistant_win_ratio": assistant_win_ratio,
             }.items()
             if value is not None
         }

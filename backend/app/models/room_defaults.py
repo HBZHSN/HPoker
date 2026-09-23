@@ -23,7 +23,7 @@ DEFAULT_ROOM_CONFIG = {
     "small_blind": 10,
     "action_timeout": 15,
     "max_seats": 6,
-    "assistant_win_ratio": 0.70,
+    "assistant_win_ratio": 1.0,
 }
 
 

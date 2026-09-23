@@ -33,6 +33,7 @@ from backend.app.services.timeout_manager import timeout_manager
 from backend.app.services.user_manager import user_manager
 from backend.app.services.room_defaults_manager import room_defaults_manager
 from backend.app.services.watermark_manager import watermark_manager
+from backend.app.services.jev_assistant import jev_assistant
 
 
 def _dedicated_test_users() -> dict[str, User]:
@@ -78,6 +79,9 @@ def _reset_test_database_state() -> None:
     user_manager.save_to_storage()
     room_defaults_manager.reset_to_defaults()
     watermark_manager.reset_to_defaults()
+    with jev_assistant.database.connection(write=True) as db:
+        db.execute("DELETE FROM jev_decisions")
+        db.execute("UPDATE jev_settings SET api_key = '', fee_cents = 1, recipient_user_id = '' WHERE singleton_id = 1")
 
 
 @pytest.fixture(autouse=True)

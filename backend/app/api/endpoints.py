@@ -1,6 +1,9 @@
 """REST API Endpoints for Poker Users, Authentication, and Room Management."""
 
 import json
+import asyncio
+import hashlib
+import httpx
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 from decimal import Decimal
@@ -21,10 +24,8 @@ from backend.app.websocket.protocol import EventType, make_message
 from backend.app.models.room import RoomConfig
 from backend.app.models.room_defaults import (
     MAX_ACTION_TIMEOUT,
-    MAX_ASSISTANT_WIN_RATIO,
     MAX_MAX_SEATS,
     MIN_ACTION_TIMEOUT,
-    MIN_ASSISTANT_WIN_RATIO,
     MIN_BUYIN_CHIPS,
     MIN_MAX_SEATS,
     MIN_SMALL_BLIND,
@@ -41,8 +42,10 @@ from backend.app.models.watermark import (
 )
 from backend.app.services.watermark_manager import watermark_manager
 from backend.app.services.room_defaults_manager import room_defaults_manager
+from backend.app.services.jev_assistant import jev_assistant
 
 api_router = APIRouter()
+_jev_user_locks: dict[str, asyncio.Lock] = {}
 
 
 def _verify_user(authorization: Optional[str] = None, token: Optional[str] = None) -> User:
@@ -256,9 +259,6 @@ class RoomDefaultsUpdateRequest(BaseModel):
         ..., ge=MIN_ACTION_TIMEOUT, le=MAX_ACTION_TIMEOUT
     )
     max_seats: int = Field(..., ge=MIN_MAX_SEATS, le=MAX_MAX_SEATS)
-    assistant_win_ratio: float = Field(
-        ..., ge=MIN_ASSISTANT_WIN_RATIO, le=MAX_ASSISTANT_WIN_RATIO
-    )
 
 
 @api_router.get("/config/room-defaults")
@@ -282,7 +282,7 @@ def update_room_defaults_config(
             small_blind=req.small_blind,
             action_timeout=req.action_timeout,
             max_seats=req.max_seats,
-            assistant_win_ratio=req.assistant_win_ratio,
+            assistant_win_ratio=1.0,
             updated_by=admin.user_id,
         ).to_dict()
     except ValueError as exc:
@@ -301,9 +301,6 @@ class CreateRoomRequest(BaseModel):
     )
     max_seats: Optional[int] = Field(
         default=None, ge=MIN_MAX_SEATS, le=MAX_MAX_SEATS
-    )
-    assistant_win_ratio: Optional[float] = Field(
-        default=None, ge=MIN_ASSISTANT_WIN_RATIO, le=MAX_ASSISTANT_WIN_RATIO
     )
 
 
@@ -387,11 +384,7 @@ async def create_room(
         max_seats=(
             req.max_seats if req.max_seats is not None else defaults.max_seats
         ),
-        assistant_win_ratio=(
-            req.assistant_win_ratio
-            if req.assistant_win_ratio is not None
-            else defaults.assistant_win_ratio
-        ),
+        assistant_win_ratio=1.0,
     )
     if cfg.cash_value > 0 and not host.is_test_account:
         required_cents = int((Decimal(str(cfg.cash_value)) * 100).quantize(Decimal("1")))
@@ -815,6 +808,120 @@ def clear_all_balance_records_post(
 
 
 # ----------------- Equity Calculation Endpoint -----------------
+
+class JevSettingsRequest(BaseModel):
+    api_key: Optional[str] = None
+    fee: Decimal
+
+
+@api_router.get("/config/jev")
+def get_public_jev_settings():
+    return {"fee": jev_assistant.public_settings()["fee"]}
+
+
+@api_router.get("/admin/config/jev")
+def get_jev_settings(authorization: Optional[str] = Header(None), token: Optional[str] = Query(None)):
+    _verify_admin(authorization=authorization, token=token)
+    return jev_assistant.public_settings()
+
+
+@api_router.put("/admin/config/jev")
+def update_jev_settings(req: JevSettingsRequest, authorization: Optional[str] = Header(None), token: Optional[str] = Query(None)):
+    admin = _verify_admin(authorization=authorization, token=token)
+    try:
+        return jev_assistant.update_settings(api_key=req.api_key, fee=req.fee, admin_id=admin.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@api_router.post("/rooms/{room_id}/jev-decision")
+async def get_jev_decision(room_id: str, authorization: Optional[str] = Header(None), token: Optional[str] = Query(None)):
+    user = _verify_user(authorization=authorization, token=token)
+    # Each user can have one active decision; this keeps other tables responsive.
+    async with _jev_user_locks.setdefault(user.user_id, asyncio.Lock()):
+        with room_manager._storage_lock:
+            room = room_manager.get_room(room_id)
+            if not room or room.is_ended:
+                raise HTTPException(status_code=404, detail="房间不存在")
+            table = room.table
+            seat = table.seats[table.current_turn_seat] if table.current_turn_seat is not None else None
+            if not seat or seat.player_id != user.user_id or len(seat.hole_cards) != 2:
+                raise HTTPException(status_code=409, detail="当前不是你的行动回合")
+            legal = table.get_legal_actions(user.user_id)
+            if not legal.can_fold:
+                raise HTTPException(status_code=409, detail="当前无法行动")
+            decision_id = "jev_" + hashlib.sha256(
+                f"{room_id}:{table.hand_number}:{table.street.value}:{len(table.last_action_history)}:{user.user_id}".encode()
+            ).hexdigest()[:32]
+            cached = jev_assistant.cached(decision_id, user.user_id)
+            if cached:
+                return cached
+            settings = jev_assistant.settings()
+            if not settings["api_key"]:
+                raise HTTPException(status_code=503, detail="管理员尚未配置 Jev API key")
+            recipient = user_manager.get_user(settings["recipient_user_id"])
+            if settings["fee_cents"] > 0 and (not recipient or not recipient.is_admin):
+                raise HTTPException(status_code=503, detail="Jev 收款管理员无效")
+            opponents = [opponent for opponent in table.seats if opponent and opponent.player_id != user.user_id]
+            public_stats = hand_history_manager.get_table_statistics(
+                room_id, [opponent.player_id for opponent in opponents],
+            )
+            seats_by_player = {player.player_id: player.seat_index for player in table.seats if player}
+            state = {
+                "game": "Texas Hold'em", "street": table.street.value,
+                "hero_cards": [card.notation for card in seat.hole_cards],
+                "board_cards": [card.notation for card in table.board_cards],
+                "hero_stack": seat.chips, "hero_seat": seat.seat_index,
+                "dealer_seat": table.dealer_seat, "small_blind": table.small_blind,
+                "big_blind": table.big_blind, "pot": table.pot_manager.total_pot_amount,
+                "legal_actions": legal.to_dict(),
+                "opponents": [
+                    {"seat": opponent.seat_index, "chips": opponent.chips,
+                     "current_bet": table.pot_manager.get_player_current_bet(opponent.player_id),
+                     "all_in": opponent.is_all_in, "folded": opponent.is_folded,
+                     "public_stats": {
+                         key: public_stats.get(opponent.player_id, {}).get(key)
+                         for key in ("hands", "vpip", "pfr", "three_bet", "three_bet_opportunities",
+                                     "win_rate", "collect_rate", "showdown_rate", "luck", "luck_samples", "updating")
+                     }}
+                    for opponent in opponents
+                ],
+                "recent_actions": [
+                    {**{key: action[key] for key in ("action", "amount", "street")},
+                     "seat": seats_by_player.get(action["player_id"])}
+                    for action in table.last_action_history[-10:]
+                ],
+            }
+        try:
+            result = await jev_assistant.recommend(api_key=settings["api_key"], state=state, legal=legal)
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="Jev 暂时无法返回建议，请稍后再试") from exc
+        result["fee"] = f'{settings["fee_cents"] / 100:.2f}'
+        with room_manager._storage_lock:
+            room = room_manager.get_room(room_id)
+            table = room.table if room else None
+            seat = table.seats[table.current_turn_seat] if table and table.current_turn_seat is not None else None
+            if not seat or seat.player_id != user.user_id or (
+                "jev_" + hashlib.sha256(
+                    f"{room_id}:{table.hand_number}:{table.street.value}:{len(table.last_action_history)}:{user.user_id}".encode()
+                ).hexdigest()[:32]
+            ) != decision_id:
+                raise HTTPException(status_code=409, detail="行动回合已结束，本次未扣费")
+            snapshot = balance_manager.snapshot_state()
+            try:
+                balance_manager.record_jev_fee(
+                    decision_id=decision_id, payer_id=user.user_id,
+                    admin_id=settings["recipient_user_id"], fee_cents=settings["fee_cents"],
+                    room_id=room_id, room_name=room.config.room_name,
+                )
+                jev_assistant.save(decision_id, user.user_id, result)
+            except Exception:
+                balance_manager.restore_state(snapshot)
+                raise
+            table.set_player_using_assistant(user.user_id, True)
+            room_manager.checkpoint_room(room)
+        await ws_manager.broadcast_room_state(room, checkpoint=False)
+        return result
 
 class EquityCardRequest(BaseModel):
     """A single card, described by either notation ('As') or rank+suit."""

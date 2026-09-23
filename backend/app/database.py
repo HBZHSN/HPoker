@@ -115,6 +115,21 @@ class SQLiteDatabase:
                     singleton_id, text_content, opacity, density, tilt, updated_at
                 ) VALUES (1, 'HPoker', 0.12, 4, -20, CAST(strftime('%s', 'now') AS REAL));
 
+                CREATE TABLE IF NOT EXISTS jev_settings (
+                    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+                    api_key TEXT NOT NULL DEFAULT '',
+                    fee_cents INTEGER NOT NULL DEFAULT 1 CHECK (fee_cents >= 0),
+                    recipient_user_id TEXT NOT NULL DEFAULT ''
+                );
+                INSERT OR IGNORE INTO jev_settings(singleton_id) VALUES (1);
+
+                CREATE TABLE IF NOT EXISTS jev_decisions (
+                    decision_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    result_json TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS default_room_config (
                     singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
                     buyin_chips INTEGER NOT NULL CHECK (buyin_chips >= 10),
@@ -129,7 +144,7 @@ class SQLiteDatabase:
                 INSERT OR IGNORE INTO default_room_config(
                     singleton_id, buyin_chips, cash_value, small_blind,
                     action_timeout, max_seats, assistant_win_ratio, updated_at
-                ) VALUES (1, 1000, 100.0, 10, 15, 6, 0.70,
+                ) VALUES (1, 1000, 100.0, 10, 15, 6, 1.0,
                           CAST(strftime('%s', 'now') AS REAL));
 
                 CREATE TABLE IF NOT EXISTS users (
