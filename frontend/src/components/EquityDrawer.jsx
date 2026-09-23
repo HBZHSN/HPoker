@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { formatChipAmount, formatHCoins } from '../utils/hCurrency';
 import CardView from './CardView';
@@ -122,6 +122,14 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [requestOpen, setRequestOpen] = useState(false);
+  const loadedDecisionKey = useRef(null);
+
+  useEffect(() => {
+    loadedDecisionKey.current = null;
+    setResult(null);
+    setError('');
+    setRequestOpen(false);
+  }, [roomId, token]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -132,14 +140,13 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
   }, [isOpen, token]);
 
   useEffect(() => {
-    setRequestOpen(false);
     if (!isOpen || !isMyTurn || !decisionKey) {
-      setResult(null);
       setLoading(false);
-      setError('');
       return;
     }
+    if (loadedDecisionKey.current === decisionKey) return;
     const controller = new AbortController();
+    setRequestOpen(false);
     setResult(null);
     setLoading(true);
     setError('');
@@ -153,13 +160,19 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
         if (!response.ok) throw new Error(data.detail || '获取建议失败');
         return data;
       })
-      .then(setResult)
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          loadedDecisionKey.current = decisionKey;
+          setResult(data);
+        }
+      })
       .catch((cause) => { if (cause.name !== 'AbortError') setError(cause.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [isOpen, isMyTurn, decisionKey, roomId, token]);
 
   if (!isOpen) return null;
+  const wasCheck = result?.request?.state?.legal_actions?.can_check ?? (toCall === 0);
 
   return (
     <>
@@ -171,15 +184,16 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
         </div>
         <div className="p-4 space-y-4 text-sm">
           {usesPerCoin !== null && <p className="text-xs text-amber-300">{usesPerCoin ? `1 H币 / ${usesPerCoin} 次` : '免费'}{result && ` · 本次扣费 ${formatHCoins(result.fee)}`}</p>}
-          {!isMyTurn && <p className="text-slate-400 py-8 text-center">轮到你行动时显示建议</p>}
+          {!isMyTurn && !result && <p className="text-slate-400 py-8 text-center">轮到你行动时显示建议</p>}
           {isMyTurn && loading && <div role="status" className="flex justify-center py-8 text-purple-300"><Loader2 className="animate-spin" /></div>}
           {isMyTurn && !loading && error && <p role="alert" className="text-red-300 bg-red-950/50 rounded-xl p-3">{error}</p>}
-          {isMyTurn && !loading && result && (
+          {!loading && result && (
             <>
-              <p className="font-bold text-amber-300">推荐：{result.recommendation === 'call' && toCall === 0 ? '过牌 CHECK' : ACTIONS.find(([key]) => key === result.recommendation)?.[1]}</p>
+              {!isMyTurn && <p className="text-xs text-slate-400">上次行动建议</p>}
+              <p className="font-bold text-amber-300">推荐：{result.recommendation === 'call' && wasCheck ? '过牌 CHECK' : ACTIONS.find(([key]) => key === result.recommendation)?.[1]}</p>
               {ACTIONS.map(([key, label]) => (
                 <div key={key} className={'rounded-xl border p-3 ' + (result.recommendation === key ? 'border-amber-400 bg-amber-500/10' : 'border-slate-700 bg-slate-800/50')}>
-                  <div className="flex justify-between font-bold"><span>{key === 'call' && toCall === 0 ? '过牌 CHECK' : label}</span><span>{(result.probabilities[key] * 100).toFixed(1)}%</span></div>
+                  <div className="flex justify-between font-bold"><span>{key === 'call' && wasCheck ? '过牌 CHECK' : label}</span><span>{(result.probabilities[key] * 100).toFixed(1)}%</span></div>
                   <div className="mt-2 h-1.5 rounded-full bg-slate-700"><div className="h-full rounded-full bg-amber-400" style={{ width: (result.probabilities[key] * 100) + '%' }} /></div>
                 </div>
               ))}

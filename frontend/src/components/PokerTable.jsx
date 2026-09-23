@@ -870,21 +870,19 @@ export default function PokerTable({
       {/* Main Body: Left Equity Panel + Center Poker Table Felt + Right Action Console Sidebar */}
       <div className="poker-table-body flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 w-full">
         {/* Left Side: Equity / Win Rate Panel (Auto-compresses poker table) */}
-        {isEquityOpen && (
-          <EquityDrawer
-            isOpen={isEquityOpen}
-            onClose={() => setIsEquityOpen(false)}
-            roomId={room?.room_id}
-            token={token}
-            decisionKey={room?.room_id + ':' + table?.hand_number + ':' + table?.turn_count}
-            isMyTurn={Boolean(isMyTurn && table?.legal_actions?.can_fold)}
-            toCall={Math.max(
-              0,
-              (table?.current_round_highest_bet || 0) -
-                (selfSeat?.current_round_bet || 0)
-            )}
-          />
-        )}
+        <EquityDrawer
+          isOpen={isEquityOpen}
+          onClose={() => setIsEquityOpen(false)}
+          roomId={room?.room_id}
+          token={token}
+          decisionKey={room?.room_id + ':' + table?.hand_number + ':' + table?.turn_count}
+          isMyTurn={Boolean(isMyTurn && table?.legal_actions?.can_fold)}
+          toCall={Math.max(
+            0,
+            (table?.current_round_highest_bet || 0) -
+              (selfSeat?.current_round_bet || 0)
+          )}
+        />
 
         {/* Center: Main Poker Table Felt Area */}
         <main className="poker-table-main relative flex-1 w-full h-full flex items-center justify-center p-3 pb-8 md:p-6 md:pb-12 select-none min-h-0 min-w-0 overflow-visible transition-all duration-300">
