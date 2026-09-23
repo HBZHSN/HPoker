@@ -9,6 +9,7 @@ const labels = {
   wallet_buyin: '买入扣除H币',
   wallet_cashout: '离桌返还H币',
   wallet_mode_change: '模式切换',
+  wallet_jev: 'Jev 建议',
 };
 
 export default function BalanceCenterModal({ isOpen, currentUser, token, onClose }) {

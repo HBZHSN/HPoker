@@ -55,7 +55,6 @@ export default function Lobby({
   const [smallBlind, setSmallBlind] = useState(() => normalizedRoomDefaults.small_blind);
   const [actionTimeout, setActionTimeout] = useState(() => normalizedRoomDefaults.action_timeout);
   const [maxSeats, setMaxSeats] = useState(() => normalizedRoomDefaults.max_seats);
-  const [assistantWinPct, setAssistantWinPct] = useState(() => normalizedRoomDefaults.assistant_win_pct);
   const [userFilter, setUserFilter] = useState('all'); // 'all' or 'online'
 
   useEffect(() => {
@@ -66,7 +65,6 @@ export default function Lobby({
     setSmallBlind(normalizedRoomDefaults.small_blind);
     setActionTimeout(normalizedRoomDefaults.action_timeout);
     setMaxSeats(normalizedRoomDefaults.max_seats);
-    setAssistantWinPct(normalizedRoomDefaults.assistant_win_pct);
   }, [createModalOpen, defaultRoomName, normalizedRoomDefaults]);
 
   const visibleUsers = useMemo(() => filterVisibleLobbyUsers(users), [users]);
@@ -120,7 +118,6 @@ export default function Lobby({
       small_blind: Number(smallBlind),
       action_timeout: Number(actionTimeout),
       max_seats: Number(maxSeats),
-      assistant_win_ratio: Number(assistantWinPct) / 100,
     });
     if (ok) {
       setCreateModalOpen(false);
@@ -356,7 +353,7 @@ export default function Lobby({
                             <Clock className="w-3.5 h-3.5 text-slate-400" />
                             限时: {r.action_timeout}s
                           </span>
-                          {r.assistant_win_ratio !== undefined && (
+                          {r.assistant_win_ratio !== undefined && r.assistant_win_ratio < 1 && (
                             <>
                               <span className="text-slate-600">·</span>
                               <span className="flex items-center gap-1 text-purple-300 font-medium">
@@ -651,26 +648,6 @@ export default function Lobby({
                       <option key={seatCount} value={seatCount}>{seatCount} 人桌</option>
                     ))}
                   </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-slate-400 font-semibold block mb-1">
-                  辅助折算 (%)
-                </label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    step="5"
-                    value={assistantWinPct}
-                    onChange={(e) => setAssistantWinPct(Number(e.target.value))}
-                    className="flex-1 accent-amber-500 cursor-pointer"
-                  />
-                  <div className="w-16 bg-slate-950 border border-slate-800 rounded-xl px-2 py-1.5 text-center font-bold text-amber-400 text-xs">
-                    {assistantWinPct}%
-                  </div>
                 </div>
               </div>
 

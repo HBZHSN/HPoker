@@ -60,6 +60,7 @@ const buildSeatPositions = (seatCount) => {
 export default function PokerTable({
   room,
   currentUser,
+  token,
   socialHistory = [],
   seatSocialBubbles = {},
   spectatorSocialBubbles = [],
@@ -335,23 +336,9 @@ export default function PokerTable({
     }
   };
 
-  const handleUseAssistant = useCallback(() => {
-    if (selfSeat && !selfSeat.using_assistant) {
-      onSendWsEvent?.('USE_EQUITY_ASSISTANT', { active: true });
-    }
-  }, [selfSeat, onSendWsEvent]);
-
   const handleToggleEquity = useCallback(() => {
-    setIsEquityOpen((prev) => {
-      const next = !prev;
-      if (next && table?.street !== 'HAND_END') {
-        if (selfSeat && !selfSeat.using_assistant) {
-          onSendWsEvent?.('USE_EQUITY_ASSISTANT', { active: true });
-        }
-      }
-      return next;
-    });
-  }, [table?.street, selfSeat, onSendWsEvent]);
+    setIsEquityOpen((prev) => !prev);
+  }, []);
 
   const handleKickPlayer = (playerId, playerName) => {
     if (!isHost || playerId === currentUser?.user_id) return;
@@ -787,10 +774,10 @@ export default function PokerTable({
                 <div><span>对应H币</span><strong>{formatHCoins(room?.config?.cash_value)}</strong></div>
                 <div><span>操作时间</span><strong>{room?.config?.action_timeout}s</strong></div>
                 <div><span>座位</span><strong>{(table?.seats || []).filter(Boolean).length}/{maxSeats}</strong></div>
-                <div>
+                {room?.config?.assistant_win_ratio < 1 && <div>
                   <span>辅助折算</span>
-                  <strong>{Math.round((room?.config?.assistant_win_ratio ?? 1) * 100)}%</strong>
-                </div>
+                  <strong>{Math.round(room.config.assistant_win_ratio * 100)}%</strong>
+                </div>}
               </section>
 
               {onOpenBalance && (
@@ -887,20 +874,15 @@ export default function PokerTable({
           <EquityDrawer
             isOpen={isEquityOpen}
             onClose={() => setIsEquityOpen(false)}
-            holeCards={selfSeat?.hole_cards || []}
-            boardCards={table?.board_cards || []}
-            street={table?.street || 'IDLE'}
-            numOpponents={numOpponents}
-            potSize={table?.total_pot || 0}
+            roomId={room?.room_id}
+            token={token}
+            decisionKey={room?.room_id + ':' + table?.hand_number + ':' + table?.turn_count}
+            isMyTurn={Boolean(isMyTurn && table?.legal_actions?.can_fold)}
             toCall={Math.max(
               0,
               (table?.current_round_highest_bet || 0) -
                 (selfSeat?.current_round_bet || 0)
             )}
-            isSeated={Boolean(selfSeat)}
-            isFolded={Boolean(selfSeat?.is_folded)}
-            handNumber={table?.hand_number || 0}
-            onUseAssistant={handleUseAssistant}
           />
         )}
 

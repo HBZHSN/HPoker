@@ -11,7 +11,7 @@ test('room defaults keep the shared fallback values and derive blind metadata', 
   assert.deepEqual(normalized, {
     ...DEFAULT_ROOM_CONFIG,
     big_blind: 20,
-    assistant_win_pct: 70,
+    assistant_win_pct: 100,
   });
 });
 

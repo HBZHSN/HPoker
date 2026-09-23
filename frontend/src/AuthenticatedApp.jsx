@@ -561,6 +561,7 @@ export default function AuthenticatedApp({
           <PokerTable
             room={roomData}
             currentUser={currentUser}
+            token={token}
             socialHistory={socialHistory}
             seatSocialBubbles={seatSocialBubbles}
             spectatorSocialBubbles={spectatorSocialBubbles}

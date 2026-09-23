@@ -3,6 +3,7 @@ import { Shield, UserPlus, KeyRound, Trash2, Edit3, X, CheckCircle2, AlertCircle
 import { AVATAR_OPTIONS } from '../utils/avatarOptions';
 import AdminWatermarkSettings from './AdminWatermarkSettings';
 import AdminRoomDefaultsSettings from './AdminRoomDefaultsSettings';
+import AdminJevSettings from './AdminJevSettings';
 
 export default function AdminUserModal({
   isOpen,
@@ -401,6 +402,7 @@ export default function AdminUserModal({
           token={token}
           onUpdated={onRoomDefaultsUpdated}
         />
+        <AdminJevSettings token={token} />
 
         {/* Settlement Data Reset Panel */}
         <div className="p-3 bg-slate-900/90 border border-red-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">

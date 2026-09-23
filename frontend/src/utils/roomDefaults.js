@@ -4,7 +4,7 @@ export const DEFAULT_ROOM_CONFIG = Object.freeze({
   small_blind: 10,
   action_timeout: 15,
   max_seats: 6,
-  assistant_win_ratio: 0.7,
+  assistant_win_ratio: 1,
 });
 
 export const ROOM_DEFAULT_LIMITS = Object.freeze({

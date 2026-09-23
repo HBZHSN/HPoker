@@ -57,7 +57,6 @@ export default function AdminRoomDefaultsSettings({ token, onUpdated }) {
       small_blind: normalized.small_blind,
       action_timeout: normalized.action_timeout,
       max_seats: normalized.max_seats,
-      assistant_win_ratio: normalized.assistant_win_ratio,
     };
 
     try {
@@ -196,21 +195,6 @@ export default function AdminRoomDefaultsSettings({ token, onUpdated }) {
           </select>
         </label>
 
-        <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-300 sm:col-span-2">
-          <span className="flex items-center justify-between">
-            <span>辅助折算</span>
-            <span className="font-mono text-amber-300">{config.assistant_win_pct}%</span>
-          </span>
-          <input
-            type="range"
-            min={ROOM_DEFAULT_LIMITS.assistant_win_ratio.min * 100}
-            max={ROOM_DEFAULT_LIMITS.assistant_win_ratio.max * 100}
-            step="5"
-            value={config.assistant_win_pct}
-            onChange={(event) => updateField('assistant_win_ratio', Number(event.target.value) / 100)}
-            className="accent-amber-400"
-          />
-        </label>
       </div>
     </form>
   );
