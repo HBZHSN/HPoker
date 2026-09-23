@@ -13,6 +13,7 @@ const AuthenticatedApp = React.lazy(() => import('./AuthenticatedApp'));
 export default function App() {
   const [token, setToken] = useState(getStoredToken);
   const [currentUser, setCurrentUser] = useState(getStoredUser);
+  const [rememberLogin, setRememberLogin] = useState(() => Boolean(getStoredToken()));
   const [isCheckingAuth, setIsCheckingAuth] = useState(() => Boolean(getStoredToken()));
 
   // Verify stored token on startup
@@ -39,7 +40,7 @@ export default function App() {
         if (!isMounted) return;
         if (data && data.user) {
           setCurrentUser(data.user);
-          setStoredAuth(data.user, token, true);
+          setStoredAuth(data.user, token, rememberLogin);
         }
       })
       .catch((err) => {
@@ -59,16 +60,18 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [token]);
+  }, [token, rememberLogin]);
 
   const handleLoginSuccess = (user, authToken, remember = true) => {
     setCurrentUser(user);
+    setRememberLogin(remember);
     setToken(authToken);
     setStoredAuth(user, authToken, remember);
   };
 
   const handleLogout = () => {
     clearAuthStorage(currentUser?.user_id);
+    setRememberLogin(false);
     setToken('');
     setCurrentUser(null);
   };
@@ -76,7 +79,7 @@ export default function App() {
   const handleUpdateUser = (updatedUser) => {
     setCurrentUser(updatedUser);
     if (token) {
-      setStoredAuth(updatedUser, token, true);
+      setStoredAuth(updatedUser, token, rememberLogin);
     }
   };
 
