@@ -119,7 +119,9 @@ class SQLiteDatabase:
                     singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
                     api_key TEXT NOT NULL DEFAULT '',
                     fee_cents INTEGER NOT NULL DEFAULT 1 CHECK (fee_cents >= 0),
-                    recipient_user_id TEXT NOT NULL DEFAULT ''
+                    recipient_user_id TEXT NOT NULL DEFAULT '',
+                    uses_per_coin INTEGER NOT NULL DEFAULT 100 CHECK (uses_per_coin >= 0),
+                    configured_at REAL NOT NULL DEFAULT 0
                 );
                 INSERT OR IGNORE INTO jev_settings(singleton_id) VALUES (1);
 
@@ -129,6 +131,8 @@ class SQLiteDatabase:
                     result_json TEXT NOT NULL,
                     created_at REAL NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS idx_jev_decisions_user_created
+                    ON jev_decisions(user_id, created_at);
 
                 CREATE TABLE IF NOT EXISTS default_room_config (
                     singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
@@ -360,6 +364,15 @@ class SQLiteDatabase:
                     "ALTER TABLE ledger_entries "
                     "ADD COLUMN entry_kind TEXT NOT NULL DEFAULT 'settlement'"
                 )
+            jev_columns = {row["name"] for row in connection.execute("PRAGMA table_info(jev_settings)")}
+            if "uses_per_coin" not in jev_columns:
+                connection.execute("ALTER TABLE jev_settings ADD COLUMN uses_per_coin INTEGER NOT NULL DEFAULT 100")
+                connection.execute(
+                    "UPDATE jev_settings SET uses_per_coin = CASE WHEN fee_cents = 0 THEN 0 "
+                    "ELSE MAX(1, CAST(ROUND(100.0 / fee_cents) AS INTEGER)) END"
+                )
+            if "configured_at" not in jev_columns:
+                connection.execute("ALTER TABLE jev_settings ADD COLUMN configured_at REAL NOT NULL DEFAULT 0")
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (2, time.time()),
@@ -380,7 +393,11 @@ class SQLiteDatabase:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (6, time.time()),
             )
-            connection.execute("PRAGMA user_version = 6")
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (7, time.time()),
+            )
+            connection.execute("PRAGMA user_version = 7")
 
     @staticmethod
     def _encode(payload: dict) -> str:

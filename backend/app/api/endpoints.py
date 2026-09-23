@@ -811,12 +811,12 @@ def clear_all_balance_records_post(
 
 class JevSettingsRequest(BaseModel):
     api_key: Optional[str] = None
-    fee: Decimal
+    uses_per_coin: int = Field(strict=True, ge=0, le=1000000)
 
 
 @api_router.get("/config/jev")
 def get_public_jev_settings():
-    return {"fee": jev_assistant.public_settings()["fee"]}
+    return {"uses_per_coin": jev_assistant.public_settings()["uses_per_coin"]}
 
 
 @api_router.get("/admin/config/jev")
@@ -829,7 +829,7 @@ def get_jev_settings(authorization: Optional[str] = Header(None), token: Optiona
 def update_jev_settings(req: JevSettingsRequest, authorization: Optional[str] = Header(None), token: Optional[str] = Query(None)):
     admin = _verify_admin(authorization=authorization, token=token)
     try:
-        return jev_assistant.update_settings(api_key=req.api_key, fee=req.fee, admin_id=admin.user_id)
+        return jev_assistant.update_settings(api_key=req.api_key, uses_per_coin=req.uses_per_coin, admin_id=admin.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -860,7 +860,7 @@ async def get_jev_decision(room_id: str, authorization: Optional[str] = Header(N
             if not settings["api_key"]:
                 raise HTTPException(status_code=503, detail="管理员尚未配置 Jev API key")
             recipient = user_manager.get_user(settings["recipient_user_id"])
-            if settings["fee_cents"] > 0 and (not recipient or not recipient.is_admin):
+            if settings["uses_per_coin"] > 0 and (not recipient or not recipient.is_admin):
                 raise HTTPException(status_code=503, detail="Jev 收款管理员无效")
             opponents = [opponent for opponent in table.seats if opponent and opponent.player_id != user.user_id]
             public_stats = hand_history_manager.get_table_statistics(
@@ -896,7 +896,6 @@ async def get_jev_decision(room_id: str, authorization: Optional[str] = Header(N
             result = await jev_assistant.recommend(api_key=settings["api_key"], state=state, legal=legal)
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
             raise HTTPException(status_code=502, detail="Jev 暂时无法返回建议，请稍后再试") from exc
-        result["fee"] = f'{settings["fee_cents"] / 100:.2f}'
         with room_manager._storage_lock:
             room = room_manager.get_room(room_id)
             table = room.table if room else None
@@ -909,9 +908,11 @@ async def get_jev_decision(room_id: str, authorization: Optional[str] = Header(N
                 raise HTTPException(status_code=409, detail="行动回合已结束，本次未扣费")
             snapshot = balance_manager.snapshot_state()
             try:
+                fee_cents = jev_assistant.charge_cents(user.user_id, settings)
+                result["fee"] = f'{fee_cents / 100:.2f}'
                 balance_manager.record_jev_fee(
                     decision_id=decision_id, payer_id=user.user_id,
-                    admin_id=settings["recipient_user_id"], fee_cents=settings["fee_cents"],
+                    admin_id=settings["recipient_user_id"], fee_cents=fee_cents,
                     room_id=room_id, room_name=room.config.room_name,
                 )
                 jev_assistant.save(decision_id, user.user_id, result)

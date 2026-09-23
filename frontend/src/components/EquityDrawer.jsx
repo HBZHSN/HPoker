@@ -20,7 +20,7 @@ const ACTIONS = [
 
 export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionKey, isMyTurn, toCall }) {
   const [result, setResult] = useState(null);
-  const [fee, setFee] = useState(null);
+  const [usesPerCoin, setUsesPerCoin] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,8 +28,8 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
     if (!isOpen) return;
     fetch('/api/config/jev', { headers: { Authorization: 'Bearer ' + token } })
       .then((response) => response.json())
-      .then((data) => setFee(data.fee))
-      .catch(() => setFee(null));
+      .then((data) => setUsesPerCoin(data.uses_per_coin))
+      .catch(() => setUsesPerCoin(null));
   }, [isOpen, token]);
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
           <button onClick={onClose} className="text-purple-200 hover:text-white px-2" aria-label="收起建议">✕</button>
         </div>
         <div className="p-4 space-y-4 text-sm">
-          {fee !== null && <p className="text-xs text-amber-300">每次决策 {formatHCoins(result?.fee ?? fee)}</p>}
+          {usesPerCoin !== null && <p className="text-xs text-amber-300">{usesPerCoin ? `1 H币 / ${usesPerCoin} 次` : '免费'}{result && ` · 本次扣费 ${formatHCoins(result.fee)}`}</p>}
           {!isMyTurn && <p className="text-slate-400 py-8 text-center">轮到你行动时显示建议</p>}
           {isMyTurn && loading && <div role="status" className="flex justify-center py-8 text-purple-300"><Loader2 className="animate-spin" /></div>}
           {isMyTurn && !loading && error && <p role="alert" className="text-red-300 bg-red-950/50 rounded-xl p-3">{error}</p>}

@@ -3,7 +3,6 @@
 import json
 import math
 import time
-from decimal import Decimal, InvalidOperation
 
 import httpx
 
@@ -20,38 +19,52 @@ class JevAssistant:
     def settings(self):
         with self.database.connection() as db:
             return dict(db.execute(
-                "SELECT api_key, fee_cents, recipient_user_id FROM jev_settings WHERE singleton_id = 1"
+                "SELECT api_key, uses_per_coin, configured_at, recipient_user_id FROM jev_settings WHERE singleton_id = 1"
             ).fetchone())
 
     def public_settings(self):
         config = self.settings()
         return {
             "has_key": bool(config["api_key"]),
-            "fee": f'{config["fee_cents"] / 100:.2f}',
+            "uses_per_coin": config["uses_per_coin"],
             "recipient_user_id": config["recipient_user_id"],
         }
 
-    def update_settings(self, *, api_key, fee, admin_id):
-        try:
-            amount = Decimal(str(fee))
-            if not amount.is_finite() or amount < 0 or amount > 1000000 or amount != amount.quantize(Decimal("0.01")):
-                raise ValueError("调用费用须为非负数，最多两位小数")
-        except (InvalidOperation, TypeError) as exc:
-            raise ValueError("调用费用无效") from exc
+    def update_settings(self, *, api_key, uses_per_coin, admin_id):
+        if type(uses_per_coin) is not int or not 0 <= uses_per_coin <= 1000000:
+            raise ValueError("每 H币调用次数须为 0 至 1000000 的整数")
         if api_key is not None and (not isinstance(api_key, str) or len(api_key) > 512):
             raise ValueError("API key 无效")
         with self.database.connection(write=True) as db:
+            current = db.execute(
+                "SELECT uses_per_coin, recipient_user_id FROM jev_settings WHERE singleton_id = 1"
+            ).fetchone()
+            configured_at = time.time() if (current[0], current[1]) != (uses_per_coin, admin_id) else None
             if api_key is None:
                 db.execute(
-                    "UPDATE jev_settings SET fee_cents = ?, recipient_user_id = ? WHERE singleton_id = 1",
-                    (int(amount * 100), admin_id),
+                    "UPDATE jev_settings SET uses_per_coin = ?, recipient_user_id = ?, "
+                    "configured_at = COALESCE(?, configured_at) WHERE singleton_id = 1",
+                    (uses_per_coin, admin_id, configured_at),
                 )
             else:
                 db.execute(
-                    "UPDATE jev_settings SET api_key = ?, fee_cents = ?, recipient_user_id = ? WHERE singleton_id = 1",
-                    (api_key.strip(), int(amount * 100), admin_id),
+                    "UPDATE jev_settings SET api_key = ?, uses_per_coin = ?, recipient_user_id = ?, "
+                    "configured_at = COALESCE(?, configured_at) WHERE singleton_id = 1",
+                    (api_key.strip(), uses_per_coin, admin_id, configured_at),
                 )
         return self.public_settings()
+
+    def charge_cents(self, user_id, settings):
+        uses_per_coin = settings["uses_per_coin"]
+        if uses_per_coin == 0:
+            return 0
+        with self.database.connection() as db:
+            used = db.execute(
+                "SELECT COUNT(*) FROM jev_decisions WHERE user_id = ? AND created_at >= ?",
+                (user_id, settings["configured_at"]),
+            ).fetchone()[0]
+        # Round cumulative cost up to cents: 1 H币 / 1000 次 charges on uses 1, 11, 21...
+        return (100 * (used + 1) + uses_per_coin - 1) // uses_per_coin - (100 * used + uses_per_coin - 1) // uses_per_coin
 
     def cached(self, decision_id, user_id):
         with self.database.connection() as db:
