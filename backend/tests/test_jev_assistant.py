@@ -1,4 +1,6 @@
+import json
 import sqlite3
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -47,6 +49,30 @@ def test_existing_jev_fee_migrates_to_uses_per_coin(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_jev_exposes_exact_request_body_without_api_key(monkeypatch):
+    sent = []
+
+    def respond(request):
+        sent.append(json.loads(request.content))
+        assert request.headers["Authorization"] == "Bearer private-key"
+        return httpx.Response(200, json={"answers": {"action": {
+            "type": "choice", "choice": "call",
+            "probabilities": {"fold": 0.1, "call": 0.7, "raise": 0.2},
+        }}})
+
+    original_client = httpx.AsyncClient
+    transport = httpx.MockTransport(respond)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original_client(transport=transport))
+    result = await jev_assistant.recommend(
+        api_key="private-key", state={"hero_cards": ["As", "Kh"]},
+        legal=SimpleNamespace(can_check=True, can_call=False, can_bet=False, can_raise=True),
+    )
+    assert result["request"] == sent[0]
+    assert result["request"]["state"]["hero_cards"] == ["As", "Kh"]
+    assert "private-key" not in json.dumps(result["request"])
+
+
+@pytest.mark.asyncio
 async def test_jev_decision_is_private_cached_and_transfers_fee_once(monkeypatch):
     admin = User("jev_admin", "jev_admin", "Admin", "👑", is_admin=True)
     user_manager._users[admin.user_id] = admin
@@ -77,7 +103,8 @@ async def test_jev_decision_is_private_cached_and_transfers_fee_once(monkeypatch
             "collect_rate": 24.0, "showdown_rate": 28.0,
             "luck": 53, "luck_samples": 42, "updating": False,
         }
-        return {"recommendation": "call", "probabilities": {"fold": 0.1, "call": 0.7, "raise": 0.2}, "model": "jev-test"}
+        return {"recommendation": "call", "probabilities": {"fold": 0.1, "call": 0.7, "raise": 0.2},
+                "model": "jev-test", "request": {"model": "jev-latest", "state": state}}
 
     monkeypatch.setattr(jev_assistant, "recommend", fake_recommend)
     jev_assistant.update_settings(api_key="private-test-key", uses_per_coin=4, admin_id=admin.user_id)
@@ -88,6 +115,7 @@ async def test_jev_decision_is_private_cached_and_transfers_fee_once(monkeypatch
         first = await client.post(url, headers={"Authorization": "Bearer jev_player_token"})
         assert first.status_code == 200
         assert first.json()["probabilities"] == {"fold": 0.1, "call": 0.7, "raise": 0.2}
+        assert first.json()["request"]["state"]["hero_cards"] == calls[0][1]["hero_cards"]
         second = await client.post(url, headers={"Authorization": "Bearer jev_player_token"})
         assert second.json() == first.json()
         assert len(calls) == 1

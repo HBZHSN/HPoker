@@ -111,6 +111,7 @@ class JevAssistant:
             "recommendation": answer["choice"],
             "probabilities": {option: probabilities.get(option, 0) for option in ("fold", "call", "raise")},
             "model": data.get("model", "jev-latest"),
+            "request": payload,
         }
 
 

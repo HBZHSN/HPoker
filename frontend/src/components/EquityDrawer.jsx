@@ -23,6 +23,7 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
   const [usesPerCoin, setUsesPerCoin] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [requestOpen, setRequestOpen] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -33,6 +34,7 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
   }, [isOpen, token]);
 
   useEffect(() => {
+    setRequestOpen(false);
     if (!isOpen || !isMyTurn || !decisionKey) {
       setResult(null);
       setLoading(false);
@@ -84,6 +86,14 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
                 </div>
               ))}
               <p className="text-xs text-slate-500">行动概率由 Jev 模型给出。</p>
+              {result.request && (
+                <div className="space-y-2">
+                  <input type="button" value={requestOpen ? '收起发送给 Jev 的原始数据' : '查看发送给 Jev 的原始数据'}
+                    onClick={() => setRequestOpen(!requestOpen)} aria-expanded={requestOpen} aria-controls="jev-request-json"
+                    className="w-full cursor-pointer rounded-xl border border-purple-500/40 bg-slate-800 px-3 py-2 text-left text-xs font-semibold text-purple-100 hover:bg-slate-700" />
+                  {requestOpen && <pre id="jev-request-json" className="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-200 select-text">{JSON.stringify(result.request, null, 2)}</pre>}
+                </div>
+              )}
             </>
           )}
         </div>
