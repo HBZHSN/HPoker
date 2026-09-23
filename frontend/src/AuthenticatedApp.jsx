@@ -66,6 +66,7 @@ export default function AuthenticatedApp({
   const [adminOpen, setAdminOpen] = useState(false);
   const [balanceOpen, setBalanceOpen] = useState(false);
   const [userBalance, setUserBalance] = useState(null);
+  const [notice, setNotice] = useState('');
 
   // User explicitly continued past the PWA gate (remembered on this device).
   const [pwaGateDismissed, setPwaGateDismissed] = useState(() => {
@@ -378,21 +379,24 @@ export default function AuthenticatedApp({
           } else if (msg.event === 'PLAYER_KICKED') {
             if (activeRoomId) {
               terminalClose = true;
-              alert(msg.payload?.message || '你已被房主移出房间');
+              setNotice(msg.payload?.message || '你已被房主移出房间');
               handleLeaveRoom({ notifyServer: false });
             }
           } else if (msg.event === 'ROOM_DELETED') {
             if (activeRoomId) {
               terminalClose = true;
-              alert(msg.payload?.message || '房间已被房主解散');
+              setNotice(msg.payload?.message || '房间已被房主解散');
               handleLeaveRoom({ notifyServer: false });
             } else {
               fetchLobbyData();
             }
           } else if (msg.event === 'ERROR_MESSAGE') {
             const errorMessage = msg.payload?.message;
-            if (errorMessage && errorMessage !== 'Room not found') {
-              alert(normalizeHCoinsMessage(errorMessage));
+            if (errorMessage?.includes('Token')) {
+              terminalClose = true;
+              onLogout();
+            } else if (errorMessage && !['Room not found', '当前不是你的行动回合', '非当前行动玩家或非法操作'].includes(errorMessage)) {
+              setNotice(normalizeHCoinsMessage(errorMessage));
             }
             if (errorMessage === 'Room not found' && activeRoomId) {
               terminalClose = true;
@@ -448,7 +452,7 @@ export default function AuthenticatedApp({
       if (wsRef.current) wsRef.current.close();
       wsRef.current = null;
     };
-  }, [activeRoomId, currentUser?.user_id, spectateMode, token, handleLeaveRoom]);
+  }, [activeRoomId, currentUser?.user_id, spectateMode, token, handleLeaveRoom, onLogout]);
 
   const sendWsEvent = (event, payload = {}) => {
     actionSoundsRef.current.send(wsRef.current, event, payload, currentUser?.user_id);
@@ -466,15 +470,13 @@ export default function AuthenticatedApp({
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(normalizeHCoinsMessage(data.detail, '创建房间失败'));
-        return false;
+        return normalizeHCoinsMessage(data.detail, '创建房间失败');
       }
       rememberAndEnterRoom(data.room_id);
       return true;
     } catch (e) {
       console.error('Failed to create room:', e);
-      alert('创建房间失败，请稍后重试');
-      return false;
+      return '创建房间失败，请稍后重试';
     }
   };
 
@@ -492,11 +494,11 @@ export default function AuthenticatedApp({
         }
       } else {
         const data = await res.json();
-        alert(data.detail || '删除房间失败');
+        setNotice(data.detail || '删除房间失败');
       }
     } catch (e) {
       console.error('Failed to delete room:', e);
-      alert('网络错误，删除房间失败');
+      setNotice('网络错误，删除房间失败');
     }
   };
 
@@ -557,6 +559,7 @@ export default function AuthenticatedApp({
     >
       <GlobalWatermark config={watermarkConfig} />
       <div className="relative z-10 flex-1 flex flex-col min-h-0">
+        {notice && <div role="status" className="flex items-center justify-between gap-3 px-4 py-2 bg-rose-950 text-rose-200 text-xs"><span>{notice}</span><button type="button" onClick={() => setNotice('')} aria-label="关闭提示">×</button></div>}
         {activeRoomId && roomData ? (
           <PokerTable
             room={roomData}

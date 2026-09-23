@@ -13,6 +13,7 @@ import { soundEngine } from '../sound/SoundEngine';
 import { isIgnoredInputTarget, resolveHandEndHotkey } from '../utils/tableShortcuts';
 import { resolveSeatBubblePlacement } from '../utils/socialNotifications';
 import { formatHCoins, formatHChipAmount, getDefaultRoomName } from '../utils/hCurrency';
+import { useConfirmAction } from '../utils/useConfirmAction';
 import {
   Volume2,
   VolumeX,
@@ -82,6 +83,7 @@ export default function PokerTable({
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isEmojiOpen, setIsEmojiOpen] = useState(false);
   const [hasSocialUnread, setHasSocialUnread] = useState(false);
+  const { pending, confirm } = useConfirmAction();
 
   const table = room?.table;
   const jevDecisionKey = `${room?.room_id}:${table?.hand_number}:${table?.turn_count}`;
@@ -198,12 +200,9 @@ export default function PokerTable({
       !['IDLE', 'HAND_END'].includes(table?.street) &&
       (selfSeat.is_all_in || table?.street === 'RIT_DECISION')
     ) {
-      alert('全下牌局请等待本手结束');
       return;
     }
-    if (window.confirm('确定要站起并转为观战模式吗？在桌筹码将退回您的H币。')) {
-      onStandUpToSpectate?.();
-    }
+    confirm('stand', '再次点击站起观战', () => { setIsRoomPanelOpen(false); onStandUpToSpectate?.(); });
   };
 
   const handleLeaveTable = () => {
@@ -344,15 +343,11 @@ export default function PokerTable({
 
   const handleKickPlayer = (playerId, playerName) => {
     if (!isHost || playerId === currentUser?.user_id) return;
-    if (window.confirm(`确定要将 ${playerName || '该玩家'} 移出房间吗？`)) {
-      onSendWsEvent('KICK_PLAYER', { target_player_id: playerId });
-    }
+    confirm(`kick:${playerId}`, `再次点击移出 ${playerName || '该玩家'}`, () => onSendWsEvent('KICK_PLAYER', { target_player_id: playerId }));
   };
 
   const handleDeleteRoom = () => {
-    if (window.confirm('确定解散房间吗？所有在桌筹码将自动兑回H币。')) {
-      onSendWsEvent('DELETE_ROOM', {});
-    }
+    confirm('delete-room', '再次点击解散房间，在桌筹码将兑回H币', () => { setIsRoomPanelOpen(false); onSendWsEvent('DELETE_ROOM', {}); });
   };
 
   const handlePlayerAction = (action, amount = 0) => {
@@ -550,8 +545,7 @@ export default function PokerTable({
               title="站起退出座位，转为观战模式留在桌边"
             >
               <Eye className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">站起观战</span>
-              <span className="sm:hidden">观战</span>
+              <span>{pending?.key === 'stand' ? '再次点击确认' : '站起观战'}</span>
             </button>
           )}
 
@@ -733,12 +727,14 @@ export default function PokerTable({
               className="flex items-center gap-1 px-3 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-300 hover:text-white rounded-xl text-xs font-bold border border-red-500/40 shadow transition active:scale-95 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              解散
+              {pending?.key === 'delete-room' ? '再次点击确认' : '解散'}
             </button>
           )}
         </div>
         </div>
       </header>
+
+      {pending && <p role="status" className="z-30 px-4 py-1 bg-rose-950 text-rose-200 text-xs">{pending.label}</p>}
 
       {isRoomPanelOpen && (
         <>
@@ -834,8 +830,8 @@ export default function PokerTable({
                   </button>
                 )}
                 {selfSeat ? (
-                  <button type="button" onClick={() => { setIsRoomPanelOpen(false); handleStandUpClick(); }}>
-                    <Eye aria-hidden="true" /> 站起观战
+                  <button type="button" onClick={handleStandUpClick}>
+                    <Eye aria-hidden="true" /> {pending?.key === 'stand' ? '再次点击确认' : '站起观战'}
                   </button>
                 ) : hasEmptySeats ? (
                   <button type="button" onClick={() => { setIsRoomPanelOpen(false); handleQuickSitDown(); }}>
@@ -850,9 +846,9 @@ export default function PokerTable({
                   <button
                     type="button"
                     className="poker-mobile-room-action-danger"
-                    onClick={() => { setIsRoomPanelOpen(false); handleDeleteRoom(); }}
+                    onClick={handleDeleteRoom}
                   >
-                    <Trash2 aria-hidden="true" /> 解散房间
+                    <Trash2 aria-hidden="true" /> {pending?.key === 'delete-room' ? '再次点击确认' : '解散房间'}
                   </button>
                 )}
                 <button

@@ -4,6 +4,7 @@ import { AVATAR_OPTIONS } from '../utils/avatarOptions';
 import AdminWatermarkSettings from './AdminWatermarkSettings';
 import AdminRoomDefaultsSettings from './AdminRoomDefaultsSettings';
 import AdminJevSettings from './AdminJevSettings';
+import { useConfirmAction } from '../utils/useConfirmAction';
 
 export default function AdminUserModal({
   isOpen,
@@ -20,6 +21,7 @@ export default function AdminUserModal({
   const [clearingData, setClearingData] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const { pending, confirm } = useConfirmAction();
 
   // Add User Form State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -134,7 +136,6 @@ export default function AdminUserModal({
   };
 
   const handleDeleteUser = async (userId, uname) => {
-    if (!window.confirm(`确定要删除账号 '${uname}' 吗？`)) return;
     setError('');
     setSuccess('');
     try {
@@ -153,13 +154,6 @@ export default function AdminUserModal({
   };
 
   const handleClearAllRecords = async () => {
-    if (
-      !window.confirm(
-        '确认清空所有结算与账单数据？\n\n此操作不可恢复。'
-      )
-    ) {
-      return;
-    }
     setClearingData(true);
     setError('');
     setSuccess('');
@@ -213,6 +207,7 @@ export default function AdminUserModal({
         </div>
 
         {/* Notices */}
+        {pending && <p role="status" className="text-xs text-rose-300">{pending.label}</p>}
         {error && (
           <div className="flex items-center gap-2 p-2.5 bg-red-950/80 border border-red-500/60 rounded-xl text-red-300 text-xs font-bold">
             <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
@@ -376,11 +371,12 @@ export default function AdminUserModal({
                           </button>
                           {!u.is_admin && (
                             <button
-                              onClick={() => handleDeleteUser(u.user_id, u.username)}
+                              onClick={() => confirm(`user:${u.user_id}`, `再次点击删除账号「${u.username}」`, () => handleDeleteUser(u.user_id, u.username))}
                               className="p-1 text-red-400 hover:text-red-300 transition"
-                              title="删除用户"
+                              title={pending?.key === `user:${u.user_id}` ? '再次点击确认删除' : '删除用户'}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
+                              {pending?.key === `user:${u.user_id}` && <span className="text-xs">确认</span>}
                             </button>
                           )}
                         </div>
@@ -411,12 +407,12 @@ export default function AdminUserModal({
             结算数据
           </div>
           <button
-            onClick={handleClearAllRecords}
+            onClick={() => confirm('clear-records', '再次点击清空所有结算与账单数据，此操作不可恢复', handleClearAllRecords)}
             disabled={clearingData}
             className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-black shadow transition active:scale-95 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            {clearingData ? '清空中...' : '清空数据'}
+            {clearingData ? '清空中...' : pending?.key === 'clear-records' ? '再次点击确认' : '清空数据'}
           </button>
         </div>
       </div>

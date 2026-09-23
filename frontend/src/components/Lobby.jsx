@@ -19,6 +19,7 @@ import PersonalHistory from './PersonalHistory';
 import { filterVisibleLobbyUsers } from '../utils/lobbyUsers';
 import { formatHCoins, getDefaultRoomName } from '../utils/hCurrency';
 import { DEFAULT_ROOM_CONFIG, normalizeRoomDefaults } from '../utils/roomDefaults';
+import { useConfirmAction } from '../utils/useConfirmAction';
 
 export default function Lobby({
   currentUser,
@@ -44,6 +45,9 @@ export default function Lobby({
   const [historyUser, setHistoryUser] = useState(null);
   const closeHistory = useCallback(() => setHistoryUser(null), []);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const openCreateModal = () => { setCreateError(''); setCreateModalOpen(true); };
+  const { pending, confirm } = useConfirmAction();
   const defaultRoomName = getDefaultRoomName(currentUser);
   const normalizedRoomDefaults = useMemo(
     () => normalizeRoomDefaults(roomDefaults),
@@ -100,6 +104,7 @@ export default function Lobby({
 
   const handleSubmitCreate = async (e) => {
     e.preventDefault();
+    setCreateError('');
     const hCoins = Number(hCoinValue);
     if (
       hCoins > 0 &&
@@ -108,10 +113,9 @@ export default function Lobby({
       userBalance !== undefined &&
       hCoins > Number(userBalance)
     ) {
-      alert(`H币不足（当前可用：${formatHCoins(userBalance)}，需要：${formatHCoins(hCoins)}）`);
       return;
     }
-    const ok = await onCreateRoom({
+    const result = await onCreateRoom({
       room_name: roomName,
       buyin_chips: Number(buyinChips),
       cash_value: Number(hCoinValue),
@@ -119,13 +123,16 @@ export default function Lobby({
       action_timeout: Number(actionTimeout),
       max_seats: Number(maxSeats),
     });
-    if (ok) {
+    if (result === true) {
       setCreateModalOpen(false);
+    } else {
+      setCreateError(result || '创建房间失败');
     }
   };
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 pt-[max(16px,env(safe-area-inset-top,0px))] pb-[max(24px,env(safe-area-inset-bottom,0px))] md:p-6 lg:p-8 flex flex-col gap-6">
+      {pending && <p role="status" className="text-sm text-rose-300">{pending.label}</p>}
       {historyUser && <PersonalHistory key={historyUser.user_id} currentUser={currentUser} profileUser={historyUser} token={token} onClose={closeHistory} />}
       {/* Top Banner & User Switcher / Auth Control */}
       <header className="flex flex-col md:flex-row items-center justify-between gap-4 bg-slate-900/80 border border-amber-500/30 p-5 rounded-3xl backdrop-blur-md shadow-2xl">
@@ -274,7 +281,7 @@ export default function Lobby({
             </div>
 
             <button
-              onClick={() => setCreateModalOpen(true)}
+              onClick={openCreateModal}
               className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black rounded-xl shadow-glow-gold transition active:scale-95 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
@@ -290,7 +297,7 @@ export default function Lobby({
               </div>
               <p className="text-sm text-slate-400 font-medium">暂无牌桌</p>
               <button
-                onClick={() => setCreateModalOpen(true)}
+                onClick={openCreateModal}
                 className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold rounded-xl border border-slate-700 transition cursor-pointer"
               >
                 创建房间
@@ -399,14 +406,13 @@ export default function Lobby({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm(`确定要解散并删除房间 "${r.room_name}" 吗？`)) {
-                              onDeleteRoom?.(r.room_id);
-                            }
+                            confirm(`delete:${r.room_id}`, `再次点击删除「${r.room_name}」`, () => onDeleteRoom?.(r.room_id));
                           }}
                           className="p-2.5 bg-red-950/70 hover:bg-red-900 text-red-300 hover:text-white rounded-xl border border-red-500/40 transition active:scale-95 cursor-pointer shadow flex items-center justify-center"
-                          title="解散/删除此房间"
+                          title={pending?.key === `delete:${r.room_id}` ? '再次点击确认删除' : '解散/删除此房间'}
                         >
                           <Trash2 className="w-4 h-4" />
+                          {pending?.key === `delete:${r.room_id}` && <span className="text-xs">确认</span>}
                         </button>
                       )}
                     </div>
@@ -551,6 +557,7 @@ export default function Lobby({
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-6 shadow-2xl flex flex-col gap-4">
             <h3 className="text-lg font-black text-white">创建房间</h3>
+            {createError && <p role="alert" className="text-xs text-rose-300">{createError}</p>}
 
             <form onSubmit={handleSubmitCreate} className="flex flex-col gap-3 text-xs">
               <div>
