@@ -183,7 +183,7 @@ export default function AdminUserModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
-      <div className="relative w-full max-w-3xl bg-gradient-to-b from-slate-900 via-slate-950 to-black border-2 border-amber-500/50 rounded-3xl p-6 shadow-2xl overflow-hidden flex flex-col gap-4 max-h-[90vh]">
+      <div className="relative w-full max-w-3xl bg-gradient-to-b from-slate-900 via-slate-950 to-black border-2 border-amber-500/50 rounded-3xl p-6 shadow-2xl max-h-[90dvh] overflow-y-auto space-y-4">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center gap-3">
@@ -296,7 +296,7 @@ export default function AdminUserModal({
         )}
 
         {/* User Table */}
-        <div className="flex-1 overflow-y-auto pr-1">
+        <div className="max-h-64 overflow-y-auto pr-1">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-slate-800 text-slate-400 font-bold">
