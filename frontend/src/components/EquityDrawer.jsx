@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BarChart3, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-import { formatChipAmount, formatHCoins } from '../utils/hCurrency';
+import { formatChipAmount } from '../utils/hCurrency';
 import CardView from './CardView';
 
 export function EquityTrigger({ isOpen = false, onToggle }) {
@@ -183,7 +183,7 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
           <button onClick={onClose} className="text-purple-200 hover:text-white px-2" aria-label="收起建议">✕</button>
         </div>
         <div className="p-4 space-y-4 text-sm">
-          {usesPerCoin !== null && <p className="text-xs text-amber-300">{usesPerCoin ? `1 H币 / ${usesPerCoin} 次` : '免费'}{result && ` · 本次扣费 ${formatHCoins(result.fee)}`}</p>}
+          {usesPerCoin !== null && <p className="text-xs text-amber-300">{usesPerCoin ? `1H币${usesPerCoin}次` : '免费'}</p>}
           {!isMyTurn && !result && <p className="text-slate-400 py-8 text-center">轮到你行动时显示建议</p>}
           {isMyTurn && loading && <div role="status" className="flex justify-center py-8 text-purple-300"><Loader2 className="animate-spin" /></div>}
           {isMyTurn && !loading && error && <p role="alert" className="text-red-300 bg-red-950/50 rounded-xl p-3">{error}</p>}
