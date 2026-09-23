@@ -886,10 +886,10 @@ async def get_jev_decision(room_id: str, authorization: Optional[str] = Header(N
                      }}
                     for opponent in opponents
                 ],
-                "recent_actions": [
+                "action_history": [
                     {**{key: action[key] for key in ("action", "amount", "street")},
                      "seat": seats_by_player.get(action["player_id"])}
-                    for action in table.last_action_history[-10:]
+                    for action in table.last_action_history
                 ],
             }
         try:

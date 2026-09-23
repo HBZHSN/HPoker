@@ -81,6 +81,11 @@ async def test_jev_decision_is_private_cached_and_transfers_fee_once(monkeypatch
     room.table.sit_down("u_test1", "Player", seat_index=0, chips=1000)
     room.table.sit_down("u_test2", "Opponent", seat_index=1, chips=1000)
     room.table.start_new_hand()
+    room.table.last_action_history.extend(
+        {"player_id": "u_test1" if index % 2 else "u_test2", "action": "CHECK", "amount": 0,
+         "street": "FLOP" if index < 6 else "TURN"}
+        for index in range(12)
+    )
     room_manager.checkpoint_room(room)
     actor = room.table.seats[room.table.current_turn_seat]
     assert actor.player_id == "u_test1"
@@ -103,6 +108,9 @@ async def test_jev_decision_is_private_cached_and_transfers_fee_once(monkeypatch
             "collect_rate": 24.0, "showdown_rate": 28.0,
             "luck": 53, "luck_samples": 42, "updating": False,
         }
+        assert len(state["action_history"]) == len(room.table.last_action_history) == 14
+        assert [action["street"] for action in state["action_history"]] == ["PREFLOP"] * 2 + ["FLOP"] * 6 + ["TURN"] * 6
+        assert {action["seat"] for action in state["action_history"]} == {0, 1}
         return {"recommendation": "call", "probabilities": {"fold": 0.1, "call": 0.7, "raise": 0.2},
                 "model": "jev-test", "request": {"model": "jev-latest", "state": state}}
 
