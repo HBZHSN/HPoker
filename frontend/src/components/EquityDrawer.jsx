@@ -116,7 +116,7 @@ function JevRequestDetails({ request }) {
   </div>;
 }
 
-export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionKey, isMyTurn, toCall }) {
+export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionKey, isMyTurn, toCall, onResult }) {
   const [result, setResult] = useState(null);
   const [usesPerCoin, setUsesPerCoin] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -164,12 +164,13 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
         if (!controller.signal.aborted) {
           loadedDecisionKey.current = decisionKey;
           setResult(data);
+          onResult?.({ decisionKey, probabilities: data.probabilities });
         }
       })
       .catch((cause) => { if (cause.name !== 'AbortError') setError(cause.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [isOpen, isMyTurn, decisionKey, roomId, token]);
+  }, [isOpen, isMyTurn, decisionKey, roomId, token, onResult]);
 
   if (!isOpen) return null;
   const wasCheck = result?.request?.state?.legal_actions?.can_check ?? (toCall === 0);

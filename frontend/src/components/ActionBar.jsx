@@ -68,6 +68,7 @@ export default function ActionBar({
   handNumber = 0,
   boardCards = [],
   isMobileMode,
+  jevProbabilities = null,
 }) {
   const blindUnit = Math.max(1, Number(smallBlind) || 1);
   const bigBlind = blindUnit * 2;
@@ -79,6 +80,16 @@ export default function ActionBar({
 
   const hasCards = Boolean(selfSeat?.has_cards || (selfSeat?.hole_cards && selfSeat.hole_cards.length > 0));
   const effectiveIsMyTurn = Boolean(isMyTurn && hasCards);
+  const jev = effectiveIsMyTurn && !disabled ? jevProbabilities : null;
+  const jevMax = jev ? Math.max(...Object.values(jev).filter(Number.isFinite)) : null;
+  const jevPercent = (key) => jev && Number.isFinite(jev[key]) && (key !== 'raise' || legalActions?.can_bet || legalActions?.can_raise)
+    ? `${(jev[key] * 100).toFixed(1)}%` : null;
+  const jevHighlight = (key) => jevPercent(key) && jev[key] === jevMax
+    ? ' ring-2 ring-purple-300 shadow-[0_0_18px_rgba(216,180,254,0.7)]' : '';
+  const jevHint = (key, shortcut, shortcutClass) => {
+    const percent = jevPercent(key);
+    return <span className={percent ? 'jev-probability text-[11px] font-black text-purple-100' : shortcutClass}>{percent || shortcut}</span>;
+  };
 
   const canPreAction = isEligibleForPreAction({
     disabled,
@@ -961,10 +972,10 @@ export default function ActionBar({
               type="button"
               onClick={() => onAction('FOLD')}
               disabled={disabled || !legalActions?.can_fold}
-              className="poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-red-700 to-red-950 hover:from-red-600 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-red-500/50 shadow-lg active:scale-95 transition cursor-pointer"
+              className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-red-700 to-red-950 hover:from-red-600 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-red-500/50 shadow-lg active:scale-95 transition cursor-pointer${jevHighlight('fold')}`}
             >
               <span className="text-sm sm:text-base font-black tracking-wide">弃牌</span>
-              <span className="text-[10px] sm:text-[11px] text-red-300/80 font-medium">[F]</span>
+              {jevHint('fold', '[F]', 'text-[10px] sm:text-[11px] text-red-300/80 font-medium')}
             </button>
           ) : canPreAction ? (
             <button
@@ -1009,22 +1020,22 @@ export default function ActionBar({
                 type="button"
                 onClick={() => onAction('CHECK')}
                 disabled={disabled}
-                className="poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer"
+                className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer${jevHighlight('call')}`}
               >
                 <span className="text-sm sm:text-base font-black tracking-wide">过牌</span>
-                <span className="text-[10px] sm:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
+                {jevHint('call', '[Space]', 'text-[10px] sm:text-[11px] text-emerald-300/80 font-medium')}
               </button>
             ) : (
               <button
                 type="button"
                 onClick={() => onAction('CALL', legalActions?.call_amount || 0)}
                 disabled={disabled || !legalActions?.can_call}
-                className="poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer"
+                className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer${jevHighlight('call')}`}
               >
                 <span className="text-sm sm:text-base font-black tracking-wide truncate max-w-full">
                   跟注 {formatHChipAmount(legalActions?.call_amount || 0)}
                 </span>
-                <span className="text-[10px] sm:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
+                {jevHint('call', '[Space]', 'text-[10px] sm:text-[11px] text-emerald-300/80 font-medium')}
               </button>
             )
           ) : canPreAction ? (
@@ -1075,7 +1086,7 @@ export default function ActionBar({
                 isAllIn
                   ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
                   : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
-              }`}
+              }${jevHighlight('raise')}`}
             >
               {isAllIn ? (
                 <>
@@ -1083,14 +1094,14 @@ export default function ActionBar({
                     <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
                     全下 {formatHChipAmount(legalActions?.all_in_amount || currentAmount)}
                   </span>
-                  <span className="text-[10px] text-purple-300/90 font-medium">[R]</span>
+                  {jevHint('raise', '[R]', 'text-[10px] text-purple-300/90 font-medium')}
                 </>
               ) : (
                 <>
                   <span className="text-sm sm:text-base font-black tracking-wide text-amber-200 whitespace-nowrap truncate max-w-full">
                     {legalActions?.can_bet ? `下注 ${formatHChipAmount(currentAmount)}` : `加注至 ${formatHChipAmount(currentAmount)}`}
                   </span>
-                  <span className="text-[10px] text-amber-300/80 font-medium">[R]</span>
+                  {jevHint('raise', '[R]', 'text-[10px] text-amber-300/80 font-medium')}
                 </>
               )}
             </button>
@@ -1304,10 +1315,10 @@ export default function ActionBar({
                 type="button"
                 onClick={() => onAction('FOLD')}
                 disabled={disabled || !legalActions?.can_fold}
-                className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
+                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${jevHighlight('fold')}`}
               >
                 <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
-                <span className="text-[10px] lg:text-[11px] text-red-300/80 font-medium">[F]</span>
+                {jevHint('fold', '[F]', 'text-[10px] lg:text-[11px] text-red-300/80 font-medium')}
               </button>
             ) : canPreAction ? (
               <button
@@ -1354,22 +1365,22 @@ export default function ActionBar({
                   type="button"
                   onClick={() => onAction('CHECK')}
                   disabled={disabled}
-                  className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
+                  className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${jevHighlight('call')}`}
                 >
                   <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
-                  <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
+                  {jevHint('call', '[Space]', 'text-[10px] lg:text-[11px] text-emerald-300/80 font-medium')}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => onAction('CALL', legalActions?.call_amount || 0)}
                   disabled={disabled || !legalActions?.can_call}
-                  className="poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]"
+                  className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${jevHighlight('call')}`}
                 >
                   <span className="text-sm lg:text-base font-black tracking-wide">
                     跟注 {formatHChipAmount(legalActions?.call_amount || 0)}
                   </span>
-                  <span className="text-[10px] lg:text-[11px] text-emerald-300/80 font-medium">[Space]</span>
+                  {jevHint('call', '[Space]', 'text-[10px] lg:text-[11px] text-emerald-300/80 font-medium')}
                 </button>
               )
             ) : canPreAction ? (
@@ -1476,7 +1487,7 @@ export default function ActionBar({
                   isAllIn
                     ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
                     : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
-                }`}
+                }${jevHighlight('raise')}`}
               >
                 {isAllIn ? (
                   <>
@@ -1484,18 +1495,14 @@ export default function ActionBar({
                       <Flame className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-amber-400 fill-amber-400" />
                       全下 {formatHChipAmount(legalActions?.all_in_amount || currentAmount)}
                     </span>
-                    <span className="text-[10px] lg:text-[11px] text-purple-300/90 font-medium">
-                      [R]
-                    </span>
+                    {jevHint('raise', '[R]', 'text-[10px] lg:text-[11px] text-purple-300/90 font-medium')}
                   </>
                 ) : (
                   <>
                     <span className="text-sm lg:text-base font-black tracking-wide text-amber-200 whitespace-nowrap">
                       {legalActions?.can_bet ? `下注 ${formatHChipAmount(currentAmount)}` : `加注至 ${formatHChipAmount(currentAmount)}`}
                     </span>
-                    <span className="text-[10px] lg:text-[11px] text-amber-300/80 font-medium">
-                      [R]
-                    </span>
+                    {jevHint('raise', '[R]', 'text-[10px] lg:text-[11px] text-amber-300/80 font-medium')}
                   </>
                 )}
               </button>

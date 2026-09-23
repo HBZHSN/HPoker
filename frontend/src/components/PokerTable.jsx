@@ -76,6 +76,7 @@ export default function PokerTable({
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
   const [leaveRequested, setLeaveRequested] = useState(false);
   const [isEquityOpen, setIsEquityOpen] = useState(false);
+  const [jevDecision, setJevDecision] = useState(null);
   const [showSpectatorList, setShowSpectatorList] = useState(false);
   const [isRoomPanelOpen, setIsRoomPanelOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -83,6 +84,7 @@ export default function PokerTable({
   const [hasSocialUnread, setHasSocialUnread] = useState(false);
 
   const table = room?.table;
+  const jevDecisionKey = `${room?.room_id}:${table?.hand_number}:${table?.turn_count}`;
   const isHost = room?.host_player_id === currentUser?.user_id;
   const roomName = room?.config?.room_name || getDefaultRoomName(
     room?.host_player_id === currentUser?.user_id ? currentUser : null
@@ -875,8 +877,9 @@ export default function PokerTable({
           onClose={() => setIsEquityOpen(false)}
           roomId={room?.room_id}
           token={token}
-          decisionKey={room?.room_id + ':' + table?.hand_number + ':' + table?.turn_count}
+          decisionKey={jevDecisionKey}
           isMyTurn={Boolean(isMyTurn && table?.legal_actions?.can_fold)}
+          onResult={setJevDecision}
           toCall={Math.max(
             0,
             (table?.current_round_highest_bet || 0) -
@@ -1251,6 +1254,7 @@ export default function PokerTable({
             onQuickSitDown={handleQuickSitDown}
             currentTurnPlayer={currentTurnPlayer}
             isMyTurn={isMyTurn}
+            jevProbabilities={isEquityOpen && isMyTurn && table?.legal_actions?.can_fold && jevDecision?.decisionKey === jevDecisionKey ? jevDecision.probabilities : null}
             street={table?.street || 'IDLE'}
             actionHistory={table?.action_history || []}
             actionTimeout={room?.config?.action_timeout || 15}

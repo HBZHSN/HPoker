@@ -958,7 +958,7 @@ button, a, input, select {
     border-radius: 14px;
   }
 
-  .poker-action-button > span:last-child,
+  .poker-action-button > span:last-child:not(.jev-probability),
   .poker-action-button > div + span:last-child {
     display: none;
   }
