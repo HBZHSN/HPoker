@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Lock, User, KeyRound, AlertCircle, ArrowRight, CheckSquare, Square } from 'lucide-react';
-import { getStoredRememberedUsername, saveRememberedUsername, removeRememberedUsername } from '../utils/authStorage';
+import { getStoredRememberedUsername, getStoredRememberedPassword, saveRememberedCredentials, removeRememberedUsername } from '../utils/authStorage';
 
 export default function LoginModal({ onLoginSuccess }) {
   const [username, setUsername] = useState(getStoredRememberedUsername);
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState(() => getStoredRememberedPassword(getStoredRememberedUsername()));
   const [rememberLogin, setRememberLogin] = useState(true);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,7 +31,7 @@ export default function LoginModal({ onLoginSuccess }) {
 
       const data = await res.json();
       if (rememberLogin) {
-        saveRememberedUsername(loginUser.trim());
+        saveRememberedCredentials(loginUser.trim(), loginPass.trim());
       } else {
         removeRememberedUsername();
       }
@@ -82,6 +82,7 @@ export default function LoginModal({ onLoginSuccess }) {
             </label>
             <input
               type="text"
+              autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full bg-slate-950 px-3.5 py-2.5 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none transition shadow-inner"
@@ -95,6 +96,7 @@ export default function LoginModal({ onLoginSuccess }) {
             </label>
             <input
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-slate-950 px-3.5 py-2.5 rounded-xl border border-slate-700 text-slate-100 font-bold text-sm focus:border-amber-400 focus:outline-none transition shadow-inner"

@@ -14,6 +14,8 @@ const {
   getStoredToken,
   getStoredUser,
   getStoredRememberedUsername,
+  getStoredRememberedPassword,
+  saveRememberedCredentials,
   saveRememberedUsername,
   removeRememberedUsername,
   setStoredAuth,
@@ -60,6 +62,16 @@ test('authStorage: saves and removes remembered username with legacy cleanup', (
   removeRememberedUsername();
   assert.equal(store.has('auth_remembered_username'), false);
   assert.equal(getStoredRememberedUsername(), '');
+});
+
+test('authStorage: remembered password follows the selected account and clears when disabled', () => {
+  store.clear();
+  saveRememberedCredentials('alice', 'secret');
+  assert.equal(getStoredRememberedPassword('alice'), 'secret');
+  assert.equal(getStoredRememberedPassword('bob'), '');
+  removeRememberedUsername();
+  assert.equal(getStoredRememberedPassword('alice'), '');
+  assert.equal(store.has('auth_remembered_password'), false);
 });
 
 test('authStorage: setStoredAuth and clearAuthStorage cleans legacy storage', () => {

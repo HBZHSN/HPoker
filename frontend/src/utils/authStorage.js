@@ -88,10 +88,25 @@ export function saveRememberedUsername(username, storage) {
   }
 }
 
+export function getStoredRememberedPassword(username, storage) {
+  const s = getStorage(storage);
+  return s && getStoredRememberedUsername(s) === username
+    ? s.getItem('auth_remembered_password') || ''
+    : '';
+}
+
+export function saveRememberedCredentials(username, password, storage) {
+  const s = getStorage(storage);
+  if (!s) return;
+  saveRememberedUsername(username, s);
+  s.setItem('auth_remembered_password', password);
+}
+
 export function removeRememberedUsername(storage) {
   const s = getStorage(storage);
   if (!s) return;
   s.removeItem('auth_remembered_username');
+  s.removeItem('auth_remembered_password');
   for (const k of LEGACY_USERNAME_KEYS) {
     if (k) s.removeItem(k);
   }

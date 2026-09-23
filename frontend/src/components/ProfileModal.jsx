@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, KeyRound, CheckCircle2, AlertCircle, X } from 'lucide-react';
 import { AVATAR_OPTIONS } from '../utils/avatarOptions';
+import { getStoredRememberedUsername, saveRememberedCredentials } from '../utils/authStorage';
 
 export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClose }) {
   if (!isOpen || !user) return null;
@@ -58,6 +59,9 @@ export default function ProfileModal({ isOpen, user, token, onUpdateUser, onClos
       }
 
       setSuccess('资料更新成功');
+      if (newPassword.trim() && getStoredRememberedUsername() === user.username) {
+        saveRememberedCredentials(user.username, newPassword.trim());
+      }
       onUpdateUser(data.user);
       setTimeout(() => {
         onClose();
