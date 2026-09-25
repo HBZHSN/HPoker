@@ -75,6 +75,44 @@ def test_api_admin_only_and_no_reset(wallet):
     assert client.delete('/api/balance/all-records', headers={'Authorization': 'Bearer admin-token'}).status_code == 410
 
 
+def test_admin_delegates_and_revokes_hcoin_management(wallet):
+    from fastapi import HTTPException
+    from backend.app.api.endpoints import (
+        AdminUpdateUserRequest, WalletChangeRequest, admin_list_users,
+        admin_update_user, change_wallet, get_current_user,
+    )
+    from backend.app.services.user_manager import UserManager
+
+    admin_auth = 'Bearer admin-token'
+    delegate_auth = 'Bearer real-token'
+    payload = WalletChangeRequest(user_id='real', amount='20', kind='deposit', request_id='delegated')
+
+    with pytest.raises(HTTPException) as denied:
+        change_wallet(payload, authorization=delegate_auth, token=None)
+    assert denied.value.status_code == 403
+    granted = admin_update_user('real', AdminUpdateUserRequest(can_manage_hcoins=True),
+                                authorization=admin_auth, token=None)
+    assert granted['can_manage_hcoins'] is True
+    assert granted['is_admin'] is False
+    assert get_current_user(authorization=delegate_auth, token=None)['user']['can_manage_hcoins'] is True
+    assert UserManager(database_path=user_manager.storage_path).get_user('real').can_manage_hcoins is True
+    with pytest.raises(HTTPException) as denied_admin:
+        admin_list_users(authorization=delegate_auth, token=None)
+    assert denied_admin.value.status_code == 403
+    assert change_wallet(payload, authorization=delegate_auth, token=None)['available_cash'] == 20
+    assert wallet.available_cents('real') == 2000
+
+    revoked = admin_update_user('real', AdminUpdateUserRequest(can_manage_hcoins=False),
+                                authorization=admin_auth, token=None)
+    assert revoked['can_manage_hcoins'] is False
+    payload.request_id = 'after-revoke'
+    with pytest.raises(HTTPException) as denied_again:
+        change_wallet(payload, authorization=delegate_auth, token=None)
+    assert denied_again.value.status_code == 403
+    assert wallet.available_cents('real') == 2000
+    assert UserManager(database_path=user_manager.storage_path).get_user('real').can_manage_hcoins is False
+
+
 def test_failed_rebuy_restores_seat(wallet):
     change(wallet)
     room = Room('real', RoomConfig(), room_id='rebuy-room')
@@ -187,4 +225,3 @@ def test_create_room_insufficient_funds_and_ws_stable_spectate(wallet):
         reply = ws.receive_json()
         assert reply['event'] == 'ERROR_MESSAGE'
         assert '可用余额不足' in reply['payload']['message']
-

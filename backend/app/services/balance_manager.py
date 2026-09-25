@@ -319,8 +319,8 @@ class BalanceManager:
         mgr = u_mgr or user_manager
         operator = mgr.get_user(operator_id)
         user = mgr.get_user(user_id)
-        if not operator or not operator.is_admin:
-            raise ValueError("仅管理员可以充值或提现")
+        if not operator or not (operator.is_admin or operator.can_manage_hcoins):
+            raise ValueError("无H币管理权限")
         if not user or user.is_test_account:
             raise ValueError("请选择真实用户")
         if kind not in {"deposit", "withdraw"} or not request_id.strip():

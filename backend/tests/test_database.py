@@ -71,7 +71,7 @@ def test_schema_uses_normalized_tables_constraints_and_foreign_keys(tmp_path):
     assert "cash_value_cents" in ledger_columns
     assert "payload_json" not in ledger_columns
     assert "entry_kind" in ledger_columns
-    assert user_version == 6
+    assert user_version == 8
 
     with pytest.raises(sqlite3.IntegrityError):
         with database.connection(write=True) as connection:
@@ -87,6 +87,28 @@ def test_test_environment_rejects_production_database_path():
     assert Path(DEFAULT_DATABASE_PATH) == PRODUCTION_DATABASE_PATH
     with pytest.raises(RuntimeError, match="production SQLite database"):
         SQLiteDatabase(str(PRODUCTION_DATABASE_PATH))
+
+
+def test_existing_users_gain_disabled_hcoin_permission(tmp_path):
+    database_path = tmp_path / "old_users.sqlite3"
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            """CREATE TABLE users (
+                user_id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE,
+                nickname TEXT NOT NULL, avatar TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 0, is_test INTEGER NOT NULL DEFAULT 0,
+                password_hash TEXT NOT NULL, created_at REAL NOT NULL
+            )"""
+        )
+        connection.execute(
+            "INSERT INTO users VALUES ('old', 'old', 'Old', '👤', 0, 0, 'hash', 1)"
+        )
+
+    database = SQLiteDatabase(str(database_path))
+    users, _ = database.load_users()
+    assert users[0]["can_manage_hcoins"] is False
+    database.replace_users([{**users[0], "can_manage_hcoins": True}], {})
+    assert database.load_users()[0][0]["can_manage_hcoins"] is True
 
 
 def test_global_services_use_only_dedicated_test_sqlite():

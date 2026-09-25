@@ -76,6 +76,7 @@ class AdminCreateUserRequest(BaseModel):
     avatar: str = "👤"
     is_admin: bool = False
     is_test: bool = False
+    can_manage_hcoins: bool = False
 
 
 class AdminUpdateUserRequest(BaseModel):
@@ -85,6 +86,7 @@ class AdminUpdateUserRequest(BaseModel):
     avatar: Optional[str] = None
     is_admin: Optional[bool] = None
     is_test: Optional[bool] = None
+    can_manage_hcoins: Optional[bool] = None
 
 
 def _verify_admin(
@@ -94,6 +96,16 @@ def _verify_admin(
     user = _verify_user(authorization=authorization, token=token)
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="仅管理员有权限访问")
+    return user
+
+
+def _verify_hcoin_manager(
+    authorization: Optional[str] = None,
+    token: Optional[str] = None,
+) -> User:
+    user = _verify_user(authorization=authorization, token=token)
+    if not (user.is_admin or user.can_manage_hcoins):
+        raise HTTPException(status_code=403, detail="无H币管理权限")
     return user
 
 
@@ -164,6 +176,7 @@ def admin_create_user(
             avatar=req.avatar,
             is_admin=req.is_admin,
             is_test=req.is_test,
+            can_manage_hcoins=req.can_manage_hcoins,
         )
         return user.to_dict()
     except PermissionError as pe:
@@ -190,6 +203,7 @@ def admin_update_user(
             avatar=req.avatar,
             is_admin=req.is_admin,
             is_test=req.is_test,
+            can_manage_hcoins=req.can_manage_hcoins,
         )
         return user.to_dict()
     except PermissionError as pe:
@@ -660,7 +674,7 @@ class WalletChangeRequest(BaseModel):
 
 @api_router.post("/balance/wallet-change")
 def change_wallet(req: WalletChangeRequest, authorization: Optional[str] = Header(None), token: Optional[str] = Query(None)):
-    operator = _verify_admin(authorization=authorization, token=token)
+    operator = _verify_hcoin_manager(authorization=authorization, token=token)
     try:
         with room_manager._storage_lock:
             entry = balance_manager.admin_wallet_change(

@@ -158,6 +158,7 @@ class SQLiteDatabase:
                     avatar TEXT NOT NULL,
                     is_admin INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
                     is_test INTEGER NOT NULL DEFAULT 0 CHECK (is_test IN (0, 1)),
+                    can_manage_hcoins INTEGER NOT NULL DEFAULT 0 CHECK (can_manage_hcoins IN (0, 1)),
                     password_hash TEXT NOT NULL,
                     created_at REAL NOT NULL
                 );
@@ -373,6 +374,12 @@ class SQLiteDatabase:
                 )
             if "configured_at" not in jev_columns:
                 connection.execute("ALTER TABLE jev_settings ADD COLUMN configured_at REAL NOT NULL DEFAULT 0")
+            user_columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)")}
+            if "can_manage_hcoins" not in user_columns:
+                connection.execute(
+                    "ALTER TABLE users ADD COLUMN can_manage_hcoins INTEGER NOT NULL DEFAULT 0 "
+                    "CHECK (can_manage_hcoins IN (0, 1))"
+                )
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (2, time.time()),
@@ -397,7 +404,11 @@ class SQLiteDatabase:
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (7, time.time()),
             )
-            connection.execute("PRAGMA user_version = 7")
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (8, time.time()),
+            )
+            connection.execute("PRAGMA user_version = 8")
 
     @staticmethod
     def _encode(payload: dict) -> str:
@@ -512,7 +523,7 @@ class SQLiteDatabase:
     def load_users(self) -> tuple[list[dict], dict[str, str]]:
         with self.connection() as connection:
             user_rows = connection.execute(
-                """SELECT user_id, username, nickname, avatar, is_admin, is_test,
+                """SELECT user_id, username, nickname, avatar, is_admin, is_test, can_manage_hcoins,
                           password_hash, created_at
                    FROM users ORDER BY created_at, user_id"""
             ).fetchall()
@@ -524,6 +535,7 @@ class SQLiteDatabase:
                 **dict(row),
                 "is_admin": bool(row["is_admin"]),
                 "is_test": bool(row["is_test"]),
+                "can_manage_hcoins": bool(row["can_manage_hcoins"]),
             }
             for row in user_rows
         ]
@@ -543,8 +555,8 @@ class SQLiteDatabase:
             connection.executemany(
                 """INSERT INTO users(
                        user_id, username, nickname, avatar, is_admin, is_test,
-                       password_hash, created_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       can_manage_hcoins, password_hash, created_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 [
                     (
                         user["user_id"],
@@ -553,6 +565,7 @@ class SQLiteDatabase:
                         user.get("avatar", "👤"),
                         int(bool(user.get("is_admin", False))),
                         int(bool(user.get("is_test", False))),
+                        int(bool(user.get("can_manage_hcoins", False))),
                         user["password_hash"],
                         float(user["created_at"]),
                     )

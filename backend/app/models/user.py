@@ -21,6 +21,7 @@ class User:
     avatar: str                       # e.g., "👑", "🦈", "🦁"
     is_admin: bool = False
     is_test: bool = False
+    can_manage_hcoins: bool = False
     password_hash: str = field(
         default_factory=lambda: hash_password(secrets.token_urlsafe(24))
     )
@@ -44,6 +45,7 @@ class User:
             "avatar": self.avatar,
             "is_admin": self.is_admin,
             "is_test": self.is_test_account,
+            "can_manage_hcoins": self.can_manage_hcoins,
             "created_at": self.created_at,
         }
 
@@ -55,6 +57,7 @@ class User:
             "avatar": self.avatar,
             "is_admin": self.is_admin,
             "is_test": self.is_test_account,
+            "can_manage_hcoins": self.can_manage_hcoins,
             "password_hash": self.password_hash,
             "created_at": self.created_at,
         }
@@ -72,6 +75,7 @@ class User:
             avatar=data.get("avatar", "👤"),
             is_admin=data.get("is_admin", False),
             is_test=is_test_val,
+            can_manage_hcoins=data.get("can_manage_hcoins", False),
             password_hash=data.get(
                 "password_hash",
                 hash_password(secrets.token_urlsafe(24)),

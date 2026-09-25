@@ -270,6 +270,7 @@ class UserManager:
         avatar: str = "👤",
         is_admin: bool = False,
         is_test: bool = False,
+        can_manage_hcoins: bool = False,
     ) -> User:
         """Admin creates a new user account with password."""
         admin = self._users.get(admin_user_id)
@@ -291,6 +292,7 @@ class UserManager:
             avatar=avatar,
             is_admin=is_admin,
             is_test=is_test or clean_username.lower().startswith("test"),
+            can_manage_hcoins=can_manage_hcoins,
             password_hash=hash_password(password),
             created_at=time.time(),
         )
@@ -308,6 +310,7 @@ class UserManager:
         avatar: Optional[str] = None,
         is_admin: Optional[bool] = None,
         is_test: Optional[bool] = None,
+        can_manage_hcoins: Optional[bool] = None,
     ) -> User:
         """Admin updates any user's credentials, role, nickname, or resets password."""
         admin = self._users.get(admin_user_id)
@@ -343,6 +346,9 @@ class UserManager:
 
         if is_test is not None:
             target.is_test = is_test
+
+        if can_manage_hcoins is not None:
+            target.can_manage_hcoins = can_manage_hcoins
 
         self.save_to_storage()
         return target
