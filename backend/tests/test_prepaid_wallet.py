@@ -79,7 +79,7 @@ def test_admin_delegates_and_revokes_hcoin_management(wallet):
     from fastapi import HTTPException
     from backend.app.api.endpoints import (
         AdminUpdateUserRequest, WalletChangeRequest, admin_list_users,
-        admin_update_user, change_wallet, get_current_user,
+        admin_update_user, change_wallet, get_balance_overview, get_current_user,
     )
     from backend.app.services.user_manager import UserManager
 
@@ -87,9 +87,17 @@ def test_admin_delegates_and_revokes_hcoin_management(wallet):
     delegate_auth = 'Bearer real-token'
     payload = WalletChangeRequest(user_id='real', amount='20', kind='deposit', request_id='delegated')
 
+    with pytest.raises(HTTPException) as unauthenticated:
+        get_balance_overview(include_test=False, authorization=None, token=None)
+    assert unauthenticated.value.status_code == 401
     with pytest.raises(HTTPException) as denied:
         change_wallet(payload, authorization=delegate_auth, token=None)
     assert denied.value.status_code == 403
+    with pytest.raises(HTTPException) as denied_overview:
+        get_balance_overview(include_test=False, authorization=delegate_auth, token=None)
+    assert denied_overview.value.status_code == 403
+    assert 'user_balances' in get_balance_overview(
+        include_test=False, authorization=admin_auth, token=None)
     granted = admin_update_user('real', AdminUpdateUserRequest(can_manage_hcoins=True),
                                 authorization=admin_auth, token=None)
     assert granted['can_manage_hcoins'] is True
@@ -99,8 +107,12 @@ def test_admin_delegates_and_revokes_hcoin_management(wallet):
     with pytest.raises(HTTPException) as denied_admin:
         admin_list_users(authorization=delegate_auth, token=None)
     assert denied_admin.value.status_code == 403
+    assert any(u['user_id'] == 'real' for u in get_balance_overview(
+        include_test=False, authorization=delegate_auth, token=None)['user_balances'])
     assert change_wallet(payload, authorization=delegate_auth, token=None)['available_cash'] == 20
-    assert wallet.available_cents('real') == 2000
+    withdraw = WalletChangeRequest(user_id='real', amount='5', kind='withdraw', request_id='delegated-withdraw')
+    assert change_wallet(withdraw, authorization=delegate_auth, token=None)['available_cash'] == 15
+    assert wallet.available_cents('real') == 1500
 
     revoked = admin_update_user('real', AdminUpdateUserRequest(can_manage_hcoins=False),
                                 authorization=admin_auth, token=None)
@@ -109,7 +121,10 @@ def test_admin_delegates_and_revokes_hcoin_management(wallet):
     with pytest.raises(HTTPException) as denied_again:
         change_wallet(payload, authorization=delegate_auth, token=None)
     assert denied_again.value.status_code == 403
-    assert wallet.available_cents('real') == 2000
+    with pytest.raises(HTTPException) as denied_overview_again:
+        get_balance_overview(include_test=False, authorization=delegate_auth, token=None)
+    assert denied_overview_again.value.status_code == 403
+    assert wallet.available_cents('real') == 1500
     assert UserManager(database_path=user_manager.storage_path).get_user('real').can_manage_hcoins is False
 
 

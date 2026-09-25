@@ -692,12 +692,8 @@ def get_balance_overview(
     authorization: Optional[str] = Header(None),
     token: Optional[str] = Query(None),
 ):
-    """Get aggregated unsettled user balances and preview of minimal peer-to-peer transfers."""
-    try:
-        if authorization or token:
-            _verify_admin(authorization=authorization, token=token)
-    except HTTPException:
-        pass
+    """Get user H币 balances for an authorized wallet manager."""
+    _verify_hcoin_manager(authorization=authorization, token=token)
     return {
         "user_balances": [dict(u, available_cash=balance_manager.available_cents(u["user_id"]) / 100)
                           for u in user_manager.list_users() if include_test or not u.get("is_test", False)],

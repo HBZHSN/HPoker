@@ -13,6 +13,7 @@ const labels = {
 };
 
 export default function BalanceCenterModal({ isOpen, currentUser, token, onClose }) {
+  const canManageHcoins = Boolean(currentUser?.is_admin || currentUser?.can_manage_hcoins);
   const [tab, setTab] = useState('my');
   const [balance, setBalance] = useState(null);
   const [users, setUsers] = useState([]);
@@ -36,13 +37,13 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
     try {
       const [mine, overview] = await Promise.all([
         request('/api/balance/my'),
-        currentUser?.is_admin ? request('/api/balance/overview') : Promise.resolve(null),
+        canManageHcoins ? request('/api/balance/overview') : Promise.resolve(null),
       ]);
       setBalance(mine);
       if (overview) setUsers(overview.user_balances.filter(u => !u.is_test));
       setError('');
     } catch (e) { setError(e.message); }
-  }, [request, currentUser?.is_admin]);
+  }, [request, canManageHcoins]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -89,7 +90,7 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
           {[
             ['my', '我的'],
             ['hands', '牌局'],
-            ...(currentUser?.is_admin ? [['admin', 'H币管理']] : []),
+            ...(canManageHcoins ? [['admin', 'H币管理']] : []),
           ].map(([id, name]) => (
             <button
               key={id}
@@ -160,7 +161,7 @@ export default function BalanceCenterModal({ isOpen, currentUser, token, onClose
 
         {tab === 'hands' && <HandHistoryPanel token={token} userId={currentUser?.user_id} />}
 
-        {tab === 'admin' && currentUser?.is_admin && (
+        {tab === 'admin' && canManageHcoins && (
           <>
             <form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
               <select

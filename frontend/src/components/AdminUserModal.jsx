@@ -30,6 +30,7 @@ export default function AdminUserModal({
   const [newPassword, setNewPassword] = useState('');
   const [newAvatar, setNewAvatar] = useState('👤');
   const [newIsAdmin, setNewIsAdmin] = useState(false);
+  const [newCanManageHcoins, setNewCanManageHcoins] = useState(false);
 
   // Edit / Reset password state
   const [editingUserId, setEditingUserId] = useState(null);
@@ -86,6 +87,7 @@ export default function AdminUserModal({
           password: newPassword.trim(),
           avatar: newAvatar,
           is_admin: newIsAdmin,
+          can_manage_hcoins: newCanManageHcoins,
         }),
       });
 
@@ -97,6 +99,7 @@ export default function AdminUserModal({
       setNewUsername('');
       setNewNickname('');
       setNewPassword('');
+      setNewCanManageHcoins(false);
       fetchUsers();
     } catch (err) {
       setError(err.message);
@@ -150,6 +153,30 @@ export default function AdminUserModal({
       fetchUsers();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const handleHcoinPermission = async (user) => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${user.user_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ can_manage_hcoins: !user.can_manage_hcoins }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '更新H币管理权限失败');
+      setUsers(previous => previous.map(item => item.user_id === user.user_id ? data : item));
+      setSuccess(`已${data.can_manage_hcoins ? '授予' : '撤销'} ${data.nickname} 的H币管理权限`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -269,16 +296,27 @@ export default function AdminUserModal({
                 ))}
               </div>
             </div>
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={newIsAdmin}
-                  onChange={(e) => setNewIsAdmin(e.target.checked)}
-                  className="rounded accent-amber-400"
-                />
-                管理员
-              </label>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-3">
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newIsAdmin}
+                    onChange={(e) => setNewIsAdmin(e.target.checked)}
+                    className="rounded accent-amber-400"
+                  />
+                  管理员
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newCanManageHcoins}
+                    onChange={(e) => setNewCanManageHcoins(e.target.checked)}
+                    className="rounded accent-amber-400"
+                  />
+                  H币管理
+                </label>
+              </div>
 
               <button
                 type="submit"
@@ -299,6 +337,7 @@ export default function AdminUserModal({
                 <th className="py-2 px-3">用户名</th>
                 <th className="py-2 px-3">显示昵称</th>
                 <th className="py-2 px-3">角色</th>
+                <th className="py-2 px-3 text-center">H币管理</th>
                 <th className="py-2 px-3 text-right">操作</th>
               </tr>
             </thead>
@@ -332,6 +371,17 @@ export default function AdminUserModal({
                           普通玩家
                         </span>
                       )}
+                    </td>
+                    <td className="py-2.5 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label={`${u.username} H币管理权限`}
+                        title={u.is_admin ? '管理员自带H币管理权限' : '允许管理H币'}
+                        checked={u.is_admin || Boolean(u.can_manage_hcoins)}
+                        disabled={loading || u.is_admin}
+                        onChange={() => handleHcoinPermission(u)}
+                        className="accent-amber-400 cursor-pointer disabled:cursor-not-allowed"
+                      />
                     </td>
                     <td className="py-2.5 px-3 text-right">
                       {isEditing ? (

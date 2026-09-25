@@ -625,10 +625,8 @@ def test_user_privacy_and_balance_endpoints():
     assert client.get("/api/users").status_code in (404, 405)
     assert client.post("/api/users", json={"username": "hacker"}).status_code in (404, 405)
 
-    # 2. Balance endpoints do not leak username
-    overview = client.get("/api/balance/overview").json()
-    for u in overview.get("user_balances", []):
-        assert "username" not in u
+    # 2. Wallet management balances require authorization.
+    assert client.get("/api/balance/overview").status_code == 401
 
     my_bal = client.get("/api/balance/my?user_id=u_test1").json()
     assert "username" not in my_bal

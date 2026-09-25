@@ -68,6 +68,18 @@ export default function AuthenticatedApp({
   const [userBalance, setUserBalance] = useState(null);
   const [notice, setNotice] = useState('');
 
+  const openBalance = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) onUpdateUser((await response.json()).user);
+    } catch (error) {
+      console.warn('Failed to refresh H币权限:', error);
+    }
+    setBalanceOpen(true);
+  }, [token, onUpdateUser]);
+
   // User explicitly continued past the PWA gate (remembered on this device).
   const [pwaGateDismissed, setPwaGateDismissed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -573,7 +585,7 @@ export default function AuthenticatedApp({
             onStandUpToSpectate={handleStandUpToSpectate}
             onToggleFullscreen={pwa.toggleFullscreen}
             isFullscreen={pwa.isFullscreen}
-            onOpenBalance={() => setBalanceOpen(true)}
+            onOpenBalance={openBalance}
           />
         ) : activeRoomId ? (
           <div className="w-full h-full min-h-screen bg-transparent flex flex-col items-center justify-center gap-4 text-center p-6">
@@ -598,7 +610,7 @@ export default function AuthenticatedApp({
             onUpdateUser={onUpdateUser}
             onOpenProfile={() => setProfileOpen(true)}
             onOpenAdmin={() => setAdminOpen(true)}
-            onOpenBalance={() => setBalanceOpen(true)}
+            onOpenBalance={openBalance}
             onLogout={onLogout}
             rooms={rooms}
             users={lobbyUsers}
