@@ -536,16 +536,6 @@ async def websocket_endpoint(
 
     user_id = effective_user_id
 
-    if room.is_player_kicked(user_id):
-        await websocket.accept()
-        await websocket.send_text(json.dumps(make_message(
-            EventType.PLAYER_KICKED,
-            {"room_id": room_id, "message": "你已被房主移出房间"},
-            room_id=room_id,
-        )))
-        await websocket.close(reason="Removed by room host")
-        return
-
     timeout_manager.cancel_disconnect_timeout(room_id, user_id)
 
     nickname = user.nickname if user else f"Spectator_{user_id[-4:]}"

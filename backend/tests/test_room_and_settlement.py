@@ -343,8 +343,18 @@ def test_pending_departure_and_kick_survive_room_checkpoint(tmp_path):
     assert restored is not None
     assert restored.table.seats[1] is None
     assert [item["reason"] for item in restored.pending_settlements] == ["leave", "kick"]
-    assert restored.is_player_kicked("user2") is True
-    assert restored.sit_down_player("user2", "Bob", seat_index=1) is False
+    assert restored.sit_down_player("user2", "Bob", seat_index=1) is True
+
+
+def test_legacy_kick_checkpoint_allows_rejoining():
+    room = Room(host_player_id="host1", config=RoomConfig())
+    checkpoint = room.to_checkpoint_dict()
+    checkpoint["kicked_player_ids"] = ["user2"]
+
+    restored = Room.from_checkpoint_dict(checkpoint)
+
+    assert restored.sit_down_player("user2", "Bob", seat_index=1)
+    assert "kicked_player_ids" not in restored.to_checkpoint_dict()
 
 
 def test_room_checkpoint_restores_completed_hand_ledger(tmp_path):

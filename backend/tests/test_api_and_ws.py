@@ -221,7 +221,8 @@ def test_websocket_chat_and_emoji_broadcast():
                 assert message["payload"]["reaction_id"]
 
 
-def test_websocket_leave_and_host_kick_stage_settlement():
+@pytest.mark.parametrize("kick_transport", ["websocket", "rest"])
+def test_websocket_leave_and_host_kick_stage_settlement(kick_transport):
     client = TestClient(app)
     response = client.post("/api/rooms", json={
         "host_player_id": "u_test1",
@@ -252,10 +253,18 @@ def test_websocket_leave_and_host_kick_stage_settlement():
             assert host_rejoin_state["payload"]["table"]["seats"][1]["player_id"] == "u_test2"
             ws_guest.receive_json()
 
-            ws_host.send_json({
-                "event": EventType.KICK_PLAYER.value,
-                "payload": {"target_player_id": "u_test2"},
-            })
+            if kick_transport == "websocket":
+                ws_host.send_json({
+                    "event": EventType.KICK_PLAYER.value,
+                    "payload": {"target_player_id": "u_test2"},
+                })
+            else:
+                response = client.post(
+                    f"/api/rooms/{room_id}/kick",
+                    params={"target_player_id": "u_test2",
+                            "token": user_manager.get_or_create_token("u_test1")},
+                )
+                assert response.status_code == 200
             kicked = ws_guest.receive_json()
             host_after_kick = ws_host.receive_json()
 
@@ -264,9 +273,12 @@ def test_websocket_leave_and_host_kick_stage_settlement():
             assert host_after_kick["payload"]["table"]["seats"][1] is None
             assert host_after_kick["payload"]["pending_settlements"][-1]["reason"] == "kick"
 
-            with client.websocket_connect(f"/ws/{room_id}/u_test2") as rejected_guest:
-                rejected = rejected_guest.receive_json()
-                assert rejected["event"] == EventType.PLAYER_KICKED.value
+            assert ws_guest.receive()["type"] == "websocket.close"
+
+        with client.websocket_connect(f"/ws/{room_id}/u_test2") as rejoined_guest:
+            state = rejoined_guest.receive_json()
+            assert state["event"] == EventType.ROOM_STATE.value
+            assert state["payload"]["table"]["seats"][1]["player_id"] == "u_test2"
 
 
 def test_websocket_rejects_invalid_social_content():

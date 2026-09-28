@@ -76,9 +76,6 @@ class Room:
         # settlements. They are not written to the balance ledger until the
         # host closes the room and chooses a settlement mode.
         self.pending_settlements: List[dict] = []
-        # A host kick also prevents the removed account from being auto-seated
-        # again by a fresh WebSocket connection to the same room.
-        self.kicked_player_ids: set[str] = set()
 
         # Table state machine
         self.table = TableStateMachine(
@@ -356,7 +353,6 @@ class Room:
             "historical_players": checkpoint_history,
             "hand_records": self.hand_records,
             "pending_settlements": copy.deepcopy(self.pending_settlements),
-            "kicked_player_ids": sorted(self.kicked_player_ids),
             "pending_auto_leave_ids": sorted(self.pending_auto_leave_ids),
             "next_test_bot_number": self._next_test_bot_number,
             "has_bots": self.has_bots,
@@ -414,11 +410,6 @@ class Room:
             history.setdefault("wallet_cashout_count", 0)
         room.hand_records = list(data.get("hand_records", []))
         room.pending_settlements = list(data.get("pending_settlements", []))
-        room.kicked_player_ids = {
-            player_id
-            for player_id in data.get("kicked_player_ids", [])
-            if isinstance(player_id, str)
-        }
         room.pending_auto_leave_ids = {
             player_id
             for player_id in data.get("pending_auto_leave_ids", [])
@@ -663,7 +654,7 @@ class Room:
         is_test: Optional[bool] = None,
     ) -> bool:
         """Internal seat mutation executed inside the financial boundary."""
-        if self.is_ended or player_id in self.kicked_player_ids:
+        if self.is_ended:
             return False
         buyin = self.config.buyin_chips
         test_identity = self._is_test_player(player_id, is_bot=is_bot, is_test=is_test)
@@ -945,14 +936,7 @@ class Room:
         )
         if not seat:
             return None
-        kicked = self.stand_up_player(seat.seat_index, reason="kick")
-        if kicked:
-            self.kicked_player_ids.add(player_id)
-        return kicked
-
-    def is_player_kicked(self, player_id: str) -> bool:
-        """Return whether the host has removed this player from the room."""
-        return player_id in self.kicked_player_ids
+        return self.stand_up_player(seat.seat_index, reason="kick")
 
     def _refund_unsettled_hand(self, reason: str) -> Dict[str, int]:
         """Refund an open pot, including contributions from players without seats."""
