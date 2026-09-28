@@ -49,7 +49,8 @@ def test_existing_jev_fee_migrates_to_uses_per_coin(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_jev_exposes_exact_request_body_without_api_key(monkeypatch):
+@pytest.mark.parametrize("confidence", [None, 0, 0.542, 1])
+async def test_jev_exposes_exact_request_body_without_api_key(monkeypatch, confidence):
     sent = []
 
     def respond(request):
@@ -58,6 +59,7 @@ async def test_jev_exposes_exact_request_body_without_api_key(monkeypatch):
         return httpx.Response(200, json={"answers": {"action": {
             "type": "choice", "choice": "call",
             "probabilities": {"fold": 0.1, "call": 0.7, "raise": 0.2},
+            **({"confidence": confidence} if confidence is not None else {}),
         }}})
 
     original_client = httpx.AsyncClient
@@ -70,6 +72,25 @@ async def test_jev_exposes_exact_request_body_without_api_key(monkeypatch):
     assert result["request"] == sent[0]
     assert result["request"]["state"]["hero_cards"] == ["As", "Kh"]
     assert "private-key" not in json.dumps(result["request"])
+    assert result["confidence"] == confidence
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confidence", [-0.1, 1.1, float("nan"), float("inf"), "0.54", True])
+async def test_jev_rejects_invalid_confidence(monkeypatch, confidence):
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, content=json.dumps({
+        "answers": {"action": {
+            "type": "choice", "choice": "call", "confidence": confidence,
+            "probabilities": {"fold": 0.1, "call": 0.7, "raise": 0.2},
+        }},
+    })))
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original_client(transport=transport))
+    with pytest.raises(ValueError, match="置信度无效"):
+        await jev_assistant.recommend(
+            api_key="private-key", state={"hero_cards": ["As", "Kh"]},
+            legal=SimpleNamespace(can_check=True, can_call=False, can_bet=False, can_raise=True),
+        )
 
 
 @pytest.mark.asyncio
@@ -112,6 +133,7 @@ async def test_jev_decision_is_private_cached_and_transfers_fee_once(monkeypatch
         assert [action["street"] for action in state["action_history"]] == ["PREFLOP"] * 2 + ["FLOP"] * 6 + ["TURN"] * 6
         assert {action["seat"] for action in state["action_history"]} == {0, 1}
         return {"recommendation": "call", "probabilities": {"fold": 0.1, "call": 0.7, "raise": 0.2},
+                "confidence": 0.542,
                 "model": "jev-test", "request": {"model": "jev-latest", "state": state}}
 
     monkeypatch.setattr(jev_assistant, "recommend", fake_recommend)
@@ -123,6 +145,7 @@ async def test_jev_decision_is_private_cached_and_transfers_fee_once(monkeypatch
         first = await client.post(url, headers={"Authorization": "Bearer jev_player_token"})
         assert first.status_code == 200
         assert first.json()["probabilities"] == {"fold": 0.1, "call": 0.7, "raise": 0.2}
+        assert first.json()["confidence"] == 0.542
         assert first.json()["request"]["state"]["hero_cards"] == calls[0][1]["hero_cards"]
         second = await client.post(url, headers={"Authorization": "Bearer jev_player_token"})
         assert second.json() == first.json()

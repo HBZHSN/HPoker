@@ -3,11 +3,12 @@ import { AlertCircle, BarChart3, ChevronDown, ChevronUp, Loader2 } from 'lucide-
 import { formatChipAmount } from '../utils/hCurrency';
 import CardView from './CardView';
 
-export function EquityTrigger({ isOpen = false, onToggle, status }) {
+export function EquityTrigger({ isOpen = false, onToggle, status, confidence }) {
   const Icon = status === 'loading' ? Loader2 : status === 'error' ? AlertCircle : BarChart3;
-  const label = status === 'loading' ? '计算中' : status === 'error' ? '获取失败' : 'Jev 建议';
+  const hasConfidence = isOpen && !status && Number.isFinite(confidence);
+  const label = status === 'loading' ? '计算中' : status === 'error' ? '获取失败' : hasConfidence ? `置信度 ${(confidence * 100).toFixed(1)}%` : 'Jev 建议';
   return (
-    <button onClick={onToggle} aria-label={label} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 cursor-pointer shadow ' + (isOpen ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white border-purple-300' : 'bg-gradient-to-r from-purple-950/80 to-indigo-950/80 text-purple-200 border-purple-500/50')}>
+    <button onClick={onToggle} aria-label={label} className={'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition active:scale-95 cursor-pointer shadow ' + (isOpen ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white border-purple-300' : 'bg-gradient-to-r from-purple-950/80 to-indigo-950/80 text-purple-200 border-purple-500/50') + (hasConfidence ? ' jev-confidence' : '')}>
       <Icon className={'w-3.5 h-3.5 text-amber-400 ' + (status === 'loading' ? 'animate-spin' : '')} />
       <span>{label}</span>
       {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -167,7 +168,7 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
         if (!controller.signal.aborted) {
           loadedDecisionKey.current = decisionKey;
           setResult(data);
-          onResult?.({ decisionKey, probabilities: data.probabilities });
+          onResult?.({ decisionKey, probabilities: data.probabilities, confidence: data.confidence });
           onStatus?.(null);
         }
       })
@@ -195,6 +196,7 @@ export default function EquityDrawer({ isOpen, onClose, roomId, token, decisionK
             <>
               {!isMyTurn && <p className="text-xs text-slate-400">上次行动建议</p>}
               <p className="font-bold text-amber-300">推荐：{result.recommendation === 'call' && wasCheck ? '过牌 CHECK' : ACTIONS.find(([key]) => key === result.recommendation)?.[1]}</p>
+              {Number.isFinite(result.confidence) && <p className="text-xs font-semibold text-purple-200">置信度 {(result.confidence * 100).toFixed(1)}%</p>}
               {ACTIONS.map(([key, label]) => (
                 <div key={key} className={'rounded-xl border p-3 ' + (result.recommendation === key ? 'border-amber-400 bg-amber-500/10' : 'border-slate-700 bg-slate-800/50')}>
                   <div className="flex justify-between font-bold"><span>{key === 'call' && wasCheck ? '过牌 CHECK' : label}</span><span>{(result.probabilities[key] * 100).toFixed(1)}%</span></div>

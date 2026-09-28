@@ -1110,11 +1110,11 @@ button, a, input, select {
 }
 
 @media (max-width: 360px) {
-  .poker-mobile-header-tools > button:not(.poker-mobile-tool-button) span {
+  .poker-mobile-header-tools > button:not(.poker-mobile-tool-button):not(.jev-confidence) span {
     display: none;
   }
 
-  .poker-mobile-header-tools > button:not(.poker-mobile-tool-button) {
+  .poker-mobile-header-tools > button:not(.poker-mobile-tool-button):not(.jev-confidence) {
     width: 36px;
     padding: 0;
   }

@@ -29,6 +29,14 @@ test('Jev probabilities highlight only the best current action', async () => {
     assert.doesNotMatch(drawer, /bg-black\/60/);
     assert.match(renderToStaticMarkup(React.createElement(EquityTrigger, { isOpen: true, status: 'loading' })), /计算中/);
     assert.match(renderToStaticMarkup(React.createElement(EquityTrigger, { isOpen: true, status: 'error' })), /获取失败/);
+    const trigger = (changes = {}) => renderToStaticMarkup(React.createElement(EquityTrigger, { isOpen: true, confidence: 0.542, ...changes }));
+    assert.match(trigger(), /置信度 54\.2%/);
+    assert.match(trigger(), /jev-confidence/);
+    assert.match(trigger({ confidence: 0 }), /置信度 0\.0%/);
+    assert.match(trigger({ confidence: 1 }), /置信度 100\.0%/);
+    for (const changes of [{ confidence: undefined }, { confidence: null }, { confidence: NaN }, { isOpen: false }, { status: 'loading' }, { status: 'error' }]) {
+      assert.doesNotMatch(trigger(changes), /置信度|jev-confidence/);
+    }
   } finally {
     await vite.close();
   }

@@ -107,9 +107,15 @@ class JevAssistant:
             for value in probabilities.values()
         ) or not 0.99 <= sum(probabilities.values()) <= 1.01 or answer.get("choice") not in options:
             raise ValueError("Jev 返回的行动概率无效")
+        confidence = answer.get("confidence")
+        if confidence is not None and (
+            type(confidence) not in (int, float) or not math.isfinite(confidence) or not 0 <= confidence <= 1
+        ):
+            raise ValueError("Jev 返回的置信度无效")
         return {
             "recommendation": answer["choice"],
             "probabilities": {option: probabilities.get(option, 0) for option in ("fold", "call", "raise")},
+            "confidence": confidence,
             "model": data.get("model", "jev-latest"),
             "request": payload,
         }

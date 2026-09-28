@@ -462,6 +462,7 @@ export default function PokerTable({
                 isOpen={isEquityOpen}
                 onToggle={handleToggleEquity}
                 status={isEquityOpen && isMyTurn ? jevStatus : null}
+                confidence={isMyTurn && table?.legal_actions?.can_fold && jevDecision?.decisionKey === jevDecisionKey ? jevDecision.confidence : null}
               />
             )}
             <button
