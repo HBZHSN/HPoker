@@ -48,7 +48,7 @@ export default function ActionBar({
   totalPot = 0,
   smallBlind = 10,
   buyinChips = 1000,
-  onAction,
+  onAction: sendAction,
   disabled = false,
   selfSeat = null,
   onRebuy,
@@ -178,6 +178,15 @@ export default function ActionBar({
   useEffect(() => {
     setShowAllInConfirm(false);
   }, [street, handNumber]);
+
+  const preActionTimer = useRef(null);
+  const onAction = useCallback((...args) => {
+    clearTimeout(preActionTimer.current);
+    preActionTimer.current = null;
+    sendAction(...args);
+  }, [sendAction]);
+  const onActionRef = useRef(onAction);
+  onActionRef.current = onAction;
 
   // Pre-action selection state
   const [preAction, setPreAction] = useState(null); // 'CHECK_FOLD' | 'CHECK_CALL' | 'RAISE' | null
@@ -357,12 +366,12 @@ export default function ActionBar({
     });
 
     if (resolved) {
-      const timer = setTimeout(() => {
-        onAction(resolved.action, resolved.amount);
-      }, 120);
-      return () => clearTimeout(timer);
+      preActionTimer.current = setTimeout(() => {
+        onActionRef.current(resolved.action, resolved.amount);
+      }, 1000 + Math.random() * 2000);
+      return () => clearTimeout(preActionTimer.current);
     }
-  }, [effectiveIsMyTurn, legalActions]);
+  }, [effectiveIsMyTurn, handNumber, street, turnCount, JSON.stringify(legalActions)]);
 
   // Preset Bet Sizing helpers
 
