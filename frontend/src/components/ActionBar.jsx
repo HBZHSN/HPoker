@@ -228,6 +228,11 @@ export default function ActionBar({
       setPreActionData(null);
     }
 
+    if (isNewTurn && !isNewStreet && !isNewHand && preActionRef.current === PRE_ACTIONS.RAISE) {
+      setRaiseAmount(preActionDataRef.current.targetAmount);
+      return;
+    }
+
     // When entering a new turn, new street, new hand, or new bet level:
     // Automatically set slider to 1/2 pot instead of keeping previous bet amount!
     if (isNewTurn || isNewStreet || isNewHand || (!effectiveIsMyTurn && (isBetLevelChanged || isMinValChanged))) {
