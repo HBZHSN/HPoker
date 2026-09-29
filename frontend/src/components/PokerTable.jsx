@@ -1306,6 +1306,8 @@ export default function PokerTable({
         <HandResultModal
           isOpen={true}
           handNumber={table.hand_number}
+          nextHandAt={table.next_hand_at}
+          serverTime={table.server_time}
           boardCards={table.board_cards}
           boardCards2={table.board_cards_2}
           boardCardsFull={table.board_cards_full}

@@ -160,7 +160,7 @@ async def test_bot_automatically_acts_when_its_turn():
 
 
 @pytest.mark.asyncio
-async def test_auto_ready_waits_for_recent_card_reveal():
+async def test_legacy_auto_ready_cannot_skip_server_countdown():
     import time
     room = room_manager.create_room(
         host_player_id='u_test1',
@@ -176,6 +176,89 @@ async def test_auto_ready_waits_for_recent_card_reveal():
     start = time.monotonic()
     ws = FakeWebSocket([{'event': 'PLAYER_READY', 'payload': {'ready': True, 'automatic': True}}])
     await websocket_endpoint(ws, room.room_id, 'u_test1', token=user_manager.get_or_create_token('u_test1'))
-    assert time.monotonic() - start >= 2.9
-    assert any(message['event'] == 'ROOM_STATE' and message['payload']['table']['hand_number'] == 2 for message in ws.messages)
+    assert time.monotonic() - start < 2.9
+    assert room.table.hand_number == 1
+    timeout_manager.cancel_all_timers(room.room_id)
+
+
+@pytest.mark.asyncio
+async def test_server_starts_next_hand_without_ready_messages():
+    import time
+    from backend.app.websocket.connection_manager import ws_manager
+    room = room_manager.create_room(
+        host_player_id='u_test1',
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=1),
+    )
+    assert room.sit_down_player('u_test1', 'Alice', 0, is_test=True)
+    assert room.sit_down_player('u_test2', 'Bob', 1, is_test=True)
+    assert room.table.start_new_hand()
+    actor = room.table.seats[room.table.current_turn_seat]
+    assert room.table.handle_action(actor.player_id, ActionType.FOLD)
+    assert 4.9 < room.table.next_hand_at - time.time() <= 5
+    await ws_manager.broadcast_room_state(room)
+    task = timeout_manager._next_hand_tasks[room.room_id]
+    deadline = room.table.next_hand_at
+    await ws_manager.broadcast_room_state(room)
+    assert timeout_manager._next_hand_tasks[room.room_id] is task
+    assert room.table.next_hand_at == deadline
+    await asyncio.wait_for(asyncio.shield(task), timeout=6)
+    assert room.table.hand_number == 2
+    assert room.table.next_hand_at == 0
+    timeout_manager.cancel_all_timers(room.room_id)
+
+
+@pytest.mark.asyncio
+async def test_reveal_extends_deadline_and_manual_ready_starts_immediately():
+    import time
+    room = room_manager.create_room(
+        host_player_id='u_test1',
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=1),
+    )
+    assert room.sit_down_player('u_test1', 'Alice', 0, is_test=True)
+    assert room.sit_down_player('u_test2', 'Bob', 1, is_test=True)
+    assert room.table.start_new_hand()
+    actor = room.table.seats[room.table.current_turn_seat]
+    assert room.table.handle_action(actor.player_id, ActionType.FOLD)
+    deadline = room.table.next_hand_at
+    assert room.table.show_card(actor.player_id, card_index=0)
+    assert room.table.next_hand_at == deadline  # More than three seconds remain.
+    room.table.next_hand_at = time.time() + 1
+    assert room.table.show_card(actor.player_id, card_index=1)
+    assert 2.9 < room.table.next_hand_at - time.time() <= 3
+    deadline = room.table.next_hand_at
+    assert room.table.show_card(actor.player_id, show_all=True)
+    assert room.table.next_hand_at == deadline  # Repeated reveal is not new.
+    assert room.table.show_card(actor.player_id, hide_all=True)
+    assert room.table.next_hand_at == deadline
+    room.table.set_player_ready('u_test2')
+    ws = FakeWebSocket([{'event': 'PLAYER_READY', 'payload': {'ready': True}}])
+    await websocket_endpoint(ws, room.room_id, 'u_test1', token=user_manager.get_or_create_token('u_test1'))
+    assert room.table.hand_number == 2
+    assert room.room_id not in timeout_manager._next_hand_tasks
+    timeout_manager.cancel_all_timers(room.room_id)
+
+
+@pytest.mark.asyncio
+async def test_scheduled_start_observes_reveal_extension():
+    import time
+    from backend.app.websocket.connection_manager import ws_manager
+    room = room_manager.create_room(
+        host_player_id='u_test1',
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=1),
+    )
+    assert room.sit_down_player('u_test1', 'Alice', 0, is_test=True)
+    assert room.sit_down_player('u_test2', 'Bob', 1, is_test=True)
+    assert room.table.start_new_hand()
+    actor = room.table.seats[room.table.current_turn_seat]
+    assert room.table.handle_action(actor.player_id, ActionType.FOLD)
+    room.table.next_hand_at = time.time() + 0.1
+    await ws_manager.broadcast_room_state(room)
+    task = timeout_manager._next_hand_tasks[room.room_id]
+    await asyncio.sleep(0.02)
+    assert room.table.show_card(actor.player_id, card_index=0)
+    await ws_manager.broadcast_room_state(room)
+    await asyncio.sleep(0.15)
+    assert room.table.hand_number == 1
+    await asyncio.wait_for(asyncio.shield(task), timeout=4)
+    assert room.table.hand_number == 2
     timeout_manager.cancel_all_timers(room.room_id)

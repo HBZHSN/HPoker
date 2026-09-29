@@ -132,6 +132,8 @@ class ConnectionManager:
         # including automated timeout and bot actions.
         from backend.app.services.room_manager import room_manager
         from backend.app.services.hand_history_manager import hand_history_manager
+        from backend.app.websocket.router import ensure_next_hand_timer
+        ensure_next_hand_timer(room)
         if checkpoint:
             room_manager.checkpoint_room(room)
 

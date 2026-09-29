@@ -225,6 +225,7 @@ class TableStateMachine:
         self.last_action_history: List[dict] = []
         self.ready_player_ids: Set[str] = set()
         self.last_card_reveal_at: float = 0.0
+        self.next_hand_at: float = 0.0
         self.turn_count: int = 0
         self.is_using_time_bank: bool = False
         self.current_turn_duration: int = action_timeout
@@ -312,6 +313,7 @@ class TableStateMachine:
         """Reward time cards to players who played in this hand upon reaching hands threshold."""
         if self._last_settled_hand_number == self.hand_number:
             return list(self.time_card_rewarded_players)
+        self.next_hand_at = time.time() + 5
         self._last_settled_hand_number = self.hand_number
         self.time_card_rewarded_players.clear()
         for p in self.active_seated_players:
@@ -466,6 +468,7 @@ class TableStateMachine:
         self.last_action_history.clear()
         self.ready_player_ids.clear()
         self.last_card_reveal_at = 0.0
+        self.next_hand_at = 0.0
         self.time_card_rewarded_players.clear()
         self.pot_manager.reset()
         self.deck.reset()
@@ -1275,6 +1278,7 @@ class TableStateMachine:
 
         if any(card not in previous_cards for card in player.shown_cards):
             self.last_card_reveal_at = time.time()
+            self.next_hand_at = max(self.next_hand_at, self.last_card_reveal_at + 3)
         return True
 
     def set_player_using_assistant(self, player_id: str, using: bool = True) -> bool:
@@ -1421,5 +1425,7 @@ class TableStateMachine:
             "legal_actions": self.get_legal_actions(viewer_player_id).to_dict() if viewer_player_id else None,
             "action_history": self.last_action_history[-10:],
             "ready_player_ids": list(self.ready_player_ids),
+            "next_hand_at": self.next_hand_at,
+            "server_time": time.time(),
             "hand_results": hand_results,
         }

@@ -12,6 +12,8 @@ class TimeoutManager:
     """Manages turn countdown timers, RIT voting timers, and slow dealing runout tasks."""
 
     def __init__(self):
+        # room_id -> automatic next-hand asyncio.Task
+        self._next_hand_tasks: Dict[str, asyncio.Task] = {}
         # room_id -> active turn asyncio.Task
         self._turn_tasks: Dict[str, asyncio.Task] = {}
         # room_id -> active RIT decision asyncio.Task
@@ -26,6 +28,15 @@ class TimeoutManager:
         self._empty_room_tasks: Dict[str, asyncio.Task] = {}
         # (room_id, user_id) -> delayed automatic leave/cash-out task
         self._disconnect_tasks: Dict[tuple[str, str], asyncio.Task] = {}
+
+    def cancel_next_hand_timer(self, room_id: str) -> None:
+        task = self._next_hand_tasks.pop(room_id, None)
+        try:
+            current_task = asyncio.current_task()
+        except RuntimeError:
+            current_task = None
+        if task and task is not current_task and not task.done():
+            task.cancel()
 
     def cancel_turn_timer(self, room_id: str) -> None:
         """Cancel existing turn timer for a room if any."""
@@ -83,6 +94,7 @@ class TimeoutManager:
 
     def cancel_all_timers(self, room_id: str) -> None:
         """Cancel every background task associated with a room."""
+        self.cancel_next_hand_timer(room_id)
         self.cancel_turn_timer(room_id)
         self.cancel_rit_timer(room_id)
         self.cancel_deal_task(room_id)

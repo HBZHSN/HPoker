@@ -41,6 +41,53 @@ def get_bot_action_delay() -> float:
     return round(low + (secrets.randbelow(int((high - low) * 1000) + 1) / 1000.0), 2)
 
 
+def ensure_next_hand_timer(room) -> None:
+    """Schedule once per completed hand; broadcasts and reveals never reset the clock."""
+    room_id = room.room_id
+    if room.is_ended or room.table.street != Street.HAND_END:
+        timeout_manager.cancel_next_hand_timer(room_id)
+        return
+    if not room.table.next_hand_at or not room.table.can_start_hand():
+        return
+    if room_id in timeout_manager._next_hand_tasks:
+        return
+    hand_number = room.table.hand_number
+
+    async def advance():
+        try:
+            while True:
+                current = room_manager.get_room(room_id)
+                if (current is not room or room.is_ended
+                        or room.table.street != Street.HAND_END
+                        or room.table.hand_number != hand_number):
+                    return
+                remaining = room.table.next_hand_at - time.time()
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
+                    continue
+
+                def start(current_room):
+                    if not current_room.table.can_start_hand():
+                        return False
+                    current_room.prepare_next_hand()
+                    return current_room.table.start_new_hand()
+
+                if room_manager.transact_room(room_id, start):
+                    await ws_manager.broadcast_sound(room_id, "deal")
+                    await ws_manager.broadcast_room_state(room)
+                    await trigger_room_after_action(room_id)
+                return
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("Failed to start next hand for %s", room_id)
+        finally:
+            if timeout_manager._next_hand_tasks.get(room_id) is asyncio.current_task():
+                timeout_manager._next_hand_tasks.pop(room_id, None)
+
+    timeout_manager._next_hand_tasks[room_id] = asyncio.create_task(advance())
+
+
 async def start_all_in_slow_dealing(room_id: str):
     """Orchestrates dramatic step-by-step card dealing when all-in is reached."""
     timeout_manager.cancel_turn_timer(room_id)
@@ -861,18 +908,9 @@ async def websocket_endpoint(
             elif event == EventType.PLAYER_READY:
                 ready = payload.get("ready", True)
 
-                # An auto-ready message may already be in flight when another player reveals.
-                hand_number = room.table.hand_number
-                if ready and payload.get("automatic", False):
-                    while room.table.street == Street.HAND_END:
-                        remaining = room.table.last_card_reveal_at + 3 - time.time()
-                        if remaining <= 0:
-                            break
-                        await asyncio.sleep(remaining)
-                    if (room_manager.get_room(room_id) is not room
-                            or room.table.hand_number != hand_number
-                            or room.table.street != Street.HAND_END):
-                        continue
+                # Older clients must not drive automatic starts or bypass reveal time.
+                if payload.get("automatic", False):
+                    continue
 
                 def _ready_mutation(current_room):
                     all_ready = current_room.table.set_player_ready(user_id, ready)

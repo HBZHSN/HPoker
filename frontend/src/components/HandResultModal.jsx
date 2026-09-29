@@ -2,14 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import CardView from './CardView';
 import CommunityBoard from './CommunityBoard';
 import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
-import {
-  DEFAULT_AUTO_READY_SECONDS,
-  hasNewShownCards,
-  getInitialAutoReady,
-  saveAutoReadyPreference,
-  formatAutoReadyCheckboxLabel,
-  formatReadyButtonLabel,
-} from '../utils/autoReady';
 import { isIgnoredInputTarget, resolveHandEndHotkey } from '../utils/tableShortcuts';
 import { formatHChipAmount } from '../utils/hCurrency';
 import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers, LogOut } from 'lucide-react';
@@ -18,6 +10,8 @@ export default function HandResultModal({
   isOpen,
   readOnly = false,
   handNumber = 1,
+  nextHandAt = 0,
+  serverTime = 0,
   boardCards = [],
   boardCards2 = [],
   boardCardsFull = [],
@@ -62,14 +56,7 @@ export default function HandResultModal({
     return () => { window.removeEventListener('keydown', handleKey, true); previous?.focus(); };
   }, [readOnly, onClose]);
 
-  const [autoReady, setAutoReady] = useState(getInitialAutoReady);
-  const [countdown, setCountdown] = useState(DEFAULT_AUTO_READY_SECONDS);
-  const hasAutoReadiedRef = useRef(false);
-  const onToggleReadyRef = useRef(onToggleReady);
-
-  useEffect(() => {
-    onToggleReadyRef.current = onToggleReady;
-  });
+  const [countdown, setCountdown] = useState(0);
 
   const isSelfReady = Boolean(selfSeat && readyPlayerIds?.includes(selfSeat.player_id));
   const isBusted = Boolean(selfSeat && selfSeat.chips === 0);
@@ -77,66 +64,17 @@ export default function HandResultModal({
   const readyCount = eligiblePlayers.filter((r) => readyPlayerIds?.includes(r.player_id)).length;
   const totalEligible = eligiblePlayers.length;
 
-  // Reset countdown & trigger flag on new hand or when modal opens
   useEffect(() => {
-    if (isOpen) {
-      hasAutoReadiedRef.current = false;
-      setCountdown(DEFAULT_AUTO_READY_SECONDS);
-    }
-  }, [isOpen, handNumber]);
-
-  const previousResults = useRef(handResults);
-  const revealHoldUntil = useRef(0);
-  useEffect(() => {
-    if (hasNewShownCards(previousResults.current, handResults)) {
-      revealHoldUntil.current = Date.now() + 3000;
-      hasAutoReadiedRef.current = false;
-      setCountdown(value => Math.max(value, 3));
-    }
-    previousResults.current = handResults;
-  }, [handResults]);
-
-  // 5-second countdown timer for auto-ready
-  useEffect(() => {
-    if (readOnly || !isOpen || !autoReady || isSelfReady || isBusted || !selfSeat) {
-      return;
-    }
-
-    if (countdown <= 0 && Date.now() < revealHoldUntil.current) {
-      setCountdown(Math.ceil((revealHoldUntil.current - Date.now()) / 1000));
-      return;
-    }
-
-    if (countdown <= 0) {
-      if (!hasAutoReadiedRef.current) {
-        hasAutoReadiedRef.current = true;
-        onToggleReadyRef.current?.({ automatic: true });
-      }
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setCountdown((prev) => Math.max(0, prev - 1, Math.ceil((revealHoldUntil.current - Date.now()) / 1000)));
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [readOnly, isOpen, autoReady, isSelfReady, isBusted, Boolean(selfSeat), countdown]);
-
-  const handleAutoReadyToggle = (e) => {
-    const checked = e.target.checked;
-    setAutoReady(checked);
-    saveAutoReadyPreference(checked);
-    if (checked && !isSelfReady) {
-      hasAutoReadiedRef.current = false;
-      setCountdown(DEFAULT_AUTO_READY_SECONDS);
-    }
-  };
+    if (readOnly || !nextHandAt) return;
+    const deadline = performance.now() + Math.max(0, nextHandAt - serverTime) * 1000;
+    const update = () => setCountdown(Math.max(0, Math.ceil((deadline - performance.now()) / 1000)));
+    update();
+    const timer = setInterval(update, 100);
+    return () => clearInterval(timer);
+  }, [readOnly, nextHandAt, serverTime]);
 
   const handleManualToggleReady = useCallback(() => {
-    hasAutoReadiedRef.current = true;
-    if (onToggleReady) {
-      onToggleReady();
-    }
+    onToggleReady?.();
   }, [onToggleReady]);
 
   const orderedSelfHoleCards = useMemo(
@@ -610,19 +548,8 @@ export default function HandResultModal({
 
           {/* Auto-ready Checkbox + Ready / Rebuy Button */}
           <div className={`flex flex-row items-center gap-2 sm:gap-4 flex-shrink-0 ${isHost && onStartNextHand ? 'ml-auto' : 'w-full justify-between sm:justify-end'}`}>
-            {/* Auto-ready Checkbox */}
-            {selfSeat && !isBusted && (
-              <label className="flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none text-[11px] sm:text-xs font-bold text-slate-300 hover:text-white transition py-1 whitespace-nowrap flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={autoReady}
-                  onChange={handleAutoReadyToggle}
-                  className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-amber-400 focus:ring-offset-slate-900 cursor-pointer accent-amber-500 flex-shrink-0"
-                />
-                <span>
-                  {formatAutoReadyCheckboxLabel({ autoReady, isSelfReady, countdown })}
-                </span>
-              </label>
+            {nextHandAt > 0 && (
+              <span className="text-xs text-slate-300 whitespace-nowrap">{countdown}s 后开局</span>
             )}
 
             {/* Rebuy (if busted) or Ready Button */}
@@ -652,7 +579,7 @@ export default function HandResultModal({
                 ) : (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                    <span>{formatReadyButtonLabel({ isSelfReady, autoReady, countdown })}</span>
+                    <span>{isSelfReady ? '已准备' : '准备'}</span>
                     <span className="hidden sm:inline text-[10px] font-mono font-bold opacity-80">[Space]</span>
                   </>
                 )}
