@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import PlayerSeat from './PlayerSeat';
 import PlayerStatsModal from './PlayerStatsModal';
 import CommunityBoard from './CommunityBoard';
@@ -470,7 +471,6 @@ export default function PokerTable({
           </div>
 
           <div className="poker-mobile-header-tools">
-            <button type="button" onClick={() => table?.street === 'HAND_END' ? setHandResultDismissed(false) : setShowLastHand(true)} disabled={!lastHand} className="poker-mobile-tool-button text-[10px] disabled:opacity-40" aria-label="上一局">上一局</button>
             {selfSeat && (
               <EquityTrigger
                 isOpen={isEquityOpen}
@@ -1064,8 +1064,8 @@ export default function PokerTable({
                 const ritBoardSlots = buildBoardSlots(ritBoardCards);
                 const ritStageText = getRitStageDescription(ritBoardCards);
 
-                return (
-                  <div className="absolute inset-0 z-30 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
+                return createPortal(
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-sm animate-fade-in">
                     <div className="max-w-md w-full bg-gradient-to-b from-slate-900 via-slate-950 to-purple-950 border-2 border-purple-500/80 rounded-3xl p-4 sm:p-5 shadow-2xl flex flex-col gap-3 sm:gap-3.5 text-center">
                       <div className="flex items-center justify-between px-1">
                         <span className="text-amber-400 font-black text-base md:text-lg">
@@ -1186,7 +1186,7 @@ export default function PokerTable({
                         </div>
                       )}
                     </div>
-                  </div>
+                  </div>, document.body
                 );
               })()}
 

@@ -183,6 +183,8 @@ export default function ActionBar({
   const onAction = useCallback((...args) => {
     clearTimeout(preActionTimer.current);
     preActionTimer.current = null;
+    setPreAction(null);
+    setPreActionData(null);
     sendAction(...args);
   }, [sendAction]);
   const onActionRef = useRef(onAction);
@@ -354,9 +356,6 @@ export default function ActionBar({
     const actionToRun = preActionRef.current;
     const dataToRun = preActionDataRef.current;
 
-    setPreAction(null);
-    setPreActionData(null);
-
     const resolved = determineAutoAction({
       preAction: actionToRun,
       preActionData: dataToRun,
@@ -370,6 +369,9 @@ export default function ActionBar({
         onActionRef.current(resolved.action, resolved.amount);
       }, 1000 + Math.random() * 2000);
       return () => clearTimeout(preActionTimer.current);
+    } else {
+      setPreAction(null);
+      setPreActionData(null);
     }
   }, [effectiveIsMyTurn, handNumber, street, turnCount, JSON.stringify(legalActions)]);
 
@@ -941,7 +943,7 @@ export default function ActionBar({
       {/* 4. Mobile Action Console (lg:hidden): Action Buttons, Sizing Slider, and 10 Quick Presets */}
       <div className="poker-action-controls poker-action-controls-mobile lg:hidden bg-slate-900/90 border border-slate-800 rounded-xl p-2 sm:p-2.5 flex flex-col gap-2 shadow-xl">
         {/* Pre-action indicator / clear button */}
-        {canPreAction && preAction && (
+        {(canPreAction || effectiveIsMyTurn) && preAction && (
           <div className="flex items-center justify-between pb-1 border-b border-slate-800/80">
             <span className="text-[11px] text-amber-300 font-bold flex items-center gap-1">
               <Zap className="w-3 h-3 text-amber-400" />
@@ -956,6 +958,7 @@ export default function ActionBar({
             <button
               type="button"
               onClick={() => {
+                clearTimeout(preActionTimer.current);
                 setPreAction(null);
                 setPreActionData(null);
               }}
@@ -981,7 +984,7 @@ export default function ActionBar({
               type="button"
               onClick={() => onAction('FOLD')}
               disabled={disabled || !legalActions?.can_fold}
-              className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-red-700 to-red-950 hover:from-red-600 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-red-500/50 shadow-lg active:scale-95 transition cursor-pointer${jevHighlight('fold')}`}
+              className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-red-700 to-red-950 hover:from-red-600 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-red-500/50 shadow-lg active:scale-95 transition cursor-pointer${preAction === PRE_ACTIONS.CHECK_FOLD ? ' ring-2 ring-amber-400' : ''}${jevHighlight('fold')}`}
             >
               <span className="text-sm sm:text-base font-black tracking-wide">弃牌</span>
               {jevHint('fold', '[F]', 'text-[10px] sm:text-[11px] text-red-300/80 font-medium')}
@@ -1029,7 +1032,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => onAction('CHECK')}
                 disabled={disabled}
-                className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer${jevHighlight('call')}`}
+                className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer${preAction === PRE_ACTIONS.CHECK_CALL ? ' ring-2 ring-amber-400' : ''}${jevHighlight('call')}`}
               >
                 <span className="text-sm sm:text-base font-black tracking-wide">过牌</span>
                 {jevHint('call', '[Space]', 'text-[10px] sm:text-[11px] text-emerald-300/80 font-medium')}
@@ -1039,7 +1042,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => onAction('CALL', legalActions?.call_amount || 0)}
                 disabled={disabled || !legalActions?.can_call}
-                className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer${jevHighlight('call')}`}
+                className={`poker-action-button flex flex-col items-center justify-center py-2 sm:py-2.5 px-1 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-xl border border-emerald-400/50 shadow-lg active:scale-95 transition cursor-pointer${preAction === PRE_ACTIONS.CHECK_CALL ? ' ring-2 ring-amber-400' : ''}${jevHighlight('call')}`}
               >
                 <span className="text-sm sm:text-base font-black tracking-wide truncate max-w-full">
                   跟注 {formatHChipAmount(legalActions?.call_amount || 0)}
@@ -1095,7 +1098,7 @@ export default function ActionBar({
                 isAllIn
                   ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
                   : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
-              }${jevHighlight('raise')}`}
+              }${preAction === PRE_ACTIONS.RAISE ? ' ring-2 ring-amber-400' : ''}${jevHighlight('raise')}`}
             >
               {isAllIn ? (
                 <>
@@ -1292,10 +1295,11 @@ export default function ActionBar({
                   : '操作'}
               </span>
             </div>
-            {canPreAction && preAction ? (
+            {(canPreAction || effectiveIsMyTurn) && preAction ? (
               <button
                 type="button"
                 onClick={() => {
+                  clearTimeout(preActionTimer.current);
                   setPreAction(null);
                   setPreActionData(null);
                 }}
@@ -1324,7 +1328,7 @@ export default function ActionBar({
                 type="button"
                 onClick={() => onAction('FOLD')}
                 disabled={disabled || !legalActions?.can_fold}
-                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${jevHighlight('fold')}`}
+                className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-red-800 to-red-950 hover:from-red-700 hover:to-red-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-red-500/40 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${preAction === PRE_ACTIONS.CHECK_FOLD ? ' ring-2 ring-amber-400' : ''}${jevHighlight('fold')}`}
               >
                 <span className="text-sm lg:text-base font-black tracking-wide">弃牌</span>
                 {jevHint('fold', '[F]', 'text-[10px] lg:text-[11px] text-red-300/80 font-medium')}
@@ -1374,7 +1378,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => onAction('CHECK')}
                   disabled={disabled}
-                  className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${jevHighlight('call')}`}
+                  className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${preAction === PRE_ACTIONS.CHECK_CALL ? ' ring-2 ring-amber-400' : ''}${jevHighlight('call')}`}
                 >
                   <span className="text-sm lg:text-base font-black tracking-wide">过牌</span>
                   {jevHint('call', '[Space]', 'text-[10px] lg:text-[11px] text-emerald-300/80 font-medium')}
@@ -1384,7 +1388,7 @@ export default function ActionBar({
                   type="button"
                   onClick={() => onAction('CALL', legalActions?.call_amount || 0)}
                   disabled={disabled || !legalActions?.can_call}
-                  className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${jevHighlight('call')}`}
+                  className={`poker-action-button flex flex-col items-center justify-center py-2 lg:py-3 px-1 lg:px-2 bg-gradient-to-b from-emerald-600 to-emerald-950 hover:from-emerald-500 hover:to-emerald-900 disabled:opacity-35 disabled:cursor-not-allowed text-white font-extrabold rounded-lg lg:rounded-xl border border-emerald-400/50 lg:border-2 shadow-lg active:scale-95 transition cursor-pointer h-[58px] lg:h-[64px] min-h-[58px] lg:min-h-[64px]${preAction === PRE_ACTIONS.CHECK_CALL ? ' ring-2 ring-amber-400' : ''}${jevHighlight('call')}`}
                 >
                   <span className="text-sm lg:text-base font-black tracking-wide">
                     跟注 {formatHChipAmount(legalActions?.call_amount || 0)}
@@ -1496,7 +1500,7 @@ export default function ActionBar({
                   isAllIn
                     ? 'bg-gradient-to-b from-purple-800 via-red-950 to-amber-950 hover:from-purple-700 hover:to-red-900 border-purple-400/80 shadow-[0_0_15px_rgba(168,85,247,0.4)] text-amber-300'
                     : 'bg-gradient-to-b from-amber-500 to-amber-900 hover:from-amber-400 hover:to-amber-800 border-amber-300/70 shadow-glow-gold text-white'
-                }${jevHighlight('raise')}`}
+                }${preAction === PRE_ACTIONS.RAISE ? ' ring-2 ring-amber-400' : ''}${jevHighlight('raise')}`}
               >
                 {isAllIn ? (
                   <>
