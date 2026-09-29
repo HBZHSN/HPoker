@@ -64,3 +64,13 @@ export function formatReadyButtonLabel({
   }
   return '准备';
 }
+
+// Only newly public cards extend the countdown; hiding or repeated broadcasts do not.
+export function hasNewShownCards(previous, current) {
+  return current.some(player => {
+    const old = previous.find(item => item.player_id === player.player_id)?.shown_cards || [];
+    return (player.shown_cards || []).some(card => !old.some(
+      seen => seen.rank === card.rank && seen.suit === card.suit
+    ));
+  });
+}

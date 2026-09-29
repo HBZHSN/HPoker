@@ -861,6 +861,19 @@ async def websocket_endpoint(
             elif event == EventType.PLAYER_READY:
                 ready = payload.get("ready", True)
 
+                # An auto-ready message may already be in flight when another player reveals.
+                hand_number = room.table.hand_number
+                if ready and payload.get("automatic", False):
+                    while room.table.street == Street.HAND_END:
+                        remaining = room.table.last_card_reveal_at + 3 - time.time()
+                        if remaining <= 0:
+                            break
+                        await asyncio.sleep(remaining)
+                    if (room_manager.get_room(room_id) is not room
+                            or room.table.hand_number != hand_number
+                            or room.table.street != Street.HAND_END):
+                        continue
+
                 def _ready_mutation(current_room):
                     all_ready = current_room.table.set_player_ready(user_id, ready)
                     if all_ready and current_room.table.can_start_hand():

@@ -224,6 +224,7 @@ class TableStateMachine:
         self.original_payouts: List[PotPayout] = []
         self.last_action_history: List[dict] = []
         self.ready_player_ids: Set[str] = set()
+        self.last_card_reveal_at: float = 0.0
         self.turn_count: int = 0
         self.is_using_time_bank: bool = False
         self.current_turn_duration: int = action_timeout
@@ -464,6 +465,7 @@ class TableStateMachine:
         self.original_payouts.clear()
         self.last_action_history.clear()
         self.ready_player_ids.clear()
+        self.last_card_reveal_at = 0.0
         self.time_card_rewarded_players.clear()
         self.pot_manager.reset()
         self.deck.reset()
@@ -1251,12 +1253,11 @@ class TableStateMachine:
         if not player or not player.hole_cards:
             return False
 
+        previous_cards = list(player.shown_cards)
         if hide_all:
             player.shown_cards.clear()
-            return True
         elif show_all:
             player.shown_cards = list(player.hole_cards)
-            return True
         elif toggle_index is not None and 0 <= toggle_index < len(player.hole_cards):
             card = player.hole_cards[toggle_index]
             if card in player.shown_cards:
@@ -1264,14 +1265,17 @@ class TableStateMachine:
             else:
                 player.shown_cards.append(card)
             player.shown_cards = [c for c in player.hole_cards if c in player.shown_cards]
-            return True
         elif card_index is not None and 0 <= card_index < len(player.hole_cards):
             card = player.hole_cards[card_index]
             if card not in player.shown_cards:
                 player.shown_cards.append(card)
             player.shown_cards = [c for c in player.hole_cards if c in player.shown_cards]
-            return True
-        return False
+        else:
+            return False
+
+        if any(card not in previous_cards for card in player.shown_cards):
+            self.last_card_reveal_at = time.time()
+        return True
 
     def set_player_using_assistant(self, player_id: str, using: bool = True) -> bool:
         """Record whether a player is using the equity assistant during the current hand."""

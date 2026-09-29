@@ -4,6 +4,7 @@ import CommunityBoard from './CommunityBoard';
 import { sortCardsLowToHigh, sortCardsWithIndex } from '../utils/cards';
 import {
   DEFAULT_AUTO_READY_SECONDS,
+  hasNewShownCards,
   getInitialAutoReady,
   saveAutoReadyPreference,
   formatAutoReadyCheckboxLabel,
@@ -15,6 +16,7 @@ import { Trophy, CheckCircle2, Clock, Eye, EyeOff, Play, X, RefreshCw, Layers, L
 
 export default function HandResultModal({
   isOpen,
+  readOnly = false,
   handNumber = 1,
   boardCards = [],
   boardCards2 = [],
@@ -41,6 +43,25 @@ export default function HandResultModal({
 }) {
   if (!isOpen) return null;
 
+  const dialogRef = useRef(null);
+  useEffect(() => {
+    if (!readOnly) return;
+    const previous = document.activeElement;
+    dialogRef.current?.focus();
+    const handleKey = event => {
+      event.stopImmediatePropagation();
+      if (event.key === 'Escape') { event.preventDefault(); onClose?.(); }
+      if (event.key === 'Tab') {
+        const buttons = [...dialogRef.current.querySelectorAll('button:not(:disabled)')];
+        const next = buttons[(buttons.indexOf(document.activeElement) + (event.shiftKey ? -1 : 1) + buttons.length) % buttons.length];
+        event.preventDefault();
+        next?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKey, true);
+    return () => { window.removeEventListener('keydown', handleKey, true); previous?.focus(); };
+  }, [readOnly, onClose]);
+
   const [autoReady, setAutoReady] = useState(getInitialAutoReady);
   const [countdown, setCountdown] = useState(DEFAULT_AUTO_READY_SECONDS);
   const hasAutoReadiedRef = useRef(false);
@@ -64,26 +85,42 @@ export default function HandResultModal({
     }
   }, [isOpen, handNumber]);
 
+  const previousResults = useRef(handResults);
+  const revealHoldUntil = useRef(0);
+  useEffect(() => {
+    if (hasNewShownCards(previousResults.current, handResults)) {
+      revealHoldUntil.current = Date.now() + 3000;
+      hasAutoReadiedRef.current = false;
+      setCountdown(value => Math.max(value, 3));
+    }
+    previousResults.current = handResults;
+  }, [handResults]);
+
   // 5-second countdown timer for auto-ready
   useEffect(() => {
-    if (!isOpen || !autoReady || isSelfReady || isBusted || !selfSeat) {
+    if (readOnly || !isOpen || !autoReady || isSelfReady || isBusted || !selfSeat) {
+      return;
+    }
+
+    if (countdown <= 0 && Date.now() < revealHoldUntil.current) {
+      setCountdown(Math.ceil((revealHoldUntil.current - Date.now()) / 1000));
       return;
     }
 
     if (countdown <= 0) {
       if (!hasAutoReadiedRef.current) {
         hasAutoReadiedRef.current = true;
-        onToggleReadyRef.current?.();
+        onToggleReadyRef.current?.({ automatic: true });
       }
       return;
     }
 
     const timer = setTimeout(() => {
-      setCountdown((prev) => Math.max(0, prev - 1));
+      setCountdown((prev) => Math.max(0, prev - 1, Math.ceil((revealHoldUntil.current - Date.now()) / 1000)));
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [isOpen, autoReady, isSelfReady, isBusted, Boolean(selfSeat), countdown]);
+  }, [readOnly, isOpen, autoReady, isSelfReady, isBusted, Boolean(selfSeat), countdown]);
 
   const handleAutoReadyToggle = (e) => {
     const checked = e.target.checked;
@@ -134,7 +171,7 @@ export default function HandResultModal({
 
     const handleKeyDown = (e) => {
       const action = resolveHandEndHotkey(e);
-      if (!action) return;
+      if (!action || (readOnly && action.type !== 'CLOSE')) return;
 
       if (action.type === 'READY') {
         e.preventDefault();
@@ -181,6 +218,7 @@ export default function HandResultModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     isOpen,
+    readOnly,
     selfSeat,
     isBusted,
     onRebuy,
@@ -200,7 +238,7 @@ export default function HandResultModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 animate-fade-in">
-      <div className="relative w-full max-w-3xl bg-gradient-to-b from-slate-900 via-slate-950 to-black border-2 border-amber-500/50 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={readOnly ? '上一局' : '牌局结果'} className="relative w-full max-w-3xl bg-gradient-to-b from-slate-900 via-slate-950 to-black border-2 border-amber-500/50 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-5 py-3 sm:py-4 border-b border-slate-800 bg-slate-900/90 gap-2 sm:gap-0">
           <div className="flex items-center gap-3">
@@ -489,7 +527,7 @@ export default function HandResultModal({
           </div>
 
           {/* Interactive Card Reveal Selector (for the current seated user) */}
-          {selfSeat && selfSeat.hole_cards && selfSeat.hole_cards.length === 2 && (
+          {!readOnly && selfSeat && selfSeat.hole_cards && selfSeat.hole_cards.length === 2 && (
             <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 mt-2 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl">
               <div className="flex flex-col gap-1 text-center sm:text-left">
                 <div className="flex items-center gap-1.5 justify-center sm:justify-start">
@@ -557,7 +595,7 @@ export default function HandResultModal({
         </div>
 
         {/* Footer: Bottom Actions Row (Host Start Hand, Auto-Ready Checkbox, Ready / Rebuy Button) */}
-        <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-t border-slate-800 bg-slate-900/95 flex flex-row items-center justify-between gap-2 sm:gap-4 overflow-x-auto">
+        {!readOnly && <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-t border-slate-800 bg-slate-900/95 flex flex-row items-center justify-between gap-2 sm:gap-4 overflow-x-auto">
           {/* Host Start Next Hand Button */}
           {isHost && onStartNextHand && (
             <button
@@ -621,7 +659,7 @@ export default function HandResultModal({
               </button>
             ) : null}
           </div>
-        </div>
+        </div>}
       </div>
     </div>
   );

@@ -226,7 +226,7 @@ def test_run_it_twice_flow():
     assert state["hand_results"][0]["hand_desc_2"] is not None
 
 
-def test_show_card_feature():
+def test_show_card_feature(monkeypatch):
     table = TableStateMachine(max_seats=6, small_blind=1, big_blind=2)
     table.sit_down("p1", "Alice", seat_index=0, chips=100, avatar="🦊")
     table.sit_down("p2", "Bob", seat_index=1, chips=100, avatar="🐼")
@@ -246,9 +246,14 @@ def test_show_card_feature():
     avatars = {result["player_id"]: result["avatar"] for result in p2_view["hand_results"]}
     assert avatars == {"p1": "🦊", "p2": "🐼"}
 
+    monkeypatch.setattr("backend.app.engine.state_machine.time.time", lambda: 100.0)
     # Show single card 0
     assert table.show_card("p1", card_index=0) is True
     assert len(table.seats[0].shown_cards) == 1
+    assert table.last_card_reveal_at == 100.0
+    monkeypatch.setattr("backend.app.engine.state_machine.time.time", lambda: 101.0)
+    assert table.show_card("p1", card_index=0)
+    assert table.last_card_reveal_at == 100.0
 
     # Check opponent p2 view: p2 should ONLY see the 1 shown card, NOT both hole cards!
     p2_view = table.get_table_state(viewer_player_id="p2")

@@ -157,3 +157,25 @@ async def test_bot_automatically_acts_when_its_turn():
         for item in room.table.last_action_history
     )
     timeout_manager.cancel_all_timers(room_id)
+
+
+@pytest.mark.asyncio
+async def test_auto_ready_waits_for_recent_card_reveal():
+    import time
+    room = room_manager.create_room(
+        host_player_id='u_test1',
+        config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=1),
+    )
+    assert room.sit_down_player('u_test1', 'Alice', 0, is_test=True)
+    assert room.sit_down_player('u_test2', 'Bob', 1, is_test=True)
+    assert room.table.start_new_hand()
+    actor = room.table.seats[room.table.current_turn_seat]
+    assert room.table.handle_action(actor.player_id, ActionType.FOLD)
+    room.table.set_player_ready('u_test2')
+    assert room.table.show_card('u_test2', card_index=0)
+    start = time.monotonic()
+    ws = FakeWebSocket([{'event': 'PLAYER_READY', 'payload': {'ready': True, 'automatic': True}}])
+    await websocket_endpoint(ws, room.room_id, 'u_test1', token=user_manager.get_or_create_token('u_test1'))
+    assert time.monotonic() - start >= 2.9
+    assert any(message['event'] == 'ROOM_STATE' and message['payload']['table']['hand_number'] == 2 for message in ws.messages)
+    timeout_manager.cancel_all_timers(room.room_id)

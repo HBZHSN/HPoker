@@ -174,3 +174,11 @@ test('formatReadyButtonLabel displays state according to readiness and countdown
     '准备'
   );
 });
+
+const { hasNewShownCards } = await import('../autoReady.js');
+const hidden = [{ player_id: 'a', shown_cards: [] }];
+const shown = [{ player_id: 'a', shown_cards: [{ rank: 14, suit: 's' }] }];
+assert.equal(hasNewShownCards(hidden, shown), true);
+assert.equal(hasNewShownCards(shown, shown), false);
+assert.equal(hasNewShownCards(shown, hidden), false);
+assert.equal(hasNewShownCards(shown, [{ ...shown[0], shown_cards: [...shown[0].shown_cards, { rank: 13, suit: 's' }] }]), true);

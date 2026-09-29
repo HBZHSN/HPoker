@@ -72,6 +72,8 @@ export default function PokerTable({
   isFullscreen = false,
   onOpenBalance,
 }) {
+  const [lastHand, setLastHand] = useState(null);
+  const [showLastHand, setShowLastHand] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [handResultDismissed, setHandResultDismissed] = useState(false);
   const [isRevealingBoard, setIsRevealingBoard] = useState(false);
@@ -92,6 +94,17 @@ export default function PokerTable({
   const roomName = room?.config?.room_name || getDefaultRoomName(
     room?.host_player_id === currentUser?.user_id ? currentUser : null
   );
+
+  useEffect(() => {
+    setLastHand(null);
+    setShowLastHand(false);
+  }, [room?.room_id, currentUser?.user_id]);
+
+  useEffect(() => {
+    if (table?.street === 'HAND_END' && table.hand_results?.length) {
+      setLastHand(table);
+    }
+  }, [table]);
 
   // Reset handResultDismissed on new hand
   useEffect(() => {
@@ -457,6 +470,7 @@ export default function PokerTable({
           </div>
 
           <div className="poker-mobile-header-tools">
+            <button type="button" onClick={() => table?.street === 'HAND_END' ? setHandResultDismissed(false) : setShowLastHand(true)} disabled={!lastHand} className="poker-mobile-tool-button text-[10px] disabled:opacity-40" aria-label="上一局">上一局</button>
             {selfSeat && (
               <EquityTrigger
                 isOpen={isEquityOpen}
@@ -505,6 +519,7 @@ export default function PokerTable({
         </div>
 
         <div className="poker-table-desktop-header">
+        <button type="button" onClick={() => table?.street === 'HAND_END' ? setHandResultDismissed(false) : setShowLastHand(true)} disabled={!lastHand} className="px-3 py-1.5 bg-slate-900 text-amber-300 rounded-xl text-xs border border-slate-700 disabled:opacity-40">上一局</button>
         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
           <button
             onClick={handleLeaveTable}
@@ -1271,8 +1286,23 @@ export default function PokerTable({
         </aside>
       </div>
 
+      {showLastHand && lastHand && <HandResultModal
+        isOpen readOnly
+        handNumber={lastHand.hand_number}
+        boardCards={lastHand.board_cards}
+        boardCards2={lastHand.board_cards_2}
+        boardCardsFull={lastHand.board_cards_full}
+        boardCards2Full={lastHand.board_cards_2_full}
+        ritEnabled={lastHand.rit_enabled}
+        boardCardsRevealed={lastHand.board_cards_revealed}
+        handResults={lastHand.hand_results}
+        totalPot={lastHand.total_pot}
+        selfSeat={lastHand.seats?.find(seat => seat?.player_id === currentUser?.user_id)}
+        onClose={() => setShowLastHand(false)}
+      />}
+
       {/* Hand Result Settlement & Card Reveal Modal */}
-      {table?.street === 'HAND_END' && !handResultDismissed && table?.hand_results && table.hand_results.length > 0 && (
+      {table?.street === 'HAND_END' && !showLastHand && !handResultDismissed && table?.hand_results && table.hand_results.length > 0 && (
         <HandResultModal
           isOpen={true}
           handNumber={table.hand_number}
@@ -1292,9 +1322,9 @@ export default function PokerTable({
           onShowCard={(payload) => onSendWsEvent('SHOW_CARD', payload)}
           onRevealBoard={handleRevealBoard}
           isRevealingBoard={isRevealingBoard}
-          onToggleReady={() => {
+          onToggleReady={({ automatic = false } = {}) => {
             const isReady = table.ready_player_ids?.includes(selfSeat?.player_id);
-            onSendWsEvent('PLAYER_READY', { ready: !isReady });
+            onSendWsEvent('PLAYER_READY', { ready: !isReady, automatic });
           }}
           onRebuy={handleRebuy}
           onStartNextHand={handleStartGame}
