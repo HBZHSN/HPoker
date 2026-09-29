@@ -252,3 +252,28 @@ def test_balance_lifetime_profit_survives_transfers_and_restart(tmp_path, monkey
     with pytest.raises(HTTPException) as exc:
         endpoints.get_my_balance(include_settled=True, authorization=None, token=None)
     assert exc.value.status_code == 401
+
+
+def test_history_returns_only_public_opponent_cards_after_showdown(tmp_path):
+    manager = RoomManager(database_path=str(tmp_path / 'showdown.sqlite3'))
+    room = manager.create_room(host_player_id='alice', config=RoomConfig(buyin_chips=100, cash_value=10, small_blind=5), room_id='showdown')
+    assert room.sit_down_player('alice', 'Alice', 0, is_test=False)
+    assert room.sit_down_player('bob', 'Bob', 1, is_test=False)
+    assert room.sit_down_player('carol', 'Carol', 2, is_test=False)
+    assert room.table.start_new_hand()
+    actor = room.table.seats[room.table.current_turn_seat]
+    folded_id = actor.player_id
+    assert room.table.handle_action(folded_id, ActionType.FOLD)
+    while room.table.street != Street.HAND_END:
+        actor = room.table.seats[room.table.current_turn_seat]
+        action = ActionType.CALL if room.table.get_legal_actions(actor.player_id).can_call else ActionType.CHECK
+        assert room.table.handle_action(actor.player_id, action)
+    manager.checkpoint_room(room)
+    for player in room.table.active_seated_players:
+        hand = manager.hand_history_manager.list_user_hands(player.player_id)['hands'][0]
+        expected = [p for p in room.table.active_seated_players if p.player_id not in (player.player_id, folded_id)]
+        assert {p['player_id'] for p in hand['opponents']} == {p.player_id for p in expected}
+        for opponent in hand['opponents']:
+            original = next(p for p in expected if p.player_id == opponent['player_id'])
+            assert opponent['shown_cards'] == [card.to_dict() for card in original.hole_cards]
+            assert 'hole_cards' not in opponent

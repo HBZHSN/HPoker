@@ -973,17 +973,28 @@ class SQLiteDatabase:
         with self.connection() as connection:
             rows = connection.execute(sql, params).fetchall()
             names = {}
+            opponents = {}
             if rows:
                 ids = [row['hand_id'] for row in rows]
                 for player in connection.execute(
-                    'SELECT hand_id, player_id, player_name FROM poker_hand_players '
+                    'SELECT hand_id, player_id, player_name, shown_cards_json, hand_description, net_chips FROM poker_hand_players '
                     'WHERE hand_id IN (' + ','.join('?' for _ in ids) + ')', ids
                 ).fetchall():
                     names[(player['hand_id'], player['player_id'])] = player['player_name']
+                    cards = json.loads(player['shown_cards_json'])["cards"]
+                    if player['player_id'] != user_id and cards:
+                        opponents.setdefault(player['hand_id'], []).append({
+                            "player_id": player['player_id'],
+                            "player_name": player['player_name'],
+                            "shown_cards": cards,
+                            "hand_description": player['hand_description'],
+                            "net_chips": player['net_chips'],
+                        })
 
         results = []
         for row in rows:
             item = dict(row)
+            item["opponents"] = opponents.get(item["hand_id"], [])
             item["is_test"] = bool(item["is_test"])
             item["is_winner"] = bool(item["is_winner"])
             item["net_cash"] = item.pop("net_cash_cents") / 100

@@ -79,6 +79,10 @@ export function HandHistoryPanel({ token, userId, roomId }) {
           <div><p className="text-[10px] text-slate-500 mb-2">公共牌{hand.board_2?.length ? ' · 牌面 1' : ''}</p><Cards cards={hand.board} />{!!hand.board_2?.length && <div className="mt-2"><p className="text-[10px] text-slate-500 mb-1">牌面 2</p><Cards cards={hand.board_2} /></div>}</div>
           <dl className="text-xs space-y-2 text-slate-400">{[['底池', hand.total_pot], ['投入 / 收回', `${hand.contributed_chips} / ${hand.payout_chips}`], ['筹码变化', `${hand.starting_chips} → ${hand.ending_chips}`]].map(([k, v]) => <div key={k} className="flex justify-between gap-2"><dt>{k}</dt><dd className="text-slate-200 tabular-nums">{v}</dd></div>)}</dl>
         </div>
+        {!!hand.opponents?.length && <div className="px-4 pb-4 flex flex-wrap gap-4">{hand.opponents.map(player => <div key={player.player_id}>
+          <p className="text-xs text-slate-400 mb-2">{player.player_name} · <span className={tone(player.net_chips)}>{signed(player.net_chips)}</span></p>
+          <Cards cards={player.shown_cards} /><p className="text-xs text-amber-200 mt-2">{player.hand_description}</p>
+        </div>)}</div>}
         <details className="border-t border-slate-800/70 text-xs"><summary className="cursor-pointer px-4 py-3 text-slate-400 hover:text-amber-200">行动过程 · {hand.actions?.length || 0} 次</summary><ol className="px-4 pb-4 space-y-2">{(hand.actions || []).map((action, index) => <li key={index} className={`flex gap-3 rounded-lg px-3 py-2 ${action.player_id === userId ? 'bg-amber-950/30 text-amber-200' : 'bg-slate-950/70 text-slate-400'}`}><span className="w-12 shrink-0 text-slate-500">{streets[action.street] || action.street}</span><span className="flex-1 break-words">{action.player_id === userId ? '我' : action.player_name || '玩家'}</span><span className="shrink-0">{actions[action.action] || action.action}{action.amount > 0 ? ` ${action.amount}` : ''}</span></li>)}</ol></details>
       </article>)}</div>
       <Pager page={page} total={data.total} size={20} setPage={setPage} />
